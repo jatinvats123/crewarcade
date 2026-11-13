@@ -21,7 +21,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
         : { level: config.LOG_LEVEL, redact: ['req.headers.authorization', 'req.headers.signature', 'req.headers.cookie'] }),
     trustProxy: true,
     bodyLimit: 1024 * 1024,
-    disableRequestLogging: false,
   });
   const started = Date.now();
 
