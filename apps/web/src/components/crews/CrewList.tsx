@@ -126,7 +126,7 @@ const lastTime = (c: ChannelState | undefined, crew: CrewSummary) => {
 function CrewRow({ crew, channel, active }: { crew: CrewSummary; channel: ChannelState | undefined; active: boolean }) {
   const last = channel?.messages[channel.messages.length - 1] ?? channel?.preview ?? null;
   const unread = active ? 0 : (channel?.unread ?? 0);
-  const busy = Object.values(channel?.agentStates ?? {}).some(s => BUSY_STATES.has(s as never));
+  const busy = Object.values(channel?.agentStates ?? {}).some(s => BUSY_STATES.has(s.state));
   const when = last ? (localDay(last.sentTime) === localDay(Date.now()) ? clockTime(last.sentTime) : dayLabel(localDay(last.sentTime))) : '';
   return (
     <Link

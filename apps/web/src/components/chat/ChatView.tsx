@@ -1,16 +1,22 @@
 'use client';
 
-// One crew's chat: header (members, presence, invite, info), timeline, typing line, composer.
+// One room of a crew: the crew chat or a game room. Header (members, presence, invite, info), room
+// tabs, Agent Status Strip, timeline (with cards and streamed agent replies), typing line, composer.
 import { AGENTS, type CrewMember } from '@crewarcade/shared';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AgentStatusStrip } from '@/components/agents/AgentStatusStrip';
+import { CardEnvProvider, type CardEnv } from '@/components/cards/context';
 import { agentKeyOf } from '@/components/identity/MemberAvatar';
-import { EmptyState, ErrorState, IconButton, Skeleton, useToast } from '@/components/ui';
+import { StoryTimeline } from '@/components/story/StoryTimeline';
+import { EmptyState, ErrorState, IconButton, Sheet, Skeleton, useToast } from '@/components/ui';
+import { api } from '@/lib/api';
 import { typingUserIds } from '@/lib/chat/reducer';
 import { useChannelState, usePresence } from '@/lib/chat/store';
 import type { MentionTarget } from '@/lib/chat/text';
 import { useCrews } from '@/lib/crews';
 import { useNexconn } from '@/lib/nexconn/NexconnProvider';
+import { activeRoomStore, roomHref } from '@/lib/room';
 import { useSession } from '@/lib/session';
 import { inviteUrl, shareInvite } from '@/lib/share';
 import { ChatComposer } from './ChatComposer';
@@ -19,7 +25,7 @@ import { ImageLightbox } from './ImageLightbox';
 import { MessageList } from './MessageList';
 import { SeenBySheet } from './SeenBySheet';
 
-export function ChatView({ crewId }: { crewId: string }) {
+export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChannelId?: string }) {
   const { user } = useSession();
   const { crews, details, loadDetail } = useCrews();
   const nx = useNexconn();
@@ -27,8 +33,13 @@ export function ChatView({ crewId }: { crewId: string }) {
   const toast = useToast();
   const detail = details[crewId];
   const summary = crews?.find(c => c.id === crewId);
-  const channelId = detail?.groupChannelId ?? summary?.groupChannelId ?? null;
+  const crewChannelId = detail?.groupChannelId ?? summary?.groupChannelId ?? null;
+  const channelId = roomChannelId ?? crewChannelId;
   const channel = useChannelState(nx.store, channelId);
+  const game = roomChannelId ? (detail?.games.find(g => g.roomChannelId === roomChannelId) ?? null) : null;
+  const rooms = (detail?.games ?? []).filter(g => g.roomChannelId);
+  const [storyOpen, setStoryOpen] = useState(false);
+  const [storyKey, setStoryKey] = useState(0);
   const presence = usePresence(nx.presence);
   const [missing, setMissing] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -42,6 +53,45 @@ export function ChatView({ crewId }: { crewId: string }) {
   useEffect(() => {
     void loadDetail(crewId).then(d => setMissing(!d));
   }, [crewId, loadDetail]);
+
+  // The desktop context panel follows the room on screen.
+  useEffect(() => {
+    if (!channelId) return;
+    activeRoomStore.dispatch({ type: 'set', room: { crewId, channelId, game } });
+  }, [crewId, channelId, game]);
+  useEffect(() => () => activeRoomStore.dispatch({ type: 'set', room: null }), []);
+
+  // Agents already working when the room opens: the server's snapshot (heartbeats keep it fresh).
+  useEffect(() => {
+    if (!channelId || !connected) return;
+    let live = true;
+    api
+      .roomAgents(channelId)
+      .then(states => {
+        if (live) for (const st of states) nx.store.dispatch({ type: 'agent/state', channelId, state: st, receivedAt: Date.now() });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [channelId, connected, nx.store]);
+
+  // A card about a room we don't know yet (a plan was just approved): refresh the crew's games.
+  // Any new card also refreshes the Story.
+  const cardCount = channel?.messages.filter(m => m.kind === 'card').length ?? 0;
+  const lastGamesRefresh = useRef(0);
+  useEffect(() => {
+    if (!detail || !channel) return;
+    const known = (c: string | undefined) => !c || detail.games.some(g => g.roomChannelId === c);
+    const unknown = channel.messages.some(
+      m => (m.card?.kind === 'roomLink' && !known(m.card.content.channelId)) || (m.card?.kind === 'plan' && !known(m.meta?.roomChannelId)),
+    );
+    if (unknown && Date.now() - lastGamesRefresh.current > 3000) {
+      lastGamesRefresh.current = Date.now();
+      void loadDetail(crewId, true);
+    }
+  }, [channel, detail, crewId, loadDetail]);
+  useEffect(() => setStoryKey(k => k + 1), [cardCount]);
 
   // This is the open channel: incoming messages here are read, not unread.
   useEffect(() => {
@@ -78,6 +128,17 @@ export function ChatView({ crewId }: { crewId: string }) {
   }, [channel]);
 
   const myId = nx.myId ?? user?.nexconnId ?? '';
+  const cardEnv: CardEnv = useMemo(
+    () => ({
+      crewId,
+      myId,
+      canApprove: detail?.role === 'owner' || detail?.role === 'approver',
+      roomHref: (c: string) => roomHref(crewId, c, crewChannelId ?? ''),
+      actions: { vote: api.vote, approve: api.approve, requestChange: api.requestChange },
+      setMeta: (channelId, messageId, metadata, replace) => nx.store.dispatch({ type: 'message/metadata', channelId, messageId, metadata, replace }),
+    }),
+    [crewId, myId, detail?.role, crewChannelId, nx.store],
+  );
   const targets: MentionTarget[] = useMemo(
     () =>
       (detail?.members ?? [])
@@ -97,6 +158,12 @@ export function ChatView({ crewId }: { crewId: string }) {
   const closeImage = useCallback(() => setImage(null), []);
   const closeSeenBy = useCallback(() => setSeenBy(null), []);
 
+  if (detail && roomChannelId && !game)
+    return (
+      <div className="flex flex-1 items-center justify-center p-6">
+        <ErrorState title="Room not found">This game room isn't part of the crew. Go back to the crew chat.</ErrorState>
+      </div>
+    );
   if (missing && !detail)
     return (
       <div className="flex flex-1 items-center justify-center p-6">
@@ -118,8 +185,8 @@ export function ChatView({ crewId }: { crewId: string }) {
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-1 border-b border-border px-1 py-1.5 sm:px-3">
         <Link
-          href="/crews"
-          aria-label="Back to crews"
+          href={roomChannelId ? `/crews/${crewId}` : '/crews'}
+          aria-label={roomChannelId ? 'Back to the crew chat' : 'Back to crews'}
           className="inline-flex size-11 items-center justify-center rounded-full text-dim hover:bg-surface-2 md:hidden"
         >
           <span aria-hidden>←</span>
@@ -132,18 +199,38 @@ export function ChatView({ crewId }: { crewId: string }) {
         >
           {detail ? (
             <>
-              <span className="block truncate font-display font-bold">{detail.name}</span>
+              <span className="block truncate font-display font-bold">{game ? `🎮 ${game.title}` : detail.name}</span>
               <span className="block truncate text-xs text-dim">
-                {detail.members.length} members · {online} online · Pixel, Forge, Glitch
+                {game ? `Game room · ${detail.name} · ${online} online` : `${detail.members.length} members · ${online} online · Pixel, Forge, Glitch`}
               </span>
             </>
           ) : (
             <Skeleton className="h-5 w-40" />
           )}
         </button>
+        {game && (
+          <span className="lg:hidden">
+            <IconButton label="Story: how this game was made" icon={<span aria-hidden>📜</span>} onClick={() => setStoryOpen(true)} />
+          </span>
+        )}
         <IconButton label="Invite friends" icon={<span aria-hidden>📤</span>} onClick={() => void share()} disabled={!detail} />
         <IconButton label="Crew info" icon={<span aria-hidden>ⓘ</span>} onClick={() => setInfoOpen(true)} disabled={!detail} />
       </header>
+      {rooms.length > 0 && crewChannelId && (
+        <nav aria-label="Rooms" className="flex gap-1.5 overflow-x-auto border-b border-border px-2 py-1.5 [scrollbar-width:none] sm:px-3">
+          {[{ id: crewChannelId, label: '💬 Crew chat' }, ...rooms.map(g => ({ id: g.roomChannelId!, label: `🎮 ${g.title}` }))].map(r => (
+            <Link
+              key={r.id}
+              href={roomHref(crewId, r.id, crewChannelId)}
+              aria-current={r.id === channelId ? 'page' : undefined}
+              className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3 text-sm font-semibold ${r.id === channelId ? 'border-brand bg-brand/15 text-brand' : 'border-border text-dim hover:text-text'}`}
+            >
+              {r.label}
+            </Link>
+          ))}
+        </nav>
+      )}
+      <AgentStatusStrip channel={channel} crewId={crewId} />
 
       {nx.state === 'unconfigured' ? (
         <div className="flex flex-1 items-center justify-center p-6">
@@ -152,17 +239,19 @@ export function ChatView({ crewId }: { crewId: string }) {
           </EmptyState>
         </div>
       ) : (
-        <MessageList
-          channel={channel}
-          members={members}
-          myId={myId}
-          targets={targets}
-          scrollSignal={scrollSignal}
-          onLoadMore={onLoadMore}
-          onRetry={onRetry}
-          onSeenBy={setSeenBy}
-          onOpenImage={setImage}
-        />
+        <CardEnvProvider value={cardEnv}>
+          <MessageList
+            channel={channel}
+            members={members}
+            myId={myId}
+            targets={targets}
+            scrollSignal={scrollSignal}
+            onLoadMore={onLoadMore}
+            onRetry={onRetry}
+            onSeenBy={setSeenBy}
+            onOpenImage={setImage}
+          />
+        </CardEnvProvider>
       )}
 
       <p className="min-h-6 truncate px-4 text-xs text-dim" aria-live="polite">
@@ -195,6 +284,11 @@ export function ChatView({ crewId }: { crewId: string }) {
       )}
 
       {detail && user && <CrewInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} crew={detail} myDbId={user.id} presence={presence} />}
+      {game && (
+        <Sheet open={storyOpen} onClose={() => setStoryOpen(false)} title={`Story of ${game.title}`}>
+          <StoryTimeline gameId={game.id} refreshKey={storyKey} />
+        </Sheet>
+      )}
       <SeenBySheet messageId={seenBy} onClose={closeSeenBy} load={loadSeenBy} members={members} />
       <ImageLightbox url={image} onClose={closeImage} />
     </div>

@@ -3,7 +3,9 @@
 // Content is untrusted: every shape goes through the zod parsers in @crewarcade/shared.
 import {
   BUILTIN_MESSAGE_TYPES,
+  cardPreview,
   decodeCard,
+  isCardType,
   MESSAGE_TYPES,
   NoticeMessage,
   asObject,
@@ -26,7 +28,24 @@ export interface SdkMessageLike {
   sentStatus?: number;
   needReceipt?: boolean;
   sentReceipt?: boolean;
+  /** Nexconn message metadata (a Map in the SDK). */
+  metadata?: Map<string, string> | Record<string, string> | null;
 }
+
+/** RC:StreamMsg content as the Web SDK exposes it (StreamMessageContent: content + isCompleted). */
+export function parseStreamContent(content: unknown): { text: string; complete: boolean } | null {
+  const o = asObject(content);
+  if (!o || typeof o !== 'object') return null;
+  const c = o as { content?: unknown; isCompleted?: unknown; complete?: unknown };
+  if (typeof c.content !== 'string') return null;
+  return { text: c.content, complete: c.isCompleted === true || c.complete === true };
+}
+
+const metaRecord = (m: SdkMessageLike['metadata']): Record<string, string> => {
+  if (!m) return {};
+  const entries = m instanceof Map ? [...m.entries()] : Object.entries(m);
+  return Object.fromEntries(entries.filter((e): e is [string, string] => typeof e[1] === 'string'));
+};
 
 export function normalizeMessage(m: SdkMessageLike, myUserId: string, extra: Partial<ChatMessage> = {}): ChatMessage {
   const out = m.senderUserId === myUserId || m.direction === 1;
@@ -62,12 +81,12 @@ export function normalizeMessage(m: SdkMessageLike, myUserId: string, extra: Par
       const n = NoticeMessage.safeParse(asObject(m.content));
       return n.success ? { ...base, kind: 'notice', notice: { kind: n.data.kind, text: n.data.text } } : base;
     }
-    case MESSAGE_TYPES.card: {
-      // Card renderers arrive in Phase 2; until then every card shows the fallback.
-      const card = decodeCard(m.content);
-      return { ...base, kind: 'card', cardType: card?.payload.card ?? null };
+    case BUILTIN_MESSAGE_TYPES.stream: {
+      const st = parseStreamContent(m.content);
+      return st ? { ...base, kind: 'stream', text: st.text, streamComplete: st.complete } : base;
     }
     default:
+      if (isCardType(m.messageType)) return { ...base, kind: 'card', card: decodeCard(m.messageType, m.content), meta: metaRecord(m.metadata) };
       return base;
   }
 }
@@ -85,7 +104,9 @@ export function previewText(m: ChatMessage | null): string {
     case 'notice':
       return m.notice?.text ?? '';
     case 'card':
-      return '🃏 Card';
+      return m.card ? cardPreview(m.card) : '🃏 Card';
+    case 'stream':
+      return (m.text ?? '').replace(/[*_`#]/g, '').slice(0, 120);
     default:
       return 'New message';
   }

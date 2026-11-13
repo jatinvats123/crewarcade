@@ -5,13 +5,13 @@ import { cn } from '@/lib/cn';
 const STATE_TONE: Record<AgentState, string> = {
   idle: 'text-faint bg-surface-2',
   thinking: 'text-pixel bg-pixel/12',
-  planning: 'text-pixel bg-pixel/12',
+  designing: 'text-pixel bg-pixel/12',
   building: 'text-forge bg-forge/12',
+  checking: 'text-forge bg-forge/12',
   testing: 'text-glitch bg-glitch/12',
-  reproducing: 'text-glitch bg-glitch/12',
-  waiting: 'text-gold bg-gold/12',
+  fixing: 'text-forge bg-forge/12',
+  waiting_approval: 'text-gold bg-gold/12',
   blocked: 'text-danger bg-danger/12',
-  error: 'text-danger bg-danger/12',
 };
 
 /** Agent state chip: "● Building v2". Busy states pulse. */

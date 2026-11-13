@@ -58,7 +58,7 @@ export default function Landing() {
             <div className="min-w-0">
               <p className={`font-display font-bold ${ACCENT_TEXT[key]}`}>{AGENTS[key].displayName}</p>
               <p className="text-sm text-dim">{AGENTS[key].tagline}</p>
-              <StateChip className="mt-2" state={(['planning', 'building', 'testing'] as const)[i]!} />
+              <StateChip className="mt-2" state={(['designing', 'building', 'testing'] as const)[i]!} />
             </div>
           </div>
         ))}

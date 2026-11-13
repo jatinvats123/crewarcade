@@ -8,16 +8,16 @@ export const ACCENT_BG: Record<AgentKey, string> = { pixel: 'bg-pixel', forge: '
 export const STATE_LABEL: Record<AgentState, string> = {
   idle: 'Idle',
   thinking: 'Thinking',
-  planning: 'Planning',
+  designing: 'Designing',
   building: 'Building',
-  testing: 'Playtesting',
-  reproducing: 'Reproducing bug',
-  waiting: 'Waiting for you',
+  checking: 'Checking',
+  testing: 'Testing',
+  fixing: 'Fixing',
+  waiting_approval: 'Waiting for approval',
   blocked: 'Blocked',
-  error: 'Error',
 };
 
-/** States that show a moving indicator. */
-export const BUSY_STATES: ReadonlySet<AgentState> = new Set(['thinking', 'planning', 'building', 'testing', 'reproducing']);
+/** States that show a moving indicator (and expect a server heartbeat). */
+export const BUSY_STATES: ReadonlySet<AgentState> = new Set(['thinking', 'designing', 'building', 'checking', 'testing', 'fixing']);
 
 export const agentByKey = (key: AgentKey) => AGENTS[key];

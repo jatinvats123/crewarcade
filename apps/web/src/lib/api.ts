@@ -2,6 +2,11 @@
 // Render server by a Next.js rewrite (next.config.ts), so the session cookie is first-party.
 // Every response is parsed with the shared zod schemas.
 import {
+  AgentStateMessage,
+  CardActionResponse,
+  LedgerEntry,
+  LedgerResponse,
+  RoomInfo,
   CrewDetail,
   CrewMember,
   CrewSummary,
@@ -61,4 +66,16 @@ export const api = {
     ),
   invite: (code: string) => request('GET', `/api/invites/${encodeURIComponent(code)}`, z.object({ invite: InvitePreview })).then(r => r.invite),
   join: (code: string) => request('POST', `/api/invites/${encodeURIComponent(code)}/join`, z.object({ crewId: z.string(), alreadyMember: z.boolean() })),
+  // Card actions: the server checks every permission and answers with the card's new metadata.
+  vote: (messageId: string, vote: 'yes' | 'no') => request('POST', `/api/cards/${encodeURIComponent(messageId)}/vote`, CardActionResponse, { vote }),
+  approve: (messageId: string) => request('POST', `/api/cards/${encodeURIComponent(messageId)}/approve`, CardActionResponse, {}),
+  requestChange: (messageId: string, text: string) => request('POST', `/api/cards/${encodeURIComponent(messageId)}/change`, CardActionResponse, { text }),
+  room: (channelId: string) => request('GET', `/api/rooms/${encodeURIComponent(channelId)}`, z.object({ room: RoomInfo })).then(r => r.room),
+  roomAgents: (channelId: string) =>
+    request('GET', `/api/rooms/${encodeURIComponent(channelId)}/agents`, z.object({ states: z.array(AgentStateMessage) })).then(r => r.states),
+  ledger: (gameId: string) => request('GET', `/api/games/${encodeURIComponent(gameId)}/ledger`, LedgerResponse),
+  agentActivity: (crewId: string, agent: 'pixel' | 'forge' | 'glitch') =>
+    request('GET', `/api/crews/${encodeURIComponent(crewId)}/agents/${agent}/activity`, z.object({ agent: z.string(), entries: z.array(LedgerEntry) })).then(
+      r => r.entries,
+    ),
 };

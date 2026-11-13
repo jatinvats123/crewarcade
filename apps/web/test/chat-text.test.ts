@@ -46,13 +46,13 @@ describe('normalizeMessage', () => {
       kind: 'notice',
       notice: { kind: 'member_joined', text: 'Riya joined the crew' },
     });
-    expect(
-      normalizeMessage(sdk({ messageType: 'CA:Card', content: '{"v":1,"payload":{"card":"shield","rule":"r","action":"blocked","summary":"s"}}' }), 'uMe'),
-    ).toMatchObject({
+    expect(normalizeMessage(sdk({ messageType: 'CA:ScoreCard', content: '{"v":1,"gameId":"g1","playerId":"u1","score":12,"rank":1}' }), 'uMe')).toMatchObject({
       kind: 'card',
-      cardType: 'shield',
+      card: { kind: 'score', content: { score: 12 } },
     });
-    expect(normalizeMessage(sdk({ messageType: 'CA:Card', content: '{"v":9}' }), 'uMe')).toMatchObject({ kind: 'card', cardType: null });
+    expect(normalizeMessage(sdk({ messageType: 'CA:ScoreCard', content: '{"v":9}' }), 'uMe')).toMatchObject({ kind: 'card', card: null });
+    // The Phase 1 envelope type is gone: old clients' CA:Card is just unknown now.
+    expect(normalizeMessage(sdk({ messageType: 'CA:Card', content: '{}' }), 'uMe').kind).toBe('unknown');
     expect(normalizeMessage(sdk({ messageType: 'RC:LBSMsg', content: {} }), 'uMe').kind).toBe('unknown');
     // A malicious image URL degrades to the fallback instead of rendering.
     expect(normalizeMessage(sdk({ messageType: 'RC:ImgMsg', content: { remoteUrl: 'javascript:alert(1)' } }), 'uMe').kind).toBe('unknown');

@@ -10,6 +10,8 @@ import { clockTime, type SenderGroup } from '@/lib/chat/grouping';
 import { tokenize, type MentionTarget } from '@/lib/chat/text';
 import type { ChatMessage } from '@/lib/chat/types';
 import { cn } from '@/lib/cn';
+import { CardMessage } from '@/components/cards/CardMessage';
+import { Markdown } from './Markdown';
 import { VoicePlayer } from './VoicePlayer';
 
 interface Props {
@@ -26,6 +28,7 @@ export const SenderGroupView = memo(function SenderGroupView({ group, sender, is
   const agent = agentKeyOf(group.senderId);
   const name = agent ? AGENTS[agent].displayName : (sender?.displayName ?? 'Someone');
   const last = group.messages.length - 1;
+  const hasCard = group.messages.some(m => m.kind === 'card');
   return (
     <div className={cn('flex gap-2 [contain-intrinsic-size:auto_96px] [content-visibility:auto]', isMe ? 'flex-row-reverse' : 'flex-row')}>
       {!isMe && (
@@ -36,7 +39,13 @@ export const SenderGroupView = memo(function SenderGroupView({ group, sender, is
           />
         </div>
       )}
-      <div className={cn('flex min-w-0 max-w-[82%] flex-col gap-0.5 sm:max-w-[70%]', isMe ? 'items-end' : 'items-start')}>
+      <div
+        className={cn(
+          'flex min-w-0 flex-col gap-0.5',
+          hasCard ? 'w-full max-w-[min(100%,28rem)]' : 'max-w-[82%] sm:max-w-[70%]',
+          isMe ? 'items-end' : 'items-start',
+        )}
+      >
         {!isMe && (
           <p className="flex items-center gap-1.5 px-1 text-xs font-semibold">
             <span className={agent ? ACCENT_TEXT[agent] : 'text-dim'}>{name}</span>
@@ -114,10 +123,13 @@ function Bubble({
       body = m.voice ? <VoicePlayer url={m.voice.url} durationS={m.voice.durationS} seed={m.key} isMe={isMe} /> : null;
       break;
     case 'card':
+      body = <CardMessage m={m} />;
+      break;
+    case 'stream':
+      // Agent replies stream in as Markdown; a soft caret shows while chunks are arriving.
       body = (
-        <div className="rounded-3xl border border-dashed border-border bg-surface px-4 py-3 text-sm text-dim">
-          <span aria-hidden>🃏 </span>
-          {m.cardType ? `A ${m.cardType.replace(/_/g, ' ')} card.` : 'A card.'} It shows up here in a coming update.
+        <div className={cn(bubble, 'min-w-12')} aria-busy={!m.streamComplete || undefined}>
+          <Markdown text={m.text ?? ''} caret={!m.streamComplete} />
         </div>
       );
       break;

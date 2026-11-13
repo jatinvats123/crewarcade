@@ -1,7 +1,9 @@
 // Client-side chat model. SDK message objects are normalized into these plain values at the edge
 // (normalize.ts), so the reducer and the UI never touch SDK classes.
 
-export type MessageKind = 'text' | 'image' | 'voice' | 'notice' | 'card' | 'unknown';
+import type { AgentStateMessage, AnyCard } from '@crewarcade/shared';
+
+export type MessageKind = 'text' | 'image' | 'voice' | 'notice' | 'card' | 'stream' | 'unknown';
 export type SendStatus = 'sending' | 'sent' | 'failed';
 
 export interface ChatMessage {
@@ -24,8 +26,12 @@ export interface ChatMessage {
   image?: { url: string; thumb: string | null };
   voice?: { url: string; durationS: number };
   notice?: { kind: string; text: string };
-  /** For CA:Card messages: the card type, rendered as a fallback until its renderer exists. */
-  cardType?: string | null;
+  /** CA:*Card messages: the decoded card (null when the content is invalid or from a newer version). */
+  card?: AnyCard | null;
+  /** Nexconn message metadata (live card state: votes, status...). */
+  meta?: Record<string, string>;
+  /** RC:StreamMsg: false while chunks are still arriving. */
+  streamComplete?: boolean;
   direction: 'out' | 'in';
   status: SendStatus;
   /** 0-100 while a media upload runs. */
@@ -52,8 +58,8 @@ export interface ChannelState {
   unread: number;
   /** Last message for the crew list when the timeline is not loaded (from the channel list). */
   preview: ChatMessage | null;
-  /** Busy agent states (from CA:AgentState) for the activity dot. agent nexconn id -> state. */
-  agentStates: Record<string, string>;
+  /** Live agent states (CA:AgentState) by agent key, with the local time they arrived. */
+  agentStates: Record<string, AgentStateMessage & { receivedAt: number }>;
 }
 
 export interface ChatState {

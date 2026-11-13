@@ -8,12 +8,20 @@
 //    reaches the browser). On "token incorrect or expired" (31004) we fetch a fresh one and
 //    connect again; the SDK handles ordinary reconnects itself (every 5 s).
 //  - All SDK names below were checked in node_modules/@nexconn/chat/index.d.ts (v26.2.1).
-import { AgentStateMessage, asObject, MESSAGE_TYPE_REGISTRY, MESSAGE_TYPES, TYPING_TTL_MS, type NexconnTokenResponse } from '@crewarcade/shared';
+import {
+  AgentStateMessage,
+  asObject,
+  BUILTIN_MESSAGE_TYPES,
+  MESSAGE_TYPE_REGISTRY,
+  MESSAGE_TYPES,
+  TYPING_TTL_MS,
+  type NexconnTokenResponse,
+} from '@crewarcade/shared';
 import type * as NexconnSdk from '@nexconn/chat';
 import type { BaseChannel, Message } from '@nexconn/chat';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiRequestError } from '../api';
-import { normalizeMessage, type SdkMessageLike } from '../chat/normalize';
+import { normalizeMessage, parseStreamContent, type SdkMessageLike } from '../chat/normalize';
 import { createChatStore, createPresenceStore, type ChatStore, type PresenceStore } from '../chat/store';
 import type { ChatMessage } from '../chat/types';
 import { useSession } from '../session';
@@ -85,6 +93,19 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
   const [attempt, setAttempt] = useState(0);
   const userId = user?.id ?? null;
 
+  /** Streams we already asked the SDK to deliver (requestStreamMessage), by messageId. */
+  const streamsRequested = useRef(new Set<string>());
+  /** A stream still being written: ask the SDK for its chunks (they arrive as onStreamMessageRequestDelta). */
+  const followStream = useCallback((m: Message) => {
+    if (m.messageType !== BUILTIN_MESSAGE_TYPES.stream || !m.messageId || streamsRequested.current.has(m.messageId)) return;
+    const st = parseStreamContent(m.content);
+    if (!st || st.complete) return;
+    streamsRequested.current.add(m.messageId);
+    void m.requestStreamMessage().then(r => {
+      if (!r.isOk) console.warn('[nexconn] requestStreamMessage failed', r.code);
+    });
+  }, []);
+
   const isActive = (channelId: string) => activeRef.current === channelId && typeof document !== 'undefined' && document.visibilityState === 'visible';
   const normalize = useCallback(
     (m: Message, extra?: Partial<ChatMessage>) => normalizeMessage(m as unknown as SdkMessageLike, myIdRef.current ?? '', extra),
@@ -128,16 +149,17 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       }
       if (m.messageType === MESSAGE_TYPES.agentState) {
         const s = AgentStateMessage.safeParse(asObject(m.content));
-        if (s.success) store.dispatch({ type: 'agent/state', channelId, agentId: m.senderUserId, state: s.data.state });
+        if (s.success) store.dispatch({ type: 'agent/state', channelId, state: s.data, receivedAt: Date.now() });
         return;
       }
       if (m.messageType === MESSAGE_TYPES.reaction) return; // Live Theater (Phase 3)
       const active = isActive(channelId);
       store.dispatch({ type: 'message/received', message: normalize(m), active });
+      followStream(m);
       if (!store.getState().channels[channelId]?.loaded) for (const l of unknownListeners.current) l(channelId);
       if (active) markRead(channelId);
     },
-    [store, normalize, markRead],
+    [store, normalize, markRead, followStream],
   );
 
   const refreshChannelList = useCallback(async () => {
@@ -230,6 +252,11 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
               messageId: info.messageId,
               reason: info.extra?.trim() || 'This message was not delivered.',
             }),
+          // Card votes/approvals (metadata/set on the server) update the card in place.
+          onMessageMetadataUpdated: ({ messageId, channelIdentifier, metadata }) =>
+            store.dispatch({ type: 'message/metadata', channelId: channelIdentifier.channelId, messageId, metadata }),
+          onStreamMessageRequestDelta: ({ messageId, chunkInfo }) => store.dispatch({ type: 'stream/delta', messageId, text: chunkInfo.messageContent }),
+          onStreamMessageRequestComplete: ({ messageId }) => store.dispatch({ type: 'stream/complete', messageId }),
           onMessageReceiptResponse: ({ responses }) => {
             for (const r of responses)
               store.dispatch({
@@ -284,9 +311,12 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
     if (session === 'anonymous' && sdkRef.current) void sdkRef.current.NCEngine.disconnect();
   }, [session]);
 
-  // Typing indicators expire on their own.
+  // Typing indicators and agent states without a heartbeat expire on their own.
   useEffect(() => {
-    const t = setInterval(() => store.dispatch({ type: 'typing/expire', now: Date.now() }), 1000);
+    const t = setInterval(() => {
+      store.dispatch({ type: 'typing/expire', now: Date.now() });
+      store.dispatch({ type: 'agent/expire', now: Date.now() });
+    }, 1000);
     return () => clearInterval(t);
   }, [store]);
 
@@ -331,6 +361,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       }
       const page = (res.data.data as Message[]).filter(m => !MESSAGE_TYPE_REGISTRY.some(r => r.isStatusMessage && r.messageType === m.messageType));
       store.dispatch({ type: 'history/loaded', channelId, messages: page.map(m => normalize(m)), hasMore: q.hasNext });
+      for (const m of page) followStream(m);
       // Read counts for my own messages on this page.
       const mine = page.filter(m => m.senderUserId === myIdRef.current && m.needReceipt).map(m => m.messageId);
       if (mine.length) {
@@ -344,7 +375,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       }
       if (isActive(channelId)) markRead(channelId);
     },
-    [store, normalize, markRead],
+    [store, normalize, markRead, followStream],
   );
   /** One page at a time per channel, however many callers ask. */
   const loadHistory = useCallback(

@@ -5,7 +5,14 @@
 //  - A messageId appears once. A live echo of our own send (multi-device sync) merges into the
 //    optimistic copy instead of duplicating it.
 //  - Optimistic sends are keyed by localId until the server assigns a messageId.
+import type { AgentStateMessage } from '@crewarcade/shared';
 import { emptyChannel, type ChannelState, type ChatMessage, type ChatState } from './types';
+
+/** A busy state with no heartbeat for this long is dropped (the server beats every 5 s). */
+export const AGENT_STATE_TTL_MS = 15_000;
+/** Waiting/blocked states are not beaten; they stay this long. */
+export const AGENT_IDLE_STATE_TTL_MS = 30 * 60_000;
+const BUSY = new Set(['thinking', 'designing', 'building', 'checking', 'testing', 'fixing']);
 
 export type ChatAction =
   | { type: 'history/loaded'; channelId: string; messages: ChatMessage[]; hasMore: boolean }
@@ -23,7 +30,11 @@ export type ChatAction =
   | { type: 'typing/expire'; now: number }
   | { type: 'unread/set'; channelId: string; count: number }
   | { type: 'preview/set'; channelId: string; message: ChatMessage | null; unread: number }
-  | { type: 'agent/state'; channelId: string; agentId: string; state: string };
+  | { type: 'agent/state'; channelId: string; state: AgentStateMessage; receivedAt: number }
+  | { type: 'agent/expire'; now: number }
+  | { type: 'message/metadata'; channelId: string; messageId: string; metadata: Record<string, string>; replace?: boolean }
+  | { type: 'stream/delta'; messageId: string; text: string; channelId?: string }
+  | { type: 'stream/complete'; messageId: string };
 
 const compare = (a: ChatMessage, b: ChatMessage) => a.sentTime - b.sentTime || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 
@@ -47,6 +58,10 @@ export function mergeMessages(existing: ChatMessage[], incoming: ChatMessage[]):
         ...(prev.blockedReason && { blockedReason: prev.blockedReason }),
         ...(readCount !== undefined && { readCount }),
         totalCount: m.totalCount ?? prev.totalCount,
+        ...((prev.meta || m.meta) && { meta: { ...prev.meta, ...m.meta } }),
+        // A stream that already grew live keeps its longer text until the server copy catches up.
+        ...(prev.kind === 'stream' && m.kind === 'stream' && (prev.text?.length ?? 0) > (m.text?.length ?? 0) && !m.streamComplete && { text: prev.text }),
+        ...(prev.streamComplete && { streamComplete: true }),
       };
     }
   }
@@ -178,8 +193,64 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return update(state, action.channelId, c => ({ ...c, preview: action.message ?? c.preview, unread: action.unread }));
 
     case 'agent/state':
-      return update(state, action.channelId, c => ({ ...c, agentStates: { ...c.agentStates, [action.agentId]: action.state } }));
+      return update(state, action.channelId, c => {
+        const agentStates = { ...c.agentStates };
+        if (action.state.state === 'idle') delete agentStates[action.state.agentId];
+        else agentStates[action.state.agentId] = { ...action.state, receivedAt: action.receivedAt };
+        return { ...c, agentStates };
+      });
+
+    case 'agent/expire': {
+      let changed = false;
+      const channels: ChatState['channels'] = {};
+      for (const [id, c] of Object.entries(state.channels)) {
+        const live = Object.entries(c.agentStates).filter(
+          ([, s]) => action.now - s.receivedAt < (BUSY.has(s.state) ? AGENT_STATE_TTL_MS : AGENT_IDLE_STATE_TTL_MS),
+        );
+        if (live.length !== Object.keys(c.agentStates).length) {
+          changed = true;
+          channels[id] = { ...c, agentStates: Object.fromEntries(live) };
+        } else channels[id] = c;
+      }
+      return changed ? { ...state, channels } : state;
+    }
+
+    case 'message/metadata':
+      return update(state, action.channelId, c => {
+        const i = c.messages.findIndex(m => m.messageId === action.messageId);
+        if (i === -1) return c;
+        const messages = [...c.messages];
+        const prev = messages[i]!;
+        messages[i] = { ...prev, meta: action.replace ? { ...action.metadata } : { ...prev.meta, ...action.metadata } };
+        return { ...c, messages };
+      });
+
+    case 'stream/delta':
+    case 'stream/complete': {
+      // Stream events carry only the messageId: find the channel that holds it.
+      const channelId =
+        (action.type === 'stream/delta' && action.channelId) ||
+        Object.keys(state.channels).find(id => state.channels[id]!.messages.some(m => m.messageId === action.messageId));
+      if (!channelId) return state;
+      return update(state, channelId, c => {
+        const i = c.messages.findIndex(m => m.messageId === action.messageId);
+        if (i === -1) return c;
+        const messages = [...c.messages];
+        const prev = messages[i]!;
+        messages[i] =
+          action.type === 'stream/delta'
+            ? { ...prev, kind: 'stream', text: action.text.length >= (prev.text?.length ?? 0) ? action.text : prev.text, streamComplete: false }
+            : { ...prev, streamComplete: true };
+        return { ...c, messages, preview: c.preview?.messageId === action.messageId ? messages[i]! : c.preview };
+      });
+    }
   }
+}
+
+/** Busy and waiting agents of a channel, Pixel, Forge, Glitch order. */
+export function roomAgentStates(c: ChannelState | undefined): Array<AgentStateMessage & { receivedAt: number }> {
+  if (!c) return [];
+  return (['pixel', 'forge', 'glitch'] as const).map(k => c.agentStates[k]).filter((s): s is AgentStateMessage & { receivedAt: number } => !!s);
 }
 
 /** Names of people typing in a channel (excluding me), in a stable order. */
