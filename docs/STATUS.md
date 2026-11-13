@@ -58,8 +58,9 @@ Render + Vercel.
   the seed are verified on Postgres via PGlite in `apps/server/test/db.test.ts`.
 - CI has not run yet: the repo has no GitHub remote. Push `phase-0` to see it go green.
 - Migration not applied to Supabase yet: needs the Supabase connection string (see the Phase 0 report).
-- Agent user IDs contain `-`, which Nexconn IDs do not allow; mapped with `nexconnUserId()`
-  (`agentpixel`…). Owner to decide: keep the mapping or rename the IDs.
+- Decided: agent DB IDs stay `agent-pixel` / `agent-forge` / `agent-glitch`; Nexconn sees
+  `agentpixel` / `agentforge` / `agentglitch` via `nexconnUserId()`. Phase 1 must also map webhook
+  user IDs back (Nexconn ID → DB ID) for agents.
 - Free Chat Plan promo (10K MAU) is not in the Nexconn pricing docs; the documented Free plan lasts one
   month (2,000 MAU) and then blocks the app. Confirm in the console.
 - Translation bills at least 1,000 characters per day with any usage (10K free) → on-demand only.

@@ -296,7 +296,9 @@ WEBM…). Server only (`SARVAM_API_KEY`).
 ## Discrepancies found (prompt facts vs live docs, 2026-11-13)
 
 1. **Agent user IDs**: the docs allow only letters and digits; `agent-pixel` has a dash. We keep the
-   DB IDs and map with `nexconnUserId()`. Alternative: rename the agents to `agentpixel` etc.
+   DB IDs and map with `nexconnUserId()` (`agent-pixel` → `agentpixel`). **Decided by the owner
+   (2026-11-13): keep the mapping.** Every Nexconn call (tokens, channel members, `fromUserId`) and
+   every webhook lookup goes through it; never pass a DB user ID to Nexconn directly.
 2. **Streaming send** uses `toChannelId` (singular) and an object `content`; `isEchoToSender` defaults to 1.
 3. **Webhook signature header** is `AppKey`, not `App-Key`.
 4. **Free plan**: one month, 2,000 MAU, app blocked after expiry; the 10K-MAU promo is not documented.
