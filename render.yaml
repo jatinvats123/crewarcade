@@ -1,0 +1,55 @@
+# Render Blueprint: the CrewArcade server as ONE Docker web service (API, webhooks, pg-boss
+# workers, Playwright playtest worker). Secrets are set in the Render dashboard (sync: false).
+services:
+  - type: web
+    name: crewarcade-server
+    runtime: docker
+    region: singapore # next to Nexconn SG and Supabase ap-southeast-1
+    plan: standard # 2 GB RAM: headless Chromium needs >= 2 GB
+    dockerfilePath: ./apps/server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    preDeployCommand: node dist/migrate.js
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - apps/server/**
+        - packages/**
+        - pnpm-lock.yaml
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: RUN_WORKERS
+        value: 'true'
+      - key: WEB_ORIGIN
+        sync: false
+      - key: PUBLIC_API_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_POOL_MAX
+        value: '10'
+      - key: NEXCONN_APP_KEY
+        sync: false
+      - key: NEXCONN_APP_SECRET
+        sync: false
+      - key: NEXCONN_API_BASE
+        value: https://api.sg-light-api.com
+      - key: NEXCONN_API_BACKUP
+        value: https://api-b.sg-light-api.com
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-opus-5-5
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: DAILY_BUDGET_USD
+        value: '25'
