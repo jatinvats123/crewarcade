@@ -31,16 +31,16 @@ and anyone who opens a shared game link and wants to make their own.
 - Nexconn's strategy: **AI agents as first-class chat participants** plus trust & safety. Every feature
   should show one of these pillars:
 
-| Pillar                           | How CrewArcade shows it                                                                                |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Agent identities                 | Pixel, Forge, Glitch are Nexconn users with tokens, avatars, presence; members of every crew channel   |
-| Agent-to-agent handoffs          | `CA:Handoff` messages: Pixel → Forge ("plan approved, build v1"), Forge → Glitch, Glitch → Forge (fix) |
-| Streamed and structured messages | Forge streams build progress (`RC:StreamMsg`); every decision is a structured `CA:Card`                |
-| Human-in-the-loop approval       | Plan votes + Approve; publish needs an approver's Allow; both are live metadata on the card            |
-| Audit trails                     | `ledger` table + per-game "How it was made" timeline (who decided what, tokens, cost, time)            |
-| Agent states                     | `CA:AgentState` → state chips (thinking, building, testing, waiting for you…)                          |
-| Prompt-injection defense         | Pre-messaging shield + agents treat chat as untrusted data + typed outputs only                        |
-| Trust & safety                   | Pre-messaging moderation, masked content, report flows, sandboxed games, publish gate                  |
+| Pillar                           | How CrewArcade shows it                                                                              |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Agent identities                 | Pixel, Forge, Glitch are Nexconn users with tokens, avatars, presence; members of every crew channel |
+| Agent-to-agent handoffs          | `CA:HandoffCard`: Pixel → Forge ("Build v1 from this plan"), Forge → Glitch, Glitch → Forge (fix)    |
+| Streamed and structured messages | Agents stream replies (`RC:StreamMsg`, markdown); every decision is a typed card (`CA:PlanCard`, …)  |
+| Human-in-the-loop approval       | Plan votes + Approve; publish needs an approver's Allow; both are live metadata on the card          |
+| Audit trails                     | `ledger` table + per-game "How it was made" timeline (who decided what, tokens, cost, time)          |
+| Agent states                     | `CA:AgentState` → state chips (thinking, building, testing, waiting for you…)                        |
+| Prompt-injection defense         | Pre-messaging shield + agents treat chat as untrusted data + typed outputs only                      |
+| Trust & safety                   | Pre-messaging moderation, masked content, report flows, sandboxed games, publish gate                |
 
 ## 3. Personas
 
@@ -118,14 +118,27 @@ judge accounts (Phase 6 builds `/judge`). A guest account lives in that browser;
 ### 4.3 Pitch → plan → approve
 
 1. Members pitch ideas (text, or a voice note transcribed by Sarvam `saaras:v4`, Hindi/Hinglish ok).
-2. Pixel merges the pitches into one plan card (`plan`): title, pitch, highlights, the acceptance
-   checklist, credits. State = `voting`.
-3. Members vote 👍/👎 on the card (metadata `vote_<userId>`); counts animate live.
-4. When the quorum is met, an approver taps **Approve**. Metadata `status = approved`; ledger
-   `plan.approved`; the game gets a slug and its **game room** (a new group channel, card `game_room`).
-5. Pixel hands off to Forge (`CA:Handoff`, ledger `handoff`).
+2. The router (`apps/server/src/agents/router.ts`) sees the message on the `message:send` webhook:
+   `@pixel` (structured mention, text, or the Hindi name), `pitch: …`, `remix <game> into …`, or a plain
+   pitch in a **solo crew** (one human). It enqueues an idempotent job (id from the messageId); one
+   job per room runs at a time. Messages from agents never trigger agents.
+3. Pixel's chip shows **thinking**, then **designing** while its 1-2 sentence intro streams into the
+   chat ("Ooh, I love this! Planning _Chai Dash_…", in the pitcher's language or Hinglish). Then it
+   posts `CA:PlanCard`: title, pitch, controls, core loop, win/lose, scoring, look, sound, 4-8
+   acceptance items (checkable via `window.__crew.state()`), language, credits. The game row exists
+   from here (`status planning`, unique slug).
+4. Anyone votes 👍/👎 (`POST /api/cards/:messageId/vote`; metadata `yes`, `no`, `voters`); counts
+   update live on every phone. There is no quorum: an owner/approver taps **Approve** when the crew
+   is happy (in a solo crew the owner). Metadata `status = approved`, `approvedBy`, `roomChannelId`.
+5. **Change**: a sheet ("make it faster") or "@pixel make it …" → Pixel posts plan v+1, the old card
+   becomes `superseded`, votes start again.
+6. On approval: the **game room** "🎮 <title>" (group channel with every crew member + agents), a
+   `CA:RoomLink` in the crew chat, the approved plan copy and a `CA:HandoffCard` (Pixel → Forge) in the
+   room, build v1 queued for Forge (Phase 3 runs it; the handoff shows "Forge will start soon"), one
+   crew-memory preference saved (`crews.settings.memory`, ≤ 10 bullets, used in later plans). Every
+   step is in the ledger.
 
-Rejected or ignored plans stay in the chat; a new pitch starts a new plan.
+Superseded or ignored plans stay in the chat; a new pitch starts a new plan.
 
 ### 4.4 Build (streamed) and Live Build Theater
 
@@ -190,8 +203,15 @@ user per day because translation is billed per character.
 
 ## 5. Card catalogue
 
-All cards are `CA:Card` messages whose content is `{ v: 1, payload }` (zod `CardPayload` in
-`packages/shared/src/cards.ts`). Live state is Nexconn message metadata (`status`, `actor`, `vote_*`).
+**Decision (Phase 2):** every card is its own custom message type (`CA:PlanCard`, `CA:HandoffCard`,
+`CA:BuildCard`, `CA:TestCard`, `CA:PublishCard`, `CA:BugCard`, `CA:ScoreCard`, `CA:RoomLink`), replacing
+the Phase 0 single `CA:Card` envelope, so each is registered on its own and old clients ignore new
+types. Content is JSON with a schema version `v` (zod in `packages/shared/src/cards.ts`); live state is
+Nexconn message metadata (string values, parsed by `parseCardMeta`), always computed by the server from
+`cards.state` (the source of truth, updated under a row lock). The rows below are the product view;
+the Phase 2 type names are: plan → `CA:PlanCard`, handoff → `CA:HandoffCard`, game_room → `CA:RoomLink`,
+build_ready → `CA:BuildCard`, playtest → `CA:TestCard`, publish_request/published → `CA:PublishCard`,
+bug_report/repro → `CA:BugCard`, leaderboard → `CA:ScoreCard`. Shield cards arrive with the shield.
 
 | Card              | Sent by       | When                         | Shows                                               | Actions (who)                                |
 | ----------------- | ------------- | ---------------------------- | --------------------------------------------------- | -------------------------------------------- |
@@ -210,7 +230,9 @@ All cards are `CA:Card` messages whose content is `{ v: 1, payload }` (zod `Card
 | `leaderboard`     | system        | new top score / weekly       | top 10                                              | Play (all)                                   |
 | `shield`          | system        | a message was blocked/masked | rule, action, a safe summary (never the content)    | Learn more                                   |
 
-Other custom types: `CA:Handoff` (agent→agent line), `CA:AgentState` (status, not persisted),
+Other custom types: `CA:AgentState` (status message, not persisted: `{v, agentId, state, detail,
+startedAt, progress?}` with states idle, thinking, designing, building, checking, testing, fixing,
+waiting_approval, blocked; re-sent every 5 s while busy, clients drop busy states after 15 s without a beat),
 `CA:Notice` (welcome, joins, room created, budget), `CA:Reaction` (Live Theater, not persisted),
 `CA:Typing` (group typing indicator, status message; the Web SDK has typing only for direct channels).
 
@@ -244,7 +266,9 @@ IDs are non-sequential alphanumeric nanoids (`newId()`), timestamps `timestamptz
 | `live_rooms`     | open channel id, game, started/ended, peak viewers                                                                                                                     |
 | `webhook_events` | webhook dedupe by Nexconn event id                                                                                                                                     |
 
-Ledger actions: `plan.created`, `plan.vote`, `plan.approved`, `handoff`, `build.started`,
+Ledger actions: `plan.created`, `plan.revised`, `plan.vote`, `plan.change_requested`, `plan.approved`,
+`plan.refused`, `plan.failed`, `room.created`, `build.queued`, `agent.replied`, `agent.explained`,
+`crew.memory_updated` (Phase 2), `handoff`, `build.started`,
 `build.check_failed`, `build.ready`, `test.passed`, `test.failed`, `bug.reported`, `bug.reproduced`,
 `hotfix.ready`, `publish.requested`, `publish.approved`, `publish.blocked`, `shield.blocked`,
 `moderation.masked` (format `area.verb`, enforced by a CHECK constraint).

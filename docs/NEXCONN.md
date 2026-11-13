@@ -109,21 +109,23 @@ server adds members directly:
 {
   "fromUserId": "agentpixel",
   "toChannelIds": ["crewAbC…"],
-  "messageType": "CA:Card",
-  "content": "{\"v\":1,\"payload\":{…}}",
+  "messageType": "CA:PlanCard",
+  "content": "{\"v\":1,\"gameId\":\"g…\",…}",
   "pushContent": "Pixel posted a plan",
   "isEchoToSender": 0,
   "shouldPersist": 1,
   "hasMetadata": true,
-  "metadata": { "status": "voting" },
+  "metadata": { "status": "pending", "yes": "0", "no": "0", "voters": "{}" },
   "needReadReceipt": 0
 }
 ```
 
 - `toChannelIds` ≤ 3; `toUserIds` (targeted message) only with one channel, and then no metadata/push fields.
 - `messageType`: built-in (`RC:TxtMsg`, …) or custom: must not start with `RC:` (the Web docs also
-  reserve `NC:`), ≤ 32 chars, registered on the client. Ours: `CA:Card`, `CA:Handoff`,
-  `CA:AgentState`, `CA:Notice`, `CA:Reaction` (`MESSAGE_TYPES` in `@crewarcade/shared`).
+  reserve `NC:`), ≤ 32 chars, registered on the client. Ours: one type per card
+  (`CA:PlanCard`, `CA:HandoffCard`, `CA:BuildCard`, `CA:TestCard`, `CA:PublishCard`, `CA:BugCard`,
+  `CA:ScoreCard`, `CA:RoomLink`) plus `CA:AgentState`, `CA:Notice`, `CA:Reaction`, `CA:Typing`
+  (`MESSAGE_TYPES` in `@crewarcade/shared`).
 - `content` is a **JSON string**, ≤ 10 KB (except image/stream/voice/… types).
 - Flags are **numbers** (`isEchoToSender`, `shouldPersist`, `hasMention`, `needReadReceipt`: 0/1);
   `hasMetadata`, `disablePush` are **booleans**. `hasMetadata`/`metadata` work only with one target channel.
@@ -140,14 +142,19 @@ server adds members directly:
   "userId": "u…",
   "channelType": 3,
   "channelId": "crewAbC…",
-  "metadata": { "vote_u123": "yes" },
+  "metadata": { "yes": "2", "no": "0", "voters": "{\"u123\":\"yes\",\"u456\":\"yes\"}" },
   "isEchoToSender": 1
 }
 ```
 
 The message must have been sent with `hasMetadata: true`. Keys ≤ 32 chars of letters, digits and
 `+ = - _`; values ≤ 4096 chars; ≤ 100 pairs per request, ≤ 300 per message. Clients get
-`onMessageMetadataUpdated`. Our keys: `status`, `actor`, `vote_<userId>` (`META` in shared).
+`onMessageMetadataUpdated`. Our keys (Phase 2): plan `status` (pending | approved | changes_requested |
+superseded), `yes`, `no`, `voters` (JSON `{nexconnUserId: "yes"|"no"}`), `approvedBy`, `supersededBy`,
+`roomChannelId`; handoff/build/test/publish/bug `status` (+ `decidedBy`, `decidedAt`, `reproClipUrl`,
+`fixedInVersion`). The server always writes the full set computed from `cards.state`, so a retried
+`metadata/set` is idempotent; the operator `userId` is the human who acted (votes, approval) or the
+agent. 30 voters in one JSON value stay far below 4,096 chars (tested).
 
 ### Streaming (AI-style) messages
 
@@ -175,6 +182,17 @@ The message must have been sent with `hasMetadata: true`. Keys ≤ 32 chars of l
   `extra` only here. Response `result.messageId` (first chunk only); send it in every later chunk.
 - `seq` starts at 1 and increases by exactly 1. Last chunk `complete: true` (optional `completeReason`).
 - All chunks together ≤ 128 KB. `isEchoToSender` defaults to **1** here. `toUserIds` ≤ 10 for targeted streams.
+- Re-checked against the live page on **2026-11-14**: request/response shapes above are current; the
+  docs list `content` as required on every chunk (we never send an empty one: the closing chunk
+  carries the tail, or a single space). `metadata` is accepted on stream sends; we do not use it.
+- Ours: `apps/server/src/nexconn/stream.ts` batches deltas every ~300 ms, ≤ 1 KB per chunk, keeps the
+  total under 128 KB (truncates with "…"), and on any failure sends the full reply once as `RC:TxtMsg`.
+- Web: a stream arrives through `onMessageReceived` as an `RC:StreamMsg` whose content is
+  `StreamMessageContent { content, isCompleted }`. While not completed the client calls
+  `message.requestStreamMessage()`; chunks then arrive on `onStreamMessageRequestDelta` (keyed by
+  `messageId` only, so the client finds the channel itself) and the end on
+  `onStreamMessageRequestComplete`. History loads carry the final content. _Unverified until the first
+  live run:_ whether chunks also arrive without `requestStreamMessage()` for online receivers.
 - Web client: `MessageHandler.onStreamMessageRequestInit({ messageId })`,
   `onStreamMessageRequestDelta({ messageId, chunkInfo: { content, messageContent } })`
   (`messageContent` = everything so far), `onStreamMessageRequestComplete({ messageId, code })`.
@@ -404,3 +422,8 @@ WEBM…). Server only (`SARVAM_API_KEY`).
     approval, which our UI never offers) and people are added with the server `join` API, which the
     docs say needs no approval. Whether `3` ("nobody can join") also blocks the server API is
     unverified, so we did not use it. (Phase 1)
+14. **Server-sent status messages:** the Platform API has no `isStatusMessage` flag; `CA:AgentState`
+    is sent with `shouldPersist: 0`, `disablePush: true`, `disableUpdateLastMsg: true`, and clients
+    treat it as a status message because it is registered with `isStatusMessage: true`. (Phase 2)
+15. **Card types:** the Phase 0 sheet planned one `CA:Card` envelope; Phase 2 uses one registered type
+    per card (see SPEC §5 decision). All ≤ 32 chars, none start with `RC:`/`NC:`. (Phase 2)

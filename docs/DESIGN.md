@@ -74,7 +74,7 @@ Theme: follows `prefers-color-scheme`; the toggle stores `crewarcade:theme` and 
 | `IconButton`    | requires `label` (accessible name + tooltip); `ghost`, `filled`, `brand`                                 |
 | `Avatar`        | `kind="agent"` (agent, state, presence) or `kind="human"` (emoji, colour, name, presence)                |
 | `Badge`         | tones; `RoleBadge` (Owner/Approver), `AiBadge`, `TranslatedBadge`                                        |
-| `StateChip`     | agent state (idle, thinking, planning, building, testing, reproducing, waiting, blocked, error)          |
+| `StateChip`     | agent state (idle, thinking, designing, building, checking, testing, fixing, waiting_approval, blocked)  |
 | `Chip`          | selectable filter chip (`aria-pressed`)                                                                  |
 | `CardShell`     | header (agent avatar, name, title, meta, badges), body, action row                                       |
 | `Sheet`         | bottom sheet / dialog, Esc + backdrop close, focus in and back                                           |
@@ -83,6 +83,19 @@ Theme: follows `prefers-color-scheme`; the toggle stores `crewarcade:theme` and 
 | `EmptyState`    | emoji, title, text, action                                                                               |
 | `ErrorState`    | `role=alert`, optional retry                                                                             |
 | `Composer`      | attach, auto-growing textarea (Enter sends, Shift+Enter newline), mic ↔ send swap                        |
+
+Chat pieces (Phase 2, `components/cards`, `components/agents`, `components/story`, `components/chat/Markdown`):
+
+| Component          | Notes                                                                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `CardMessage`      | one renderer per card type on `CardShell` (agent avatar + name + AI badge, status badge, action row)                                    |
+| `PlanCard`         | plan at a glance, "Full plan" expander, checklist, 👍/👎 with optimistic counts (`animate-pop`), Approve (approvers only), Change sheet |
+| `AgentStatusStrip` | top of every room: Pixel/Forge/Glitch chips ("thinking 4s", "testing 12/18"); tap → sheet with the last 5 ledger actions                |
+| `StoryTimeline`    | the game's ledger as a vertical timeline, tokens/cost per agent step, Details expander, Export JSON                                     |
+| `Markdown`         | safe subset (bold, italic, code, lists, headings, http links) as React elements; soft caret while streaming                             |
+
+Game rooms open at `/crews/<id>/rooms/<channelId>`; room chips under the header switch between the
+crew chat and each game room. Desktop shows the Story in the context panel; phones open it from 📜.
 
 ## Motion
 

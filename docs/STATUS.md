@@ -4,16 +4,162 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
 
 ## Phase checklist
 
-| Phase | Theme                       | Status                                                        |
-| ----- | --------------------------- | ------------------------------------------------------------- |
-| 0     | Foundation                  | **Done** (branch `phase-0`)                                   |
-| 1     | Identity, crews, chat       | **Built** (branch `phase-1`); live Nexconn check pending keys |
-| 2     | Pixel, cards, approval      | —                                                             |
-| 3     | Forge, builds, Live Theater | —                                                             |
-| 4     | Glitch, playtest, publish   | —                                                             |
-| 5     | Bugs, voice, languages      | —                                                             |
-| 6     | Arcade and growth           | —                                                             |
-| 7     | Polish and launch           | —                                                             |
+| Phase | Theme                       | Status                                                               |
+| ----- | --------------------------- | -------------------------------------------------------------------- |
+| 0     | Foundation                  | **Done** (branch `phase-0`)                                          |
+| 1     | Identity, crews, chat       | **Built** (branch `phase-1`); live Nexconn check pending keys        |
+| 2     | Pixel, cards, approval      | **Built** (branch `phase-2`); live Nexconn + Claude run pending keys |
+| 3     | Forge, builds, Live Theater | —                                                                    |
+| 4     | Glitch, playtest, publish   | —                                                                    |
+| 5     | Bugs, voice, languages      | —                                                                    |
+| 6     | Arcade and growth           | —                                                                    |
+| 7     | Polish and launch           | —                                                                    |
+
+## Phase 2: built, waiting for Nexconn and Anthropic keys to verify live (branch `phase-2`)
+
+The agents are real chat members and Pixel works end to end. Everything below runs and is tested
+locally against a fake Nexconn and the fake agents. **Not run yet:** anything against a real Nexconn
+app or real Claude (no `NEXCONN_*` or `ANTHROPIC_API_KEY` on this machine), so the phone checklist,
+the two-user Pixel e2e and the real cost numbers are still open (see "Needed from the owner").
+
+### Done
+
+- **Message router** (`apps/server/src/agents/router.ts`): on `message:send` in crew and game rooms,
+  drops agent senders (no loops), finds agents by structured mention, `@pixel` / `@forge` / `@glitch`
+  (any case, not inside emails or words), Hindi names (`@पिक्सेल`, "पिक्सेल, …", "pixel bhai …"),
+  commands (`remix <game> into …` incl. Hinglish/Hindi forms, `explain …` / "kaise kaam karta",
+  `bug: …` / `बग: …`, `make it …` / "isko …", `pitch: …`) and plain pitches in solo crews. 45-row
+  table test in English, Hindi and Hinglish.
+- **Jobs**: pg-boss 12 queue `agent` (+ `forge-build`, waiting for Phase 3). Job ids are UUIDs derived
+  from the messageId (or `card:<id>:change:<n>`), so retries never run twice; 4 jobs per process
+  (`AGENT_CONCURRENCY`), 1 per room (pg-boss `groupConcurrency: 1`, group = channel). Tested on PGlite
+  through pg-boss's own adapter; an in-memory queue with the same rules serves the other tests.
+  `JOBS_DATABASE_URL` takes a session/direct URL when `DATABASE_URL` is Supabase's transaction pooler.
+- **Claude wrapper** (`apps/server/src/ai/claude.ts`): `structured()` (zod schema → JSON schema for
+  `output_config.format`, optionally streaming one field live) and `streamText()`; `claude-opus-5-5`,
+  explicit effort per call (plan/revise medium, explain low; Forge high and Glitch medium are set when
+  they land), cached system prompt, `fallbacks: "default"` with beta `server-side-fallback-2026-07-01`,
+  timeouts, typed errors (`AiRefusalError`, `AiOutputError`, `AiTimeoutError`, `AiUnavailableError`),
+  `stop_reason` checked before content, no prefill, usage → tokens in/out, cache, cost (price table),
+  ms, fallback flag. Tested against a local fake Messages API (exact request body and headers).
+- **Pixel**: one streamed structured call per plan; the `intro` field streams into the chat while the
+  rest of the JSON generates, then the `CA:PlanCard`. Input: pitch, last 30 room messages
+  (`messages_log`, agent replies included), crew memory, pitch language (Devanagari, other Indian
+  scripts, Hinglish heuristics). Output normalized to the engine `GameSpec` (4–8 checks renumbered,
+  lengths clamped), unique slug (`chai-dash-2`…). Revisions (button or chat) post plan v+1 and
+  supersede the old card; remix finds the source (slug, then approved title, then published) and sets
+  `remixOfGameId`; explain streams ≤ 8 lines from the plan. Forge/Glitch and small talk get canned
+  replies (no AI). Refusal → "I can't make that one. Try another idea?"; other failures → a friendly
+  line; daily budget guard (`DAILY_BUDGET_USD`).
+- **Prompt safety**: chat text only inside `<untrusted>` blocks in the user turn; every system prompt
+  says not to follow instructions in it, not to reveal prompts or keys, change role, skip votes or
+  approvals, or make non-game content, and to turn known games into original twists.
+- **FAKE_AGENTS=1** (`apps/server/src/ai/fake.ts`): same interface, deterministic plans from the pitch
+  (same hero word → same title), language-aware intros, realistic delays (1.8 s thinking, typed
+  intro), explain answers, Forge/Glitch fixture outputs for later phases. Allowed in production config.
+- **Streaming bridge** (`apps/server/src/nexconn/stream.ts`): chunk 1 with `type: markdown` + user,
+  seq +1, ~300 ms batches, ≤ 1 KB chunks, < 128 KB total, closing `complete: true`; any failure → one
+  `RC:TxtMsg` with the full reply. The web app follows streams with `requestStreamMessage()` +
+  delta/complete handlers and renders a safe Markdown subset with a soft caret.
+- **Cards**: one registered type each (`CA:PlanCard`, `CA:HandoffCard`, `CA:BuildCard`, `CA:TestCard`,
+  `CA:PublishCard`, `CA:BugCard`, `CA:ScoreCard`, `CA:RoomLink`) with `v` + zod content and metadata
+  schemas; `CA:AgentState` status message. `postCard` (hasMetadata, `cards` row) / `updateCard`
+  (metadata/set with retries; values always recomputed from `cards.state`, which is updated under a row
+  lock). Renderers for all eight on `CardShell` with the AI badge; the plan card has optimistic votes
+  (latest request wins), Approve (approvers only), a Change sheet and a Full plan expander.
+- **Votes and approval**: `POST /api/cards/:messageId/vote|approve|change`; members only (404
+  otherwise), Approve owner/approver only (403), one approval (409 after), votes close on approval.
+  Approval creates the game room "🎮 <title>" with every crew member + agents (create, then join beyond
+  30), `CA:RoomLink` in the crew chat, the approved plan copy + `CA:HandoffCard` (Pixel → Forge, "Forge
+  will start soon") in the room, `game_versions` v1, a queued build job, and one crew-memory note
+  (≤ 10). New crew members are added to existing game rooms.
+- **Agent Status Strip**: three chips per room from `CA:AgentState` (thinking, designing,
+  waiting_approval… with timers and progress), 5 s server heartbeat while busy, client expiry after 15 s
+  without a beat, `GET /api/rooms/:channelId/agents` snapshot on open; tap → a sheet with the agent's
+  last 5 ledger actions.
+- **Decision Ledger**: `record()` on every agent step and human decision (tokens, cost, ms, input,
+  output, reason); `GET /api/games/:id/ledger` (long strings redacted, totals); Story tab in the desktop
+  context panel and a 📜 sheet on phones, with Details and Export JSON. `usage` gets each call's cost.
+- **Game rooms in the web app**: `/crews/<id>/rooms/<channelId>`, room chips under the header,
+  `GET /api/rooms/:channelId`, crew detail includes `games`.
+- Docs: SPEC (§4.3 flow, card-type decision, agent states, ledger actions), NEXCONN (stream page
+  re-checked 2026-11-14, Web stream flow, metadata keys, discrepancies 14–15), DESIGN, CLAUDE.
+
+### Verified locally (2026-11-14)
+
+- `pnpm lint` ✓ (ESLint, Prettier, client secret check), `pnpm typecheck` ✓, `pnpm build` ✓.
+- `pnpm test`: **272 tests** (shared 24, engine 38, web 48, server 159, root 3). The server suite runs
+  the whole Pixel flow on PGlite + fake Nexconn: webhook → router → job → states → stream → card →
+  votes (incl. concurrent) → permissions → approval → room, link, copy, handoff, build → ledger order;
+  plus explain, change (button and chat), remix, refusal, stream failure, idempotency, agent loops.
+- `pnpm e2e`: **26 passed, 4 skipped** (the two-user chat and two-user Pixel specs, phone + desktop,
+  skip without Nexconn). New: card UI, streamed Markdown and status strip on `/dev/ui`.
+- `pnpm eval:fast`: **21/21 planted bugs caught, 0 false FAILs** (4.0 min; engine untouched).
+- Checked in a browser at 375 px: plan card header, votes, Approve, handoff (fixed a squeezed title).
+
+### Cost per plan (not measured yet)
+
+`pnpm --filter @crewarcade/server measure:pixel` runs 5 pitches (English, Hindi, Hinglish and a
+"make Flappy Bird" one) through the production prompt and prints tokens, cost, time and time to the
+first intro words, plus averages. It needs `ANTHROPIC_API_KEY` and was **not run** (no key here).
+**Estimate only** (prices: $4 / $20 per million tokens): ~1.5 K input tokens (system ≈ 1 K + output
+schema + request) ≈ $0.006, plus ~1.5–5 K output tokens including medium-effort thinking ≈
+$0.03–0.10, so roughly **$0.04–0.11 and 20–60 s per plan**. The system prompt is probably under
+Opus's minimum cacheable size, so expect `cache_read` ≈ 0 for Pixel until the prompt grows.
+
+### Run the Pixel e2e (two users, FAKE_AGENTS)
+
+1. Server with a **dev** Nexconn app (as in Phase 1) **and `FAKE_AGENTS=1`**. The Nexconn webhook must
+   reach this server (`message:send`; use a tunnel for local runs) with "Include Server API Messaging
+   in post-event webhooks" on.
+2. `E2E_CHAT=1 E2E_API_ORIGIN=http://127.0.0.1:8080 pnpm e2e --project desktop`.
+
+### Phone checklist (Phase 2)
+
+1. Phone A (owner), in a crew with Phone B: send `@pixel a chai cup on a scooter dodging potholes`
+   (pick Pixel from the @ list). The strip shows **Pixel · Thinking**, then **Designing**; Pixel's
+   intro types itself out on both phones; the Plan card appears.
+2. Both phones tap 👍: the count reaches 2 on both screens within a second or two. Phone B has no
+   Approve button.
+3. Phone B taps **Change**, types "make it faster": the card says "Change requested", then plan v2
+   arrives and v1 says "Replaced by a newer plan".
+4. Phone A taps **Approve** on v2: "Approved by …" on both; a "🎮 …" room link appears in the crew chat;
+   the room shows the approved plan and "Forge will start soon"; 📜 shows the Story with tokens and
+   cost for Pixel's steps; Export JSON downloads it.
+5. In the room: `@pixel explain how does the jump work?` gives a short streamed answer.
+6. In a solo crew, type a pitch without @: Pixel answers. Try "make flappy bird": the title is original.
+
+### Known issues / open questions (Phase 2)
+
+- **Nothing has talked to real Nexconn or Claude.** Highest-risk unverified pieces: the Web stream flow
+  (`requestStreamMessage` + deltas), status messages sent through the server API, metadata echo to
+  the operator, and structured outputs accepting our generated schema (`outputJsonSchema`).
+- The intro streams only after Opus finishes thinking, so with real Claude the "thinking" chip may
+  show for 10–30 s before words appear. If that feels slow, try Pixel at `low` effort after measuring
+  plan quality.
+- Forge's build job is queued but no worker runs it yet (Phase 3): the handoff card stays "Forge will
+  start soon" and the Forge chip shows "Waiting for approval · build v1 starts soon".
+- Live agent states and heartbeats live in process memory (one Render instance); a restart drops them
+  (clients expire them after 15 s).
+- No quorum before Approve (per the Phase 2 brief an approver decides); votes are advisory.
+- The pre-messaging shield is still allow-all (agents rely on the prompt rules and typed outputs).
+- The crew list's activity dot and unread badge follow the crew chat only, not game rooms.
+- The server bundle now imports `@crewarcade/engine` (spec schemas), which loads Playwright's module
+  at startup (no browser is launched).
+
+### Needed from the owner
+
+1. A dev Nexconn App Key/Secret (and a webhook URL Nexconn can reach) to run the two e2e specs and the
+   phone checklist.
+2. An `ANTHROPIC_API_KEY` in `apps/server/.env` (never committed), then
+   `pnpm --filter @crewarcade/server measure:pixel` for the real cost and time per plan (≈ $0.50 total).
+3. On Render: `JOBS_DATABASE_URL` = the Supabase **session** pooler URL (port 5432) for pg-boss, and
+   optionally `FAKE_AGENTS=1` as a demo fallback.
+
+## Next: Phase 3
+
+A Forge worker for the queued `forge-build` jobs (handoff → started/done, `CA:BuildCard`), streamed
+build progress, static-check retries, Storage, Live Build Theater.
 
 ## Phase 1: built, waiting for Nexconn keys to verify live (branch `phase-1`)
 
@@ -149,12 +295,6 @@ dev App Key and App Secret (see "Needed from the owner").
 - Local dev runs on Node 24 here; the Docker image enforces Node 22 LTS.
 - Fixed during this phase: the server bundle imported `nanoid` (via `@crewarcade/shared`) without
   declaring it; a test now checks that every dependency of bundled workspace packages is declared.
-
-## Next: Phase 2
-
-Pitch detection, Pixel plan cards (`CA:Card` renderers), voting via message metadata, approver
-Approve, ledger, agent states (`CA:AgentState` → chips and the crew-list dot), handoffs, the first
-pre-messaging shield rules, game rooms.
 
 ## Phase 0: done
 

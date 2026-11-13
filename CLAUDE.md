@@ -14,7 +14,7 @@ Built for the Nexconn Build Challenge 2026 (deadline 2026-11-22 23:59 AoE) on th
 ```
 apps/web          Next.js App Router + Tailwind v4 (Vercel). Mobile-first UI, Nexconn Web SDK client.
   src/app           routes: / landing, /start, /i/[code], /crews, /crews/[id], /settings, /dev/ui
-  src/components    ui/ (design system), brand/, identity/, crews/, chat/, shell/
+  src/components    ui/ (design system), brand/, identity/, crews/, chat/, cards/, agents/, story/, shell/
   src/lib           api client, session, crews, chat/ (pure reducer + text), nexconn/NexconnProvider
   src/env.ts        public env schema (NEXT_PUBLIC_* only)
   e2e/              Playwright e2e (phone + desktop)
@@ -24,7 +24,10 @@ apps/server       Fastify API + Nexconn webhooks + pg-boss jobs + AI agents + pl
   src/db/           Drizzle schema, client, migrate, seed (agent users)
   src/nexconn/      signed Platform API client (failover, retries, rate limits) + typed calls
   src/webhooks/     /webhooks/nexconn (verify, dedupe, pre-messaging, processing)
-  src/routes/ services/ repo/   HTTP routes, flows (crews, tokens), DB access
+  src/agents/       router (intents), queue (pg-boss / memory), Pixel, prompts, live states, runtime
+  src/ai/           Claude wrapper (structured + streaming, fallbacks, cost), FAKE_AGENTS client
+  src/routes/ services/ repo/   HTTP routes, flows (crews, tokens, plans, rooms, ledger), DB access
+  scripts/          measure-pixel.ts (real Claude cost for 5 pitches)
   drizzle/          generated SQL migrations (never hand-edit; `pnpm db:generate`)
   Dockerfile        on mcr.microsoft.com/playwright (tag = engine's playwright version)
 packages/engine   starter template, static checker, headless playtester, GIF clipper, versioning, eval
@@ -52,6 +55,7 @@ pnpm build                   # web (next build) + server (esbuild → apps/serve
 pnpm db:generate             # SQL migration from the Drizzle schema
 pnpm db:migrate              # apply migrations (DATABASE_URL)
 pnpm db:seed                 # upsert the three agent users
+pnpm --filter @crewarcade/server measure:pixel   # real Claude cost/time for 5 plans (needs ANTHROPIC_API_KEY)
 docker build -f apps/server/Dockerfile -t crewarcade-server .   # server image (repo root context)
 ```
 
