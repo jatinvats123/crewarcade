@@ -1,0 +1,185 @@
+@import 'tailwindcss';
+
+/* CrewArcade design tokens (docs/DESIGN.md). Dark-first; light via prefers-color-scheme or
+   data-theme="light" on <html>. Components use the Tailwind names below (bg-surface, text-dim,
+   text-pixel...), never raw hex. */
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0b0a16;
+  --surface: #15132a;
+  --surface-2: #1e1b3a;
+  --surface-3: #28244b;
+  --border: #2e2a55;
+  --text: #f4f1ff;
+  --dim: #a39dcc;
+  --faint: #6f6a99;
+  --brand: #ff4d8d;
+  --brand-ink: #1a0610;
+  --gold: #ffd166;
+  --pixel: #a78bfa;
+  --forge: #f5b83d;
+  --glitch: #3dd6f5;
+  --success: #34d399;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --overlay: rgb(5 4 14 / 0.66);
+  --shadow: 0 12px 32px -12px rgb(0 0 0 / 0.6);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+    --bg: #faf8ff;
+    --surface: #ffffff;
+    --surface-2: #f1eefb;
+    --surface-3: #e6e1f7;
+    --border: #ddd7f0;
+    --text: #17142b;
+    --dim: #5e5880;
+    --faint: #8f89ad;
+    --brand: #e11d74;
+    --brand-ink: #ffffff;
+    --gold: #b7791f;
+    --pixel: #7c3aed;
+    --forge: #b45309;
+    --glitch: #0e7490;
+    --success: #059669;
+    --danger: #dc2626;
+    --warning: #b45309;
+    --overlay: rgb(23 20 43 / 0.45);
+    --shadow: 0 12px 32px -16px rgb(23 20 43 / 0.25);
+  }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #faf8ff;
+  --surface: #ffffff;
+  --surface-2: #f1eefb;
+  --surface-3: #e6e1f7;
+  --border: #ddd7f0;
+  --text: #17142b;
+  --dim: #5e5880;
+  --faint: #8f89ad;
+  --brand: #e11d74;
+  --brand-ink: #ffffff;
+  --gold: #b7791f;
+  --pixel: #7c3aed;
+  --forge: #b45309;
+  --glitch: #0e7490;
+  --success: #059669;
+  --danger: #dc2626;
+  --warning: #b45309;
+  --overlay: rgb(23 20 43 / 0.45);
+  --shadow: 0 12px 32px -16px rgb(23 20 43 / 0.25);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-dim: var(--dim);
+  --color-faint: var(--faint);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-gold: var(--gold);
+  --color-pixel: var(--pixel);
+  --color-forge: var(--forge);
+  --color-glitch: var(--glitch);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-overlay: var(--overlay);
+  --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --shadow-card: var(--shadow);
+  --radius-card: 1.25rem;
+  --ease-snappy: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --animate-slide-up: slide-up 220ms var(--ease-snappy) both;
+  --animate-fade-in: fade-in 180ms ease-out both;
+  --animate-pop: pop 200ms var(--ease-snappy) both;
+  --animate-float-up: float-up 1600ms ease-out forwards;
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.85);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes float-up {
+  from {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-160px) scale(1.4);
+    opacity: 0;
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100dvh;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+@utility pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+@utility px-safe {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
