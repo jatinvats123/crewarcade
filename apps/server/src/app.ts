@@ -1,14 +1,26 @@
-// Builds the Fastify app. Dependencies are injected so tests run without a database.
+// Builds the Fastify app. Dependencies are injected so tests run on PGlite with a fake Nexconn.
 import Fastify, { type FastifyInstance } from 'fastify';
-import type { Config } from './config';
+import { cookieSecure, sessionSecret, type Config } from './config';
+import type { Ctx } from './context';
+import type { Db } from './db/types';
+import type { NexconnClient } from './nexconn/client';
+import { registerAuthRoutes } from './routes/auth';
+import { registerCrewRoutes } from './routes/crews';
+import { installApiPlumbing } from './routes/http';
+import { registerWebhookRoutes } from './webhooks/routes';
 
 export interface AppDeps {
-  config: Pick<Config, 'NODE_ENV' | 'LOG_LEVEL' | 'WEB_ORIGIN'>;
+  config: Config;
   /** Resolves when the database answers; rejects otherwise. */
   pingDb: () => Promise<void>;
+  /** Without a db only /health and / are served (used by the health tests). */
+  db?: Db;
+  nexconn?: NexconnClient | null;
   /** Pino logger options override (tests pass false). */
   logger?: boolean | object;
   version?: string;
+  now?: () => number;
+  runInBackground?: Ctx['runInBackground'];
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -18,7 +30,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       deps.logger ??
       (config.NODE_ENV === 'development'
         ? { level: config.LOG_LEVEL, transport: { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } } }
-        : { level: config.LOG_LEVEL, redact: ['req.headers.authorization', 'req.headers.signature', 'req.headers.cookie'] }),
+        : { level: config.LOG_LEVEL, redact: ['req.headers.authorization', 'req.headers.signature', 'req.headers.cookie', 'res.headers["set-cookie"]'] }),
     trustProxy: true,
     bodyLimit: 1024 * 1024,
   });
@@ -41,12 +53,35 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       dbLatencyMs: Math.round(performance.now() - t0),
       uptimeS: Math.round((Date.now() - started) / 1000),
       version: deps.version ?? process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? 'dev',
+      nexconn: deps.nexconn ? 'configured' : 'not_configured',
       ...(error && config.NODE_ENV !== 'production' && { error }),
     };
     return reply.code(db === 'up' ? 200 : 503).send(body);
   });
 
   app.get('/', async () => ({ name: 'crewarcade-server', health: '/health' }));
+
+  if (deps.db) {
+    const ctx: Ctx = {
+      config,
+      db: deps.db,
+      nexconn: deps.nexconn ?? null,
+      log: app.log,
+      session: { secret: sessionSecret(config), secure: cookieSecure(config), ...(deps.now && { now: deps.now }) },
+      now: deps.now ?? Date.now,
+      runInBackground:
+        deps.runInBackground ??
+        ((name, task) => {
+          setImmediate(() => {
+            task().catch(err => app.log.error({ err, task: name }, 'background task failed'));
+          });
+        }),
+    };
+    installApiPlumbing(app, ctx);
+    registerAuthRoutes(app, ctx);
+    registerCrewRoutes(app, ctx);
+    registerWebhookRoutes(app, ctx);
+  }
   return app;
 }
 

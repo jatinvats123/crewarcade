@@ -50,6 +50,18 @@ const BaseSchema = z.object({
   /** 32 random bytes, base64: encrypts Nexconn access tokens at rest (users.nexconn_token_encrypted). */
   TOKEN_ENCRYPTION_KEY: optionalSecret.refine(v => v === undefined || Buffer.from(v, 'base64').length === 32, 'must be 32 bytes, base64-encoded'),
 
+  /** Signs session cookies (HS256 JWT). At least 32 characters. Required in production. */
+  SESSION_SECRET: optionalSecret.refine(v => v === undefined || v.length >= 32, 'must be at least 32 characters'),
+  /** Secure flag on the session cookie. Defaults to true in production. */
+  COOKIE_SECURE: bool.optional(),
+  /** Webhooks whose Timestamp header is further than this from now are rejected: the Nexconn
+   *  signature does not cover the body, so a fresh timestamp is what stops replayed headers. */
+  WEBHOOK_MAX_SKEW_MS: z.coerce
+    .number()
+    .int()
+    .min(1000)
+    .default(10 * 60 * 1000),
+
   /** Global daily AI spend guard in USD (builds stop for the day when reached). */
   DAILY_BUDGET_USD: z.coerce.number().min(0).default(25),
   /** Run the pg-boss job workers in this process (one Render service runs API + workers). */
@@ -65,6 +77,7 @@ export const ConfigSchema = BaseSchema.superRefine((c, ctx) => {
     'SUPABASE_SERVICE_ROLE_KEY',
     'ANTHROPIC_API_KEY',
     'TOKEN_ENCRYPTION_KEY',
+    'SESSION_SECRET',
   ] as const) {
     if (!c[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'is required in production' });
   }
@@ -104,5 +117,16 @@ export function integrations(c: Config): Record<string, boolean> {
     anthropic: !!c.ANTHROPIC_API_KEY,
     sarvam: !!c.SARVAM_API_KEY,
     tokenEncryption: !!c.TOKEN_ENCRYPTION_KEY,
+    sessionSecret: !!c.SESSION_SECRET,
   };
 }
+
+/** Dev-only session secret so local sessions survive restarts. Never used when NODE_ENV=production
+ *  (the config refuses to load without SESSION_SECRET there). */
+export const DEV_SESSION_SECRET = 'crewarcade-dev-only-session-secret-not-for-production';
+export function sessionSecret(c: Pick<Config, 'SESSION_SECRET' | 'NODE_ENV'>): string {
+  if (c.SESSION_SECRET) return c.SESSION_SECRET;
+  if (c.NODE_ENV === 'production') throw new Error('SESSION_SECRET is required in production');
+  return DEV_SESSION_SECRET;
+}
+export const cookieSecure = (c: Pick<Config, 'COOKIE_SECURE' | 'NODE_ENV'>): boolean => c.COOKIE_SECURE ?? c.NODE_ENV === 'production';

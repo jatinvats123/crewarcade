@@ -51,5 +51,10 @@ services:
         sync: false
       - key: TOKEN_ENCRYPTION_KEY
         sync: false
+      # Signs session cookies. Render generates a random value once and keeps it.
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: WEBHOOK_MAX_SKEW_MS
+        value: '600000'
       - key: DAILY_BUDGET_USD
         value: '25'

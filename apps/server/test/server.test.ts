@@ -21,7 +21,7 @@ describe('config', () => {
       ANTHROPIC_MODEL: 'claude-opus-5-5',
       RUN_WORKERS: true,
     });
-    expect(integrations(c)).toEqual({ nexconn: false, supabaseStorage: false, anthropic: false, sarvam: false, tokenEncryption: false });
+    expect(integrations(c)).toEqual({ nexconn: false, supabaseStorage: false, anthropic: false, sarvam: false, tokenEncryption: false, sessionSecret: false });
   });
 
   it('fails fast listing every missing value', () => {
@@ -30,7 +30,15 @@ describe('config', () => {
       loadConfig({ NODE_ENV: 'production', DATABASE_URL: DB });
     } catch (e) {
       const problems = (e as ConfigError).problems.join('\n');
-      for (const k of ['NEXCONN_APP_KEY', 'NEXCONN_APP_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'ANTHROPIC_API_KEY', 'TOKEN_ENCRYPTION_KEY'])
+      for (const k of [
+        'NEXCONN_APP_KEY',
+        'NEXCONN_APP_SECRET',
+        'SUPABASE_URL',
+        'SUPABASE_SERVICE_ROLE_KEY',
+        'ANTHROPIC_API_KEY',
+        'TOKEN_ENCRYPTION_KEY',
+        'SESSION_SECRET',
+      ])
         expect(problems).toContain(k);
       return;
     }
@@ -53,6 +61,7 @@ describe('config', () => {
       SUPABASE_SERVICE_ROLE_KEY: 'svc',
       ANTHROPIC_API_KEY: 'a',
       TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+      SESSION_SECRET: 's'.repeat(32),
     });
     expect(integrations(c).nexconn).toBe(true);
   });
@@ -152,5 +161,13 @@ describe('deploy', () => {
     expect(docker).toContain(`mcr.microsoft.com/playwright:v${v}-noble`);
     // The Playwright image ships a newer Node; the image must run Node 22 LTS.
     expect(docker).toMatch(/FROM node:22\.\d+\.\d+-bookworm-slim AS node22/);
+  });
+});
+
+describe('bundle dependencies', () => {
+  it('declares every runtime dependency of the workspace packages esbuild bundles in (pnpm is strict)', () => {
+    const read = (p: string) => JSON.parse(fs.readFileSync(path.join(ROOT, p, 'package.json'), 'utf8')) as { dependencies?: Record<string, string> };
+    const server = Object.keys(read('apps/server').dependencies ?? {});
+    for (const pkg of ['packages/shared']) for (const dep of Object.keys(read(pkg).dependencies ?? {})) expect(server, `${pkg} needs ${dep}`).toContain(dep);
   });
 });
