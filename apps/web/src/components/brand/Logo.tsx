@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn';
 /** The CrewArcade wordmark: a joystick-dot mark + "Crew" / "Arcade" in the display font. */
 export function Logo({ className, showMark = true }: { className?: string; showMark?: boolean }) {
   return (
-    <span className={cn('inline-flex items-center gap-2 font-display font-bold tracking-tight', className)} aria-label="CrewArcade">
+    <span className={cn('inline-flex items-center gap-2 font-display font-bold tracking-tight', className)} role="img" aria-label="CrewArcade">
       {showMark && <LogoMark className="size-[1.3em]" />}
       <span aria-hidden>
         Crew<span className="text-brand">Arcade</span>

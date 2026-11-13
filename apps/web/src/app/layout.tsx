@@ -20,6 +20,8 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // Android Chrome: the on-screen keyboard resizes the layout, so the composer stays above it.
+  interactiveWidget: 'resizes-content',
   themeColor: [
     { media: '(prefers-color-scheme: dark)', color: '#0b0a16' },
     { media: '(prefers-color-scheme: light)', color: '#faf8ff' },

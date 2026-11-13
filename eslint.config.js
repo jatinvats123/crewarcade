@@ -57,7 +57,7 @@ export default tseslint.config(
       'no-restricted-syntax': [
         'error',
         {
-          selector: "MemberExpression[object.object.name='process'][object.property.name='env'][property.name=/^(?!NEXT_PUBLIC_|NODE_ENV$|CI$|E2E_PORT$)/]",
+          selector: "MemberExpression[object.object.name='process'][object.property.name='env'][property.name=/^(?!NEXT_PUBLIC_|NODE_ENV$|CI$|E2E_)/]",
           message: 'Browser code may only read NEXT_PUBLIC_* env vars.',
         },
       ],

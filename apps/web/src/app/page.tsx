@@ -22,7 +22,7 @@ export default function Landing() {
       </header>
 
       <section className="flex flex-col items-start gap-5 py-10 sm:py-16">
-        <Badge tone="brand">Phase 0 · coming together</Badge>
+        <Badge tone="brand">Built on the Nexconn Chat SDK</Badge>
         <h1 className="font-display text-4xl leading-[1.05] font-bold tracking-tight sm:text-6xl">
           Your friends + 3 AI agents.
           <br />
@@ -33,12 +33,12 @@ export default function Landing() {
           and share it.
         </p>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <span
-            className="inline-flex min-h-13 items-center justify-center rounded-2xl bg-brand px-6 text-lg font-semibold text-brand-ink opacity-60"
-            aria-disabled
+          <Link
+            href="/start"
+            className="inline-flex min-h-13 items-center justify-center rounded-2xl bg-brand px-6 text-lg font-semibold text-brand-ink shadow-card hover:brightness-110"
           >
-            Start a crew (soon)
-          </span>
+            Start a crew
+          </Link>
           <Link
             href="/dev/ui"
             className="inline-flex min-h-13 items-center justify-center rounded-2xl border border-border bg-surface-2 px-6 text-lg font-semibold hover:bg-surface-3"

@@ -14,7 +14,7 @@
   --border: #2e2a55;
   --text: #f4f1ff;
   --dim: #a39dcc;
-  --faint: #6f6a99;
+  --faint: #8e89ba;
   --brand: #ff4d8d;
   --brand-ink: #1a0610;
   --gold: #ffd166;
@@ -38,7 +38,7 @@
     --border: #ddd7f0;
     --text: #17142b;
     --dim: #5e5880;
-    --faint: #8f89ad;
+    --faint: #68628a;
     --brand: #e11d74;
     --brand-ink: #ffffff;
     --gold: #b7791f;
@@ -62,7 +62,7 @@
   --border: #ddd7f0;
   --text: #17142b;
   --dim: #5e5880;
-  --faint: #8f89ad;
+  --faint: #68628a;
   --brand: #e11d74;
   --brand-ink: #ffffff;
   --gold: #b7791f;
@@ -152,7 +152,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 1rem; /* respects the browser and OS text size */
   line-height: 1.5;
   min-height: 100dvh;
 }

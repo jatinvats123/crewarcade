@@ -41,7 +41,11 @@ export function Avatar(props: Props) {
         </span>
       )}
       {props.presence && (
-        <span className={cn('absolute -right-0.5 -bottom-0.5 rounded-full ring-2 ring-bg', DOT[size], PRESENCE[props.presence])} aria-label={props.presence} />
+        <span
+          className={cn('absolute -right-0.5 -bottom-0.5 rounded-full ring-2 ring-bg', DOT[size], PRESENCE[props.presence])}
+          role="img"
+          aria-label={props.presence}
+        />
       )}
     </span>
   );
