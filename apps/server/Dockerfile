@@ -2,9 +2,19 @@
 # Build from the repo root:  docker build -f apps/server/Dockerfile -t crewarcade-server .
 # The base image ships Chromium for Playwright; its tag MUST match packages/engine's playwright
 # version (a test in apps/server enforces this).
+# That image ships Node 26 (no corepack); we run Node 22 LTS, copied from the official image into
+# /usr/local, which comes before the image's /usr/bin/node on PATH.
+FROM node:22.23.5-bookworm-slim AS node22
+
 FROM mcr.microsoft.com/playwright:v1.64.1-noble AS base
+COPY --from=node22 /usr/local/bin/node /usr/local/bin/node
+COPY --from=node22 /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf ../lib/node_modules/corepack/dist/corepack.js /usr/local/bin/corepack \
+ && ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+ && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+ && node -v | grep -q '^v22\.'
 ENV PNPM_HOME=/pnpm \
-    PATH=/pnpm:$PATH \
+    PATH=/pnpm:/usr/local/bin:$PATH \
     CI=true \
     COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable

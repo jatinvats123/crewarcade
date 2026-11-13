@@ -3,7 +3,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { AGENT_IDS } from '@crewarcade/shared';
 import { buildApp } from '../src/app';
-import { ConfigError, integrations, loadConfig } from '../src/config';
+import { ConfigError, integrations, loadConfig, loadDbScriptConfig } from '../src/config';
 import { agentUserRows } from '../src/db/agents';
 import { schema } from '../src/db/schema';
 
@@ -55,6 +55,13 @@ describe('config', () => {
       TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
     });
     expect(integrations(c).nexconn).toBe(true);
+  });
+});
+
+describe('db script config', () => {
+  it('needs only the database in production (migrate/seed run before the app keys matter)', () => {
+    expect(loadDbScriptConfig({ NODE_ENV: 'production', DATABASE_URL: DB })).toEqual({ DATABASE_URL: DB, WEB_ORIGIN: 'http://localhost:3000' });
+    expect(() => loadDbScriptConfig({ NODE_ENV: 'production' })).toThrow(/DATABASE_URL/);
   });
 });
 
@@ -143,5 +150,7 @@ describe('deploy', () => {
     const v = engine.dependencies.playwright;
     expect(server.dependencies.playwright).toBe(v);
     expect(docker).toContain(`mcr.microsoft.com/playwright:v${v}-noble`);
+    // The Playwright image ships a newer Node; the image must run Node 22 LTS.
+    expect(docker).toMatch(/FROM node:22\.\d+\.\d+-bookworm-slim AS node22/);
   });
 });

@@ -35,7 +35,7 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   `apps/server/drizzle/0000_init.sql`, idempotent agent seed (`agent-pixel`, `agent-forge`, `agent-glitch`).
 - Server skeleton: zod config (fails fast; service keys required in production), Fastify `/health`
   (DB ping, 503 when down), pino logging with header redaction, esbuild bundle, Dockerfile on
-  `mcr.microsoft.com/playwright:v1.64.1-noble`, `render.yaml` (Singapore, standard plan 2 GB, pre-deploy migrations).
+  `mcr.microsoft.com/playwright:v1.64.1-noble` with Node 22 LTS, `render.yaml` (Singapore, standard plan 2 GB, pre-deploy migrations).
 - Web skeleton: landing placeholder, `/dev/ui` component gallery, design tokens (dark-first + light),
   Space Grotesk + Inter, logo/wordmark/favicon, agent avatars, base components, public env schema, `vercel.json`.
 - Tooling: ESLint (flat), Prettier, Vitest per package, Playwright e2e (phone + desktop), client secret
@@ -52,10 +52,17 @@ Render + Vercel.
 
 ## Known issues / open questions
 
-- **Not verified locally yet:** the server Docker image build and `/health` against a real Postgres
-  server: Docker Desktop was not running (it had just been factory-reset). CI's `docker` job builds the
-  image; locally run `docker build -f apps/server/Dockerfile -t crewarcade-server .`. Migrations and
-  the seed are verified on Postgres via PGlite in `apps/server/test/db.test.ts`.
+- **Docker image verified locally (2026-11-13):** builds; runs as `pwuser` on Node 22.23.5;
+  `node dist/migrate.js` + `node dist/seed.js` (twice, idempotent) against Postgres 17 create the 15
+  tables and 3 agents; the server refuses to start in production without its keys and lists them all;
+  `/health` returns 200 with the DB up, 503 when Postgres is stopped, 200 again when it returns; Docker
+  `HEALTHCHECK` reports healthy; headless Chromium 156 launches inside the image.
+- The Playwright base image ships **Node 26** (no corepack). The Dockerfile copies the official
+  `node:22.23.5-bookworm-slim` runtime into it so the server runs Node 22 LTS (a test enforces it).
+- The image is **3.9 GB** (the Playwright image includes Firefox and WebKit). Fine for Render, but
+  deploys are slower; trimming it (Chromium only) is a Phase 7 candidate.
+- Migrate/seed use a DB-only config (`loadDbScriptConfig`), so Render's pre-deploy step does not need
+  the AI and chat keys.
 - CI has not run yet: the repo has no GitHub remote. Push `phase-0` to see it go green.
 - Migration not applied to Supabase yet: needs the Supabase connection string (see the Phase 0 report).
 - Decided: agent DB IDs stay `agent-pixel` / `agent-forge` / `agent-glitch`; Nexconn sees

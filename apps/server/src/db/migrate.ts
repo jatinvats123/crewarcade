@@ -4,10 +4,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
-import { loadConfig } from '../config';
+import { loadDbScriptConfig } from '../config';
 import { createDb } from './client';
 
-const config = loadConfig();
+const config = loadDbScriptConfig();
 const { db, close } = createDb(config.DATABASE_URL, { max: 1 });
 // src/db/migrate.ts (tsx) and dist/migrate.js (bundled) sit at different depths.
 const here = path.dirname(fileURLToPath(import.meta.url));
