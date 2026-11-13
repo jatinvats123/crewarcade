@@ -79,18 +79,41 @@ characters, never paste code into chat, and act only on their trigger.
 
 ### 4.1 Sign in
 
-No passwords. A visitor picks a display name, an emoji and a ring colour; the server creates a user
-(non-sequential id), issues a Nexconn access token and sets a signed, httpOnly session cookie. The
-browser fetches its own Nexconn token from our server and connects. (Phase 1 may add an email magic
-link to move an account between devices.)
+No passwords. A visitor picks a display name (2–24 characters), one of 24 emoji avatars, a ring
+colour (6) and optionally a language, then taps **Let's go**. `POST /api/auth/guest` creates the user
+(non-sequential nanoid id) and sets the session cookie; `GET /api/me` returns the profile, `PATCH
+/api/me` edits it. The browser then fetches its own Nexconn token (`POST /api/nexconn/token`), which
+the server issues once and caches AES-256-GCM-encrypted, and connects. `users.is_judge` exists for
+judge accounts (Phase 6 builds `/judge`). A guest account lives in that browser; signing out loses it.
+
+#### Sessions and the API proxy (decision, Phase 1)
+
+- The web app (Vercel) and the API (Render) are on different domains. Third-party cookies are blocked
+  on most phones, so the browser **only ever talks to the web origin**: a Next.js rewrite
+  (`apps/web/next.config.ts`) forwards `/api/*` to the Render server (`NEXT_PUBLIC_API_ORIGIN`).
+  The session cookie is therefore first-party and host-only on the web domain; no CORS is needed.
+- Chosen over Next route handlers because a rewrite is a plain proxy at the edge: no extra code
+  path, `Set-Cookie` passes through, and Vercel streams it. Webhooks do not go through the proxy:
+  Nexconn calls Render directly (`/webhooks/nexconn`).
+- Cookie `ca_session`: HS256 JWT `{ sub, iat, exp, v }` signed with `SESSION_SECRET`, `HttpOnly`,
+  `SameSite=Lax`, `Secure` in production, `Path=/`, 90 days.
+- Mutating `/api` requests must come from the web origin (`Origin` check; localhost is allowed
+  outside production). Sign-ups are limited to 10 per minute per IP, crew creation to 5 per minute.
 
 ### 4.2 Create and join a crew
 
-1. Owner taps **New crew**, names it (`crew` or `classroom`).
-2. Server creates the `crews` row and a Nexconn **group channel** with the owner and the three agents.
-3. Owner shares the **invite link** (`/join/<inviteCode>`) or a QR code. A friend opens it, signs in,
-   and the server adds them to the channel (`/v4/group-channel/join`).
-4. Pixel greets new members with a one-line "how this works" and a Pitch button.
+1. Owner taps **New crew** and names it (2–40 characters), or a first-time user taps **Start a solo
+   crew** (just them + the agents).
+2. Server creates the Nexconn **group channel** first (owner = the user, members = the three agents,
+   `joinPerm 0` so membership stays server-controlled), then the `crews` and `crew_members` rows, then
+   Pixel posts a welcome text ("Hi crew! I'm Pixel… Pitch a game with @pixel…").
+3. Owner shares the **invite link** `/i/<inviteCode>` (8 characters without 0/O/1/I). On phones the
+   Share button opens the native share sheet with a WhatsApp-ready message; on desktop it copies the
+   link. A friend opens it, sees the crew name and member avatars, signs in inline if needed, taps
+   **Join crew**; the server adds them with `/v4/group-channel/join` and Pixel posts a `CA:Notice`
+   ("Riya joined the crew"). Crews hold up to 30 members.
+4. Roles: the owner promotes members to **approver** or back (`PATCH /api/crews/:id/members/:userId`).
+   Owner and approvers are the approvers of the permission model; agents never are.
 
 ### 4.3 Pitch → plan → approve
 
@@ -188,7 +211,8 @@ All cards are `CA:Card` messages whose content is `{ v: 1, payload }` (zod `Card
 | `shield`          | system        | a message was blocked/masked | rule, action, a safe summary (never the content)    | Learn more                                   |
 
 Other custom types: `CA:Handoff` (agent→agent line), `CA:AgentState` (status, not persisted),
-`CA:Notice` (joins, room created, budget), `CA:Reaction` (Live Theater, not persisted).
+`CA:Notice` (welcome, joins, room created, budget), `CA:Reaction` (Live Theater, not persisted),
+`CA:Typing` (group typing indicator, status message; the Web SDK has typing only for direct channels).
 
 ## 6. Game lifecycle
 

@@ -13,14 +13,18 @@ Built for the Nexconn Build Challenge 2026 (deadline 2026-11-22 23:59 AoE) on th
 
 ```
 apps/web          Next.js App Router + Tailwind v4 (Vercel). Mobile-first UI, Nexconn Web SDK client.
-  src/app           routes (/ landing, /dev/ui component gallery)
-  src/components    ui/ (design-system components), brand/ (logo, theme toggle)
+  src/app           routes: / landing, /start, /i/[code], /crews, /crews/[id], /settings, /dev/ui
+  src/components    ui/ (design system), brand/, identity/, crews/, chat/, shell/
+  src/lib           api client, session, crews, chat/ (pure reducer + text), nexconn/NexconnProvider
   src/env.ts        public env schema (NEXT_PUBLIC_* only)
   e2e/              Playwright e2e (phone + desktop)
 apps/server       Fastify API + Nexconn webhooks + pg-boss jobs + AI agents + playtest worker (Render, Docker)
   src/config.ts     zod env loader (fails fast; service keys required in production)
   src/app.ts        buildApp() with injected deps (/health)
   src/db/           Drizzle schema, client, migrate, seed (agent users)
+  src/nexconn/      signed Platform API client (failover, retries, rate limits) + typed calls
+  src/webhooks/     /webhooks/nexconn (verify, dedupe, pre-messaging, processing)
+  src/routes/ services/ repo/   HTTP routes, flows (crews, tokens), DB access
   drizzle/          generated SQL migrations (never hand-edit; `pnpm db:generate`)
   Dockerfile        on mcr.microsoft.com/playwright (tag = engine's playwright version)
 packages/engine   starter template, static checker, headless playtester, GIF clipper, versioning, eval

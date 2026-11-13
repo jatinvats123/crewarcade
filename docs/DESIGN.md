@@ -27,7 +27,7 @@ Components use Tailwind names generated from tokens (`bg-surface`, `text-dim`, `
 | `border`     | `#2e2a55` | `#ddd7f0` | hairlines                     |
 | `text`       | `#f4f1ff` | `#17142b` | body                          |
 | `dim`        | `#a39dcc` | `#5e5880` | secondary text                |
-| `faint`      | `#6f6a99` | `#8f89ad` | meta, placeholders            |
+| `faint`      | `#8e89ba` | `#68628a` | meta, placeholders (≥ 4.5:1)  |
 | `brand`      | `#ff4d8d` | `#e11d74` | primary actions, logo         |
 | `gold`       | `#ffd166` | `#b7791f` | owner, best score, highlights |
 | **`pixel`**  | `#a78bfa` | `#7c3aed` | Pixel · Designer (violet)     |

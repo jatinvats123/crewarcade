@@ -198,13 +198,19 @@ flow (`/chatsdk-web/open-channel/*.md`).
 
 - One URL for all events: Console → **Chat → Chat settings → Webhooks → Config**. Ours:
   `PUBLIC_API_ORIGIN/webhooks/nexconn`. Singapore sender IPs are listed on the overview page.
+  Because the console takes **one** URL, pre-messaging events arrive there too and are answered
+  synchronously in the same handler (`apps/server/src/webhooks/routes.ts`); `/webhooks/nexconn/pre` is
+  only an alias. Flow: verify the signature (constant time) and that `Timestamp` is within
+  `WEBHOOK_MAX_SKEW_MS` (the signature does not cover the body) → `*:pre_messaging` answers
+  `{ "pass": 1 }` at once (Phase 1) → other events: insert the event id into `webhook_events`
+  (duplicate → 200), reply 200, process asynchronously (in-process now; pg-boss in Phase 3).
 - Body: `{ "type": "message:send", "id": "<uuid or snowflake>", "time": <ms>, "data": [ { … } ] }`
   (`WebhookEnvelope` in shared; empty fields omitted).
 - Verify headers **`AppKey`** (no dash, unlike API calls), `Nonce`, `Timestamp`, `Signature`, where
   `Signature = sha1(AppSecret + Nonce + Timestamp)` lowercase hex. Mismatch → discard.
 - Delivery: 5 s timeout, **3 attempts total**; any 2xx is success. Circuit breaker: if 30 events in a
   minute all fail, delivery pauses for 1 minute. → Handlers answer fast and are idempotent: insert
-  the event id into `webhook_events` first, skip duplicates, do the work in a pg-boss job.
+  the event id into `webhook_events` first, skip duplicates, do the work after replying.
 - Events we use:
   - `message:send` data: `userId, channelId, channelType, messageType, content (JSON string), time,
 messageId, os (iOS|Android|Websocket|Server)`, optional `groupUserIds, aiGenerated, profanityType`.
@@ -213,7 +219,25 @@ messageId, os (iOS|Android|Websocket|Server)`, optional `groupUserIds, aiGenerat
     logged out, `userId`, `os`, `time`, `clientIp`, `sessionId`. Abnormal disconnects arrive within 5 min.
     → `connections` (event id as key), `/stats` unique users.
   - `group_channel:operation` (join/leave/kick/create/dismiss), `group_channel:changed`, and
-    `open_channel:operation` for viewer counts. _Payloads to verify when implemented._
+    `open_channel:operation` for viewer counts. _Payloads to verify when implemented._ Phase 1
+    acknowledges every other event type and logs it at debug.
+  - Server-API sends (Pixel's welcome, join notices) reach `message:send` only when **Include Server
+    API Messaging in post-event webhooks** is on (Chat → Chat settings → Messages).
+
+### Console setup (once per App Key)
+
+1. <https://console.nexconn.ai> → your app → **Key Management**: copy the **App Key** and **App Secret**
+   into Render (`NEXCONN_APP_KEY`, `NEXCONN_APP_SECRET`). Check that the data center is **Singapore**.
+2. **Chat → Chat settings → Webhooks → Config**: URL `https://<render-service>.onrender.com/webhooks/nexconn`.
+   Add the events **`message:send`**, **`user:connection_status`** and **`group_channel:pre_messaging`**
+   (Phase 4 also needs `direct_channel:pre_messaging`). Save.
+3. **Chat → Chat settings → Messages**: turn on **Include Server API Messaging in post-event webhooks**.
+4. **Chat → Chat settings**: turn on **Subscribe to user online status** (presence dots) and, if the
+   console lists it, **group read receipts** (the "Seen by" sheet).
+5. Leave automatic moderation and the profanity filter off: our pre-messaging shield owns safety.
+6. Send one message in a crew (this also locks in the plan promo if it applies) and check the server
+   log shows `webhook: processed` for `message:send`.
+
 - Channel types: 1 direct, 3 group, 4 open, 6 system, 10 community.
 
 ### Pre-messaging (synchronous safety gate)
@@ -234,32 +258,91 @@ clientIp, aiGenerated`.
 
 ## Web client (`@nexconn/chat`)
 
-```ts
-import { NCEngine, AreaCode, LogLevel, ConnectionStatusHandler, MessageHandler, GroupChannel, SendTextMessageParams, SendMessageParams } from '@nexconn/chat';
+Installed: **`@nexconn/chat@26.2.1` + `@nexconn/engine@26.2.1`** (npm `latest`, same version for both,
+as the import guide requires). Every name below was checked in
+`apps/web/node_modules/@nexconn/chat/index.d.ts` on 2026-11-13. Our wrapper is
+`apps/web/src/lib/nexconn/NexconnProvider.tsx` (one provider for the whole signed-in app).
 
-NCEngine.initialize({ appKey, areaCode: AreaCode.SG, logLevel: LogLevel.WARN }); // exactly once per app lifetime
-NCEngine.registerCustomMessages(MESSAGE_TYPE_REGISTRY); // BEFORE connect; options: messageType, isPersited, isCounted, isStatusMessage?, remoteFileUrlField?
-NCEngine.addConnectionStatusHandler('crew', new ConnectionStatusHandler({ onConnectionStatusChanged({ status, code }) {} }));
-NCEngine.addMessageHandler('crew', new MessageHandler({ onMessageReceived({ messages }) {} /* + metadata, stream, offline sync */ }));
-const res = await NCEngine.connect({ token }); // res.code === 0 → res.data.userId; built-in reconnect, call once
-await new GroupChannel(id).sendMessage(new SendTextMessageParams({ text }));
-await new GroupChannel(id).sendMessage(new SendMessageParams(payload, 'CA:Card'));
+```ts
+import {
+  NCEngine,
+  AreaCode,
+  LogLevel,
+  ConnectionStatus,
+  ConnectionStatusHandler,
+  MessageHandler,
+  ChannelHandler,
+  UserHandler,
+  GroupChannel,
+  BaseChannel,
+  SendTextMessageParams,
+  SendMessageParams,
+  Helper,
+  MentionedType,
+  SubscribeType,
+  MessageReadReceiptStatus,
+} from '@nexconn/chat';
+
+NCEngine.initialize({ appKey, areaCode: AreaCode.SG, logLevel: LogLevel.WARN }); // once per page lifetime (DEBUG in dev)
+NCEngine.registerCustomMessages(MESSAGE_TYPE_REGISTRY); // BEFORE connect: { messageType, isPersisted, isCounted, isStatusMessage? }
+NCEngine.addConnectionStatusHandler(id, new ConnectionStatusHandler({ onConnectionStatusChanged({ status, code }) {} }));
+NCEngine.addMessageHandler(
+  id,
+  new MessageHandler({
+    onMessageReceived,
+    onOfflineMessageSyncCompleted,
+    onMessageDeleted,
+    onMessageBlocked /* { info: { messageId, channelIdentifier, blockType, extra? } } */,
+    onMessageReceiptResponse /* { responses: [{ messageId, readCount, totalCount, users }] } */,
+    onMessageMetadataUpdated,
+    onStreamMessageRequestInit,
+    onStreamMessageRequestDelta,
+    onStreamMessageRequestComplete,
+  }),
+);
+NCEngine.addChannelHandler(id, new ChannelHandler({ onTypingStatusChanged({ channelIdentifier, userTypingStatus }) {} }));
+NCEngine.addUserHandler(id, new UserHandler({ onSubscriptionChanged({ events }) {} }));
+const res = await NCEngine.connect({ token }); // NCResult: res.isOk / res.code / res.data.userId; the SDK reconnects every 5 s itself
 ```
 
-- Install `@nexconn/engine@latest @nexconn/chat@latest`; the docs import everything from `@nexconn/chat`.
-  The skill requires checking exact enum/class names in `node_modules/@nexconn/**/*.d.ts` when we install
-  them (Phase 1). `areaCode` defaults to SG, `logLevel` to WARN (use Debug while integrating).
-- Results are `{ code, data }`; `code === 0` is success.
-- History: `BaseChannel.createChannelsQuery({ pageSize })`, `BaseChannel.createMessagesQuery({
-channelIdentifier, startTime, pageSize (1–100), isAscending })` → `query.loadNextPage()`. Offline
-  messages are kept 7 days.
-- Message handler events we use: `onMessageReceived`, `onMessageDeleted`, `onMessageBlocked`,
-  `onMessageReceiptResponse`, `onMessageMetadataUpdated`, `onMessageMetadataDeleted`,
-  `onOfflineMessageSyncCompleted`, the three stream events. _To verify in Phase 1:_ exact names of all
-  but the stream events; channel handler `onTypingStatusChanged`; presence `onSubscriptionChanged`;
-  media helpers (`Helper.createSendHDVoiceMessageParams`, image helpers). Doc paths:
-  `/chatsdk-web/message/read-receipt.md`, `/chatsdk-web/channel/typing-status.md`,
-  `/chatsdk-web/user/subscribe_online.md`, `/chatsdk-web/group-channel/groupat.md`.
+- **Lifecycle:** the browser asks our server for its token (`POST /api/nexconn/token` →
+  `{ token, appKey, userId }`). `appKey` comes from the server, so the web app needs no Nexconn env.
+  The SDK is loaded with `import('@nexconn/chat')` inside the provider (never during SSR, never on the
+  landing page). `ConnectionStatus` = `CONNECTED 0 | CONNECTING 1 | DISCONNECTED 2 | SUSPENDED 3`.
+  Codes we act on (`/chatsdk-web/code.md`): `31004` token invalid or expired → ask the server for a
+  fresh token (`{ refresh: true }` re-issues it) and connect again; `31010` kicked by another login →
+  banner with "Use it here"; `33007` auto-reconnect exhausted → connect again. The browser `online`
+  event triggers a manual connect only when the SDK reports `DISCONNECTED` (not while `CONNECTING`).
+- **Send:** `new GroupChannel(id).sendMessage(new SendTextMessageParams({ text, mentionedInfo? }))`;
+  custom types with `new SendMessageParams(content, 'CA:…')`; media with
+  `Helper.createSendImageMessageParams(file)` / `Helper.createSendHDVoiceMessageParams(file)`
+  (→ `NCResult<Send…Params>`), then `channel.sendMediaMessage(params)` with `onUploadProgress(progress)`.
+  We set `params.needReceipt = true` on text, image and voice. Client limit: **5 messages/s across all channels**.
+- **Mentions** (`/chatsdk-web/group-channel/groupat.md`): `mentionedInfo: { type: MentionedType.USERS, userIdList }`.
+  The chat package's `MentionedType` is `{ ALL: 1, USERS: 2 }` (the engine's own enum says `SINGAL`; use the chat one).
+- **History:** `BaseChannel.createMessagesQuery({ channelIdentifier: new GroupChannel(id).identifier, startTime, pageSize: 30, isAscending: false })`
+  → `query.loadNextPage()` → `res.data.data`; `query.hasNext` says whether more pages exist. Web keeps
+  nothing locally: every page comes from the server. Channel list (previews, unread):
+  `BaseChannel.createChannelsQuery({ pageSize: 50 }).loadNextPage()` → `BaseChannel[]` with
+  `latestMessage` and `unreadCount`; `channel.clearUnreadCount()` while a chat is open.
+- **Read receipts (group):** the reader calls `channel.sendReadReceiptResponse(messageIds)`; the sender gets
+  `onMessageReceiptResponse`; on history load `channel.getMessageReadReceiptInfo(ids)` →
+  `{ messageId, readCount, totalCount }[]`; the "Seen by" list is
+  `BaseChannel.createMessagesReadReceiptUsersQuery({ channelIdentifier, messageId, pageSize, status: MessageReadReceiptStatus.RESPONDED })`.
+- **Typing:** `sendTypingStatus(type)` exists **only on `DirectChannel`** in 26.2.1. Group channels
+  support transient status messages (Channel Guide: online members receive them instantly; not
+  stored; not counted toward quotas), so groups use **`CA:Typing`** (registered `isPersisted: false,
+isCounted: false, isStatusMessage: true`), sent at most every 4 s while typing; receivers show it for
+  6.5 s. The server leaves status types out of `messages_log`.
+- **Presence** (`/chatsdk-web/user/subscribe_online.md`):
+  `NCEngine.userModule.subscribeEvent({ userIds, subscribeType: SubscribeType.ONLINE_STATUS })`, then
+  `NCEngine.userModule.getSubscribeUsersOnlineStatus(userIds)` → `{ userId, isOnline }[]`. On
+  `onSubscriptionChanged` we re-query those users instead of decoding `details[].eventValue`. Needs the
+  console service **Subscribe to user online status**. Agents show as "Always here".
+- **Blocked messages:** `onMessageBlocked({ info })` → an inline "Not delivered: <extra>" under the
+  sender's message (`extra` comes from our pre-messaging answer; the rules arrive in Phase 4).
+- Offline messages are kept 7 days and arrive through `onMessageReceived` during sync;
+  `onOfflineMessageSyncCompleted` refreshes the channel list.
 
 ### Built-in translation
 
@@ -293,7 +376,7 @@ WEBM…). Server only (`SARVAM_API_KEY`).
 - CI: `scripts/check-client-secrets.mjs` fails if a server secret name appears in `apps/web` or
   `packages/shared`, or in the built bundle; ESLint blocks non-`NEXT_PUBLIC_` env reads in browser code.
 
-## Discrepancies found (prompt facts vs live docs, 2026-11-13)
+## Discrepancies found (prompt facts vs live docs vs installed SDK)
 
 1. **Agent user IDs**: the docs allow only letters and digits; `agent-pixel` has a dash. We keep the
    DB IDs and map with `nexconnUserId()` (`agent-pixel` → `agentpixel`). **Decided by the owner
@@ -306,3 +389,18 @@ WEBM…). Server only (`SARVAM_API_KEY`).
 6. **Group create**: `groupProfile.portraitUrl` ≤ 128 chars; `groupExtProfile` values ≤ 256 chars; rate
    limit 100/s. Joining is `POST /v4/group-channel/join` (≤ 100 users, no approval).
 7. Free plan limits worth designing around: 300 members/group, 50 concurrent open channels, 15K message size.
+8. **`registerCustomMessages` flag:** the customize doc says `isPersited`; the installed typings
+   (`CustomMessageRegistration`, 26.2.1) say **`isPersisted`**. The installed code wins; the shared
+   registry uses `isPersisted`. (Phase 1)
+9. **Group typing:** the typing doc calls `sendTypingStatus` on a channel, but in 26.2.1 only
+   `DirectChannel` has it. Groups use the `CA:Typing` status message. (Phase 1)
+10. **Read-receipt users query:** the doc example passes `MessageReadReceiptStatus.READ`; the enum is
+    `{ RESPONDED: 0, UNRESPONDED: 1 }`. We use `RESPONDED`. (Phase 1)
+11. **`MentionedType`:** the engine enum has `ALL = 1, SINGAL = 2`; the chat package exports
+    `{ ALL: 1, USERS: 2 }` as the groupat doc says. We use the chat package's. (Phase 1)
+12. **`NCEngine.connect` result** is an `NCResult` with `isOk`, `code`, `msg` and `data` (this sheet
+    used to say `{ code, data }`). (Phase 1)
+13. **Group `joinPerm`:** crews are created with `joinPerm: 0` (client-side joins need the owner's
+    approval, which our UI never offers) and people are added with the server `join` API, which the
+    docs say needs no approval. Whether `3` ("nobody can join") also blocks the server API is
+    unverified, so we did not use it. (Phase 1)
