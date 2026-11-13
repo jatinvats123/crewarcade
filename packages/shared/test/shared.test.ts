@@ -2,23 +2,30 @@ import { describe, expect, it } from 'vitest';
 import {
   AGENTS,
   AGENT_IDS,
-  CARD_TYPES,
+  AgentStateMessage,
+  CARD_MESSAGE_TYPES,
+  CARD_SCHEMAS,
   LIMITS,
   MESSAGE_TYPES,
   MESSAGE_TYPE_REGISTRY,
-  META,
   META_KEY_RE,
   PreMessagingResponse,
+  STATUS_MESSAGE_TYPES,
   WebhookEnvelope,
+  applyVote,
+  cardKindOf,
+  cardPreview,
   decodeCard,
   encodeCard,
   isAgentId,
   isNexconnId,
+  metaToStrings,
   newId,
   newInviteCode,
   nexconnUserId,
-  tallyVotes,
-  type CardPayload,
+  parseCardMeta,
+  type CardKind,
+  type PlanCardContent,
 } from '../src';
 
 describe('agents', () => {
@@ -60,52 +67,132 @@ describe('message types', () => {
       expect(t).not.toMatch(/^(RC|NC):/);
     }
     expect(MESSAGE_TYPE_REGISTRY.map(r => r.messageType).sort()).toEqual(Object.values(MESSAGE_TYPES).sort());
+    expect(STATUS_MESSAGE_TYPES).toEqual(new Set(['CA:AgentState', 'CA:Reaction', 'CA:Typing']));
   });
 });
+
+export const plan: PlanCardContent = {
+  v: 1,
+  gameId: 'g123',
+  version: 1,
+  title: 'Chai Dash',
+  slug: 'chai-dash',
+  pitch: 'A chai cup on a scooter dodging potholes.',
+  controls: { keyboard: 'Left/Right arrows steer', touch: 'Tap the left or right buttons' },
+  coreLoop: 'Steer between lanes, dodge potholes, collect biscuits.',
+  winLose: 'Three potholes and the chai spills: game over.',
+  scoring: '+1 per second, +5 per biscuit.',
+  lookAndFeel: 'Warm sunset road, steam puffs, bouncy scooter.',
+  sound: 'Beep on biscuit, splash on pothole.',
+  acceptance: [
+    { id: 'A1', text: 'state().score rises while playing.' },
+    { id: 'A2', text: 'state().lane changes with ArrowLeft/ArrowRight.' },
+    { id: 'A3', text: 'state().lives drops when hitting a pothole.' },
+    { id: 'A4', text: 'state().scene is over when lives reach 0.' },
+  ],
+  language: 'en',
+  credits: ['Asha'],
+};
 
 describe('cards', () => {
-  const plan: CardPayload = {
-    card: 'plan',
-    gameId: 'g123',
-    title: 'Penguin Slide',
-    pitch: 'A penguin slides down an icy hill dodging snowmen.',
-    highlights: ['Arrow keys or on-screen buttons', '+1 per second, +10 per fish'],
-    acceptance: [
-      { id: 'A1', text: 'Score increases while playing.' },
-      { id: 'A2', text: 'Speed rises with time.' },
-      { id: 'A3', text: 'A snowman ends the run.' },
-      { id: 'A4', text: 'reset() returns to the title.' },
-    ],
-    credits: ['Asha'],
-    quorum: 2,
-  };
-
-  it('round-trips through encode/decode', () => {
-    const json = encodeCard(plan);
-    expect(decodeCard(json)).toEqual({ v: 1, payload: plan });
-    expect(decodeCard(JSON.parse(json))).toEqual({ v: 1, payload: plan });
+  it('has one registered custom type per card kind', () => {
+    for (const t of Object.values(CARD_MESSAGE_TYPES)) {
+      expect(Object.values(MESSAGE_TYPES)).toContain(t);
+      expect(STATUS_MESSAGE_TYPES.has(t)).toBe(false);
+    }
+    expect(Object.keys(CARD_SCHEMAS).sort()).toEqual(Object.keys(CARD_MESSAGE_TYPES).sort());
+    expect(cardKindOf('CA:PlanCard')).toBe('plan');
+    expect(cardKindOf('RC:TxtMsg')).toBeNull();
   });
-  it('rejects invalid or unknown cards', () => {
-    expect(() => encodeCard({ ...plan, acceptance: [] } as CardPayload)).toThrow();
-    expect(decodeCard('{"v":1,"payload":{"card":"nope"}}')).toBeNull();
-    expect(decodeCard('not json')).toBeNull();
-    expect(decodeCard({ v: 2, payload: plan })).toBeNull();
+  it('round-trips through encode/decode and carries a version field', () => {
+    const json = encodeCard('plan', plan);
+    expect(JSON.parse(json).v).toBe(1);
+    expect(decodeCard('CA:PlanCard', json)).toEqual({ kind: 'plan', content: plan });
+    expect(decodeCard('CA:PlanCard', JSON.parse(json))).toEqual({ kind: 'plan', content: plan });
   });
-  it('keeps content under the Nexconn 10 KB limit', () => {
-    const big = { card: 'bug_report', gameId: 'g1', bugId: 'b1', version: 1, description: 'x'.repeat(1000) } as const;
-    expect(encodeCard(big).length).toBeLessThan(LIMITS.messageContentBytes);
+  it('rejects invalid content, unknown versions and unknown types', () => {
+    expect(() => encodeCard('plan', { ...plan, acceptance: plan.acceptance.slice(0, 3) })).toThrow();
+    expect(() => encodeCard('plan', { ...plan, acceptance: [...plan.acceptance, ...plan.acceptance, plan.acceptance[0]!] })).toThrow();
+    expect(decodeCard('CA:PlanCard', { ...plan, v: 2 })).toBeNull();
+    expect(decodeCard('CA:PlanCard', 'not json')).toBeNull();
+    expect(decodeCard('CA:Nope', JSON.stringify(plan))).toBeNull();
+    expect(decodeCard('CA:RoomLink', { v: 1, channelId: 'game1', gameId: 'g1', title: 'x', kind: 'tv' })).toBeNull();
   });
-  it('lists every card type once', () => {
-    expect(new Set(CARD_TYPES).size).toBe(CARD_TYPES.length);
-    expect(CARD_TYPES).toEqual(expect.arrayContaining(['plan', 'handoff', 'playtest', 'publish_request', 'shield']));
+  it('validates every card kind and keeps it under the 10 KB limit', () => {
+    const samples: { [K in CardKind]: unknown } = {
+      plan,
+      handoff: {
+        v: 1,
+        gameId: 'g1',
+        from: 'pixel',
+        to: 'forge',
+        task: 'Build v1 from this plan',
+        contextSummary: 'Chai Dash, 4 checks',
+        artifacts: [{ kind: 'plan', label: 'Plan v1', ref: 'MSG-1' }],
+      },
+      build: {
+        v: 1,
+        gameId: 'g1',
+        version: 1,
+        playUrl: 'https://x.test/p',
+        sizeKb: 42.5,
+        buildMs: 30000,
+        notes: ['title screen'],
+        checks: { pass: true, problems: [] },
+      },
+      test: { v: 1, gameId: 'g1', version: 1, pass: false, passed: 3, total: 4, fps: 58, failures: [{ label: 'A2', detail: 'lane stuck' }], regressions: [] },
+      publish: { v: 1, gameId: 'g1', version: 1, arcadeUrl: 'https://x.test/g/chai-dash' },
+      bug: { v: 1, bugId: 'b1', gameId: 'g1', reporterId: 'u1', description: 'x'.repeat(1000) },
+      score: { v: 1, gameId: 'g1', playerId: 'u1', score: 120, rank: 1, beatPlayerId: 'u2' },
+      roomLink: { v: 1, channelId: 'game1', gameId: 'g1', title: '🎮 Chai Dash', kind: 'game' },
+    };
+    for (const [kind, sample] of Object.entries(samples) as Array<[CardKind, unknown]>) {
+      const json = encodeCard(kind, sample as never);
+      expect(json.length).toBeLessThan(LIMITS.messageContentBytes);
+      const card = decodeCard(CARD_MESSAGE_TYPES[kind], json);
+      expect(card?.kind).toBe(kind);
+      expect(cardPreview(card!)).toBeTruthy();
+    }
   });
 });
 
-describe('metadata', () => {
-  it('builds valid keys and tallies votes', () => {
-    const key = META.vote(newId('user'));
-    expect(key).toMatch(META_KEY_RE);
-    expect(tallyVotes({ vote_u1: 'yes', vote_u2: 'no', vote_u3: 'yes', status: 'voting' })).toEqual({ yes: ['u1', 'u3'], no: ['u2'] });
+describe('card metadata', () => {
+  it('parses string metadata into typed state, with safe defaults for missing or broken values', () => {
+    expect(parseCardMeta('plan', undefined)).toEqual({ status: 'pending', yes: 0, no: 0, voters: {} });
+    const m = parseCardMeta(
+      'plan',
+      new Map(Object.entries({ status: 'approved', yes: '2', no: '1', voters: '{"u1":"yes","u2":"no","u3":"yes"}', approvedBy: 'Asha' })),
+    );
+    expect(m).toMatchObject({ status: 'approved', yes: 2, no: 1, approvedBy: 'Asha', voters: { u1: 'yes', u2: 'no', u3: 'yes' } });
+    expect(parseCardMeta('plan', { status: 'weird', yes: 'x', voters: '{broken' })).toMatchObject({ status: 'pending', yes: 0, voters: {} });
+    expect(parseCardMeta('plan', { voters: '{"u1":"maybe"}' }).voters).toEqual({});
+  });
+  it('serializes patches to valid Nexconn metadata', () => {
+    const out = metaToStrings({ status: 'approved', yes: 2, voters: { u1: 'yes' }, approvedBy: undefined });
+    expect(out).toEqual({ status: 'approved', yes: '2', voters: '{"u1":"yes"}' });
+    for (const k of Object.keys(out)) expect(k).toMatch(META_KEY_RE);
+    expect(() => metaToStrings({ 'bad key': 1 })).toThrow();
+    expect(() => metaToStrings({ k: 'x'.repeat(LIMITS.metadataValueChars + 1) })).toThrow();
+  });
+  it('counts votes: one per voter, switching allowed', () => {
+    let r = applyVote({}, 'u1', 'yes');
+    r = applyVote(r.voters, 'u2', 'no');
+    r = applyVote(r.voters, 'u1', 'yes');
+    expect([r.yes, r.no]).toEqual([1, 1]);
+    r = applyVote(r.voters, 'u2', 'yes');
+    expect([r.yes, r.no]).toEqual([2, 0]);
+    // 30 voters still fit in one metadata value.
+    let big: Record<string, 'yes' | 'no'> = {};
+    for (let i = 0; i < 30; i++) big = applyVote(big, newId('user'), 'yes').voters;
+    expect(JSON.stringify(big).length).toBeLessThan(LIMITS.metadataValueChars);
+  });
+});
+
+describe('agent state', () => {
+  it('validates the status message', () => {
+    expect(AgentStateMessage.parse({ agentId: 'pixel', state: 'thinking', startedAt: 1 })).toMatchObject({ v: 1, detail: '' });
+    expect(AgentStateMessage.safeParse({ agentId: 'pixel', state: 'planning', startedAt: 1 }).success).toBe(false);
+    expect(AgentStateMessage.safeParse({ agentId: 'glitch', state: 'testing', startedAt: 1, progress: { done: 12, total: 18 } }).success).toBe(true);
   });
 });
 

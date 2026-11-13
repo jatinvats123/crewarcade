@@ -59,16 +59,21 @@ export const AGENT_ID_LIST: readonly AgentId[] = Object.values(AGENT_IDS);
 export const isAgentId = (id: string): id is AgentId => (AGENT_ID_LIST as readonly string[]).includes(id);
 
 /** What an agent is doing right now; shown as a Chip next to its avatar. */
-export const AGENT_STATES = ['idle', 'thinking', 'planning', 'building', 'testing', 'reproducing', 'waiting', 'blocked', 'error'] as const;
+export const AGENT_STATES = ['idle', 'thinking', 'designing', 'building', 'checking', 'testing', 'fixing', 'waiting_approval', 'blocked'] as const;
 export type AgentState = (typeof AGENT_STATES)[number];
 
 /** Custom Nexconn message types (prefix "CA:" = CrewArcade). Registered on the web client before connect. */
 export const MESSAGE_TYPES = {
-  /** Interactive card (plan, vote, build, playtest, bug, publish...). content = CardEnvelope JSON. */
-  card: 'CA:Card',
-  /** Agent-to-agent handoff, shown inline ("Pixel → Forge: plan approved, build v1"). */
-  handoff: 'CA:Handoff',
-  /** Agent state change (idle/building/testing...). Status message: not stored, not counted. */
+  // Cards (one type each; content has a `v` field, live state is message metadata). See cards.ts.
+  planCard: 'CA:PlanCard',
+  handoffCard: 'CA:HandoffCard',
+  buildCard: 'CA:BuildCard',
+  testCard: 'CA:TestCard',
+  publishCard: 'CA:PublishCard',
+  bugCard: 'CA:BugCard',
+  scoreCard: 'CA:ScoreCard',
+  roomLink: 'CA:RoomLink',
+  /** Agent state change (thinking/building/testing...). Status message: not stored, not counted. */
   agentState: 'CA:AgentState',
   /** System notice (welcome, member joined, game room created, publish approved...). */
   notice: 'CA:Notice',
@@ -91,10 +96,16 @@ export interface MessageTypeRegistration {
   isStatusMessage?: boolean;
 }
 
-/** Every planned CA:* type, for NCEngine.registerCustomMessages (call once, before connect). */
+/** Every CA:* type, for NCEngine.registerCustomMessages (call once, before connect). */
 export const MESSAGE_TYPE_REGISTRY: readonly MessageTypeRegistration[] = [
-  { messageType: MESSAGE_TYPES.card, isPersisted: true, isCounted: true },
-  { messageType: MESSAGE_TYPES.handoff, isPersisted: true, isCounted: false },
+  { messageType: MESSAGE_TYPES.planCard, isPersisted: true, isCounted: true },
+  { messageType: MESSAGE_TYPES.handoffCard, isPersisted: true, isCounted: false },
+  { messageType: MESSAGE_TYPES.buildCard, isPersisted: true, isCounted: true },
+  { messageType: MESSAGE_TYPES.testCard, isPersisted: true, isCounted: true },
+  { messageType: MESSAGE_TYPES.publishCard, isPersisted: true, isCounted: true },
+  { messageType: MESSAGE_TYPES.bugCard, isPersisted: true, isCounted: true },
+  { messageType: MESSAGE_TYPES.scoreCard, isPersisted: true, isCounted: false },
+  { messageType: MESSAGE_TYPES.roomLink, isPersisted: true, isCounted: true },
   { messageType: MESSAGE_TYPES.agentState, isPersisted: false, isCounted: false, isStatusMessage: true },
   { messageType: MESSAGE_TYPES.notice, isPersisted: true, isCounted: false },
   { messageType: MESSAGE_TYPES.reaction, isPersisted: false, isCounted: false, isStatusMessage: true },

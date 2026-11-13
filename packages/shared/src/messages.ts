@@ -1,25 +1,21 @@
-// Zod schemas for the non-card custom message payloads (CA:Handoff, CA:AgentState, CA:Notice,
+// Zod schemas for the non-card custom message payloads (CA:AgentState, CA:Notice, CA:Typing,
 // CA:Reaction) and the webhook envelope we receive from Nexconn.
 import { z } from 'zod';
-import { AGENT_ID_LIST, AGENT_STATES } from './constants';
+import { AGENT_STATES } from './constants';
 
-const agentId = z.enum(AGENT_ID_LIST as [string, ...string[]]);
-
-export const HandoffMessage = z.object({
-  from: agentId,
-  to: agentId,
-  gameId: z.string().max(64),
-  version: z.number().int().min(1).optional(),
-  text: z.string().min(1).max(300),
-});
-export type HandoffMessage = z.infer<typeof HandoffMessage>;
-
+/** CA:AgentState (status message: online members only, never stored). Sent on every state change
+ *  and as a heartbeat every few seconds while an agent works, so late joiners catch up. */
 export const AgentStateMessage = z.object({
-  agentId,
+  v: z.literal(1).default(1),
+  agentId: z.enum(['pixel', 'forge', 'glitch']),
   state: z.enum(AGENT_STATES),
+  /** Short human text, e.g. "Chai Dash" or "v2". */
+  detail: z.string().max(120).default(''),
+  /** When this state started (ms), for "building 32s". */
+  startedAt: z.number().int().min(0),
   gameId: z.string().max(64).optional(),
-  /** Short human text, e.g. "building v2 (1:20)". */
-  detail: z.string().max(120).optional(),
+  /** e.g. testing 12/18. */
+  progress: z.object({ done: z.number().int().min(0), total: z.number().int().min(1) }).optional(),
 });
 export type AgentStateMessage = z.infer<typeof AgentStateMessage>;
 
