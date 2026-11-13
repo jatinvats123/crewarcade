@@ -14,15 +14,18 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "db:seed": "tsx --env-file-if-exists=.env src/db/seed.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "measure:pixel": "tsx --env-file-if-exists=.env scripts/measure-pixel.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.8.0",
     "@crewarcade/engine": "workspace:*",
     "@crewarcade/shared": "workspace:*",
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.8",
     "gifenc": "1.0.3",
     "nanoid": "5.1.16",
+    "pg-boss": "12.38.2",
     "playwright": "1.64.1",
     "postgres": "3.4.9",
     "undici": "7.30.2",
