@@ -44,3 +44,13 @@ export function nexconnUserId(userId: string): string {
   if (!isNexconnId(id)) throw new Error(`Cannot map "${userId}" to a Nexconn user ID`);
   return id;
 }
+
+/** Reverse of nexconnUserId for webhook payloads and SDK senders: "agentpixel" -> "agent-pixel". */
+const AGENT_BY_NEXCONN_ID: Readonly<Record<string, string>> = {
+  agentpixel: 'agent-pixel',
+  agentforge: 'agent-forge',
+  agentglitch: 'agent-glitch',
+};
+export function dbUserIdFromNexconn(nexconnId: string): string {
+  return AGENT_BY_NEXCONN_ID[nexconnId] ?? nexconnId;
+}

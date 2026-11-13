@@ -68,24 +68,41 @@ export const MESSAGE_TYPES = {
   card: 'CA:Card',
   /** Agent-to-agent handoff, shown inline ("Pixel → Forge: plan approved, build v1"). */
   handoff: 'CA:Handoff',
-  /** Agent state change (idle/building/testing...). Not persisted, not counted. */
+  /** Agent state change (idle/building/testing...). Status message: not stored, not counted. */
   agentState: 'CA:AgentState',
-  /** System notice (member joined, game room created, publish approved...). */
+  /** System notice (welcome, member joined, game room created, publish approved...). */
   notice: 'CA:Notice',
-  /** Floating reaction in the Live Build Theater (open channel). Not persisted. */
+  /** Floating reaction in the Live Build Theater (open channel). Status message. */
   reaction: 'CA:Reaction',
+  /**
+   * "X is typing" in a group channel. The Web SDK only has sendTypingStatus on DirectChannel, so
+   * groups use a transient status message (delivered to online members only, never stored).
+   */
+  typing: 'CA:Typing',
 } as const;
 export type MessageTypeKey = keyof typeof MESSAGE_TYPES;
 export type CustomMessageType = (typeof MESSAGE_TYPES)[MessageTypeKey];
 
-/** Registration flags for NCEngine.registerCustomMessages (Nexconn spells it "isPersited"). */
-export const MESSAGE_TYPE_REGISTRY: ReadonlyArray<{ messageType: CustomMessageType; isPersited: boolean; isCounted: boolean; isStatusMessage?: boolean }> = [
-  { messageType: MESSAGE_TYPES.card, isPersited: true, isCounted: true },
-  { messageType: MESSAGE_TYPES.handoff, isPersited: true, isCounted: false },
-  { messageType: MESSAGE_TYPES.agentState, isPersited: false, isCounted: false, isStatusMessage: true },
-  { messageType: MESSAGE_TYPES.notice, isPersited: true, isCounted: false },
-  { messageType: MESSAGE_TYPES.reaction, isPersited: false, isCounted: false, isStatusMessage: true },
+export interface MessageTypeRegistration {
+  messageType: CustomMessageType;
+  /** Spelled as in the installed SDK typings (CustomMessageRegistration.isPersisted); the docs say "isPersited". */
+  isPersisted: boolean;
+  isCounted: boolean;
+  isStatusMessage?: boolean;
+}
+
+/** Every planned CA:* type, for NCEngine.registerCustomMessages (call once, before connect). */
+export const MESSAGE_TYPE_REGISTRY: readonly MessageTypeRegistration[] = [
+  { messageType: MESSAGE_TYPES.card, isPersisted: true, isCounted: true },
+  { messageType: MESSAGE_TYPES.handoff, isPersisted: true, isCounted: false },
+  { messageType: MESSAGE_TYPES.agentState, isPersisted: false, isCounted: false, isStatusMessage: true },
+  { messageType: MESSAGE_TYPES.notice, isPersisted: true, isCounted: false },
+  { messageType: MESSAGE_TYPES.reaction, isPersisted: false, isCounted: false, isStatusMessage: true },
+  { messageType: MESSAGE_TYPES.typing, isPersisted: false, isCounted: false, isStatusMessage: true },
 ];
+
+/** Types that are signals, not chat history: never logged, never rendered as bubbles. */
+export const STATUS_MESSAGE_TYPES: ReadonlySet<string> = new Set(MESSAGE_TYPE_REGISTRY.filter(r => r.isStatusMessage).map(r => r.messageType));
 
 /** Nexconn built-in types we use. */
 export const BUILTIN_MESSAGE_TYPES = {
@@ -99,6 +116,9 @@ export const BUILTIN_MESSAGE_TYPES = {
 export const CHANNEL_TYPE = { direct: 1, group: 3, open: 4, system: 6, community: 10 } as const;
 
 export const LIMITS = {
+  /** Display names: 2-24 characters after trimming. */
+  displayNameMin: 2,
+  displayNameMax: 24,
   /** Nexconn: content of a non-stream message <= 10 KB. */
   messageContentBytes: 10 * 1024,
   /** Nexconn: all chunks of one stream message <= 128 KB. */

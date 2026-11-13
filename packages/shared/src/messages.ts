@@ -24,11 +24,19 @@ export const AgentStateMessage = z.object({
 export type AgentStateMessage = z.infer<typeof AgentStateMessage>;
 
 export const NoticeMessage = z.object({
-  kind: z.enum(['member_joined', 'member_left', 'room_created', 'publish_approved', 'publish_blocked', 'budget', 'info']),
+  kind: z.enum(['welcome', 'member_joined', 'member_left', 'room_created', 'publish_approved', 'publish_blocked', 'budget', 'info']),
   text: z.string().min(1).max(300),
   gameId: z.string().max(64).optional(),
 });
 export type NoticeMessage = z.infer<typeof NoticeMessage>;
+
+/** CA:Typing: what the sender is composing. Transient; receivers clear it after TYPING_TTL_MS. */
+export const TypingMessage = z.object({ typing: z.enum(['text', 'voice']).default('text') });
+export type TypingMessage = z.infer<typeof TypingMessage>;
+/** Senders repeat CA:Typing at most this often while typing (client limit: 5 messages/s overall). */
+export const TYPING_THROTTLE_MS = 4000;
+/** Receivers hide a typing indicator this long after the last CA:Typing (docs suggest ~6 s). */
+export const TYPING_TTL_MS = 6500;
 
 export const ReactionMessage = z.object({
   emoji: z.string().min(1).max(8),
