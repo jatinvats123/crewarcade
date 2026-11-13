@@ -63,7 +63,8 @@ Render + Vercel.
   deploys are slower; trimming it (Chromium only) is a Phase 7 candidate.
 - Migrate/seed use a DB-only config (`loadDbScriptConfig`), so Render's pre-deploy step does not need
   the AI and chat keys.
-- CI has not run yet: the repo has no GitHub remote. Push `phase-0` to see it go green.
+- **CI green on the first run** (private repo `jatinvats123/crewarcade`, branch `phase-0`, 2026-11-13):
+  checks + eval + build 8 min (eval 21/21, 0 false FAILs on Linux), web e2e 8/8, Docker image build 4 min.
 - Migration not applied to Supabase yet: needs the Supabase connection string (see the Phase 0 report).
 - Decided: agent DB IDs stay `agent-pixel` / `agent-forge` / `agent-glitch`; Nexconn sees
   `agentpixel` / `agentforge` / `agentglitch` via `nexconnUserId()`. Phase 1 must also map webhook
