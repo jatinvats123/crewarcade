@@ -1,5 +1,6 @@
 // What route handlers and services get: injected dependencies, no globals.
 import type { FastifyBaseLogger } from 'fastify';
+import type { AgentServices } from './agents/runtime-deps';
 import type { SessionOptions } from './auth/session';
 import type { Config } from './config';
 import type { Db } from './db/types';
@@ -13,6 +14,8 @@ export interface Ctx {
   log: FastifyBaseLogger;
   session: SessionOptions;
   now: () => number;
+  /** AI client, job queue and live agent states. null: agents are not running (card actions answer 503). */
+  agents: AgentServices | null;
   /** Fire-and-forget work after the response (webhook processing). Tests collect and await it. */
   runInBackground: (name: string, task: () => Promise<void>) => void;
 }

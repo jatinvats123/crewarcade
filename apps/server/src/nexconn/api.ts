@@ -154,10 +154,45 @@ export async function setMessageMetadata(c: NexconnClient, input: z.input<typeof
 
 // ---- later phases: documented, not implemented yet --------------------------------------------
 
-/** Phase 3 (Forge build progress). POST /v4/group-channel/message/stream/send: `toChannelId`
- *  (singular), object `content` {content, seq, complete, type, user}, messageId from chunk 1. */
-export async function streamGroupMessage(_c: NexconnClient, _input: unknown): Promise<never> {
-  throw new NotImplementedYetError('streamGroupMessage', `${DOCS}/platform-chat-api/message/send-group-stream.md`);
+// docs: /platform-chat-api/message/send-group-stream.md (checked 2026-11-14)
+export const StreamChunkContent = z
+  .object({
+    content: z.string(),
+    /** Starts at 1, +1 per chunk. */
+    seq: z.number().int().min(1),
+    complete: z.boolean(),
+    completeReason: z.number().int().optional(),
+    /** First chunk only: text | markdown | html. */
+    type: z.enum(['text', 'markdown', 'html']).optional(),
+    /** Continuation chunks: the id returned for chunk 1. */
+    messageId: z.string().min(1).max(64).optional(),
+    /** First chunk only. */
+    user: z.object({ id: z.string(), name: z.string().max(64), portrait: z.string().max(1024).optional() }).optional(),
+  })
+  .superRefine((c, ctx) => {
+    if (c.seq === 1 && c.messageId) ctx.addIssue({ code: 'custom', message: 'the first chunk has no messageId' });
+    if (c.seq > 1 && !c.messageId) ctx.addIssue({ code: 'custom', message: 'continuation chunks need the messageId' });
+    if (c.seq > 1 && (c.type || c.user)) ctx.addIssue({ code: 'custom', message: 'type and user go on the first chunk only' });
+  });
+
+export const StreamGroupMessageInput = z.object({
+  fromUserId: nexconnId,
+  /** Singular (unlike message/send). */
+  toChannelId: nexconnId,
+  messageType: z.literal('RC:StreamMsg'),
+  /** An object, not a JSON string (unlike message/send). */
+  content: StreamChunkContent,
+  isEchoToSender: flag.optional(),
+  shouldPersist: flag.optional(),
+  disableUpdateLastMsg: z.boolean().optional(),
+});
+const StreamResult = z.object({ code: z.literal(0), result: z.object({ messageId: z.string().optional() }).passthrough().optional() });
+
+/** POST /v4/group-channel/message/stream/send. Returns the messageId for the first chunk. */
+export async function streamGroupMessage(c: NexconnClient, input: z.input<typeof StreamGroupMessageInput>): Promise<{ messageId: string | null }> {
+  const body = StreamGroupMessageInput.parse(input);
+  const res = await c.post('/v4/group-channel/message/stream/send', body, StreamResult, { bucket: 'groupMessage' });
+  return { messageId: res.result?.messageId ?? null };
 }
 
 /** Phase 3 (Live Build Theater). POST /v4/open-channel/create {channelId, destroyType, ttlMinutes}. */

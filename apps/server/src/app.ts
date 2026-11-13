@@ -5,7 +5,9 @@ import type { Ctx } from './context';
 import type { Db } from './db/types';
 import type { NexconnClient } from './nexconn/client';
 import { registerAuthRoutes } from './routes/auth';
+import type { AgentServices } from './agents/runtime-deps';
 import { registerCrewRoutes } from './routes/crews';
+import { registerGameRoutes } from './routes/games';
 import { installApiPlumbing } from './routes/http';
 import { registerWebhookRoutes } from './webhooks/routes';
 
@@ -16,11 +18,14 @@ export interface AppDeps {
   /** Without a db only /health and / are served (used by the health tests). */
   db?: Db;
   nexconn?: NexconnClient | null;
+  agents?: AgentServices | null;
   /** Pino logger options override (tests pass false). */
   logger?: boolean | object;
   version?: string;
   now?: () => number;
   runInBackground?: Ctx['runInBackground'];
+  /** Receives the request context once built (the entry point starts the agent worker with it). */
+  onReady?: (ctx: Ctx) => void;
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -66,6 +71,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       config,
       db: deps.db,
       nexconn: deps.nexconn ?? null,
+      agents: deps.agents ?? null,
       log: app.log,
       session: { secret: sessionSecret(config), secure: cookieSecure(config), ...(deps.now && { now: deps.now }) },
       now: deps.now ?? Date.now,
@@ -80,7 +86,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     installApiPlumbing(app, ctx);
     registerAuthRoutes(app, ctx);
     registerCrewRoutes(app, ctx);
+    registerGameRoutes(app, ctx);
     registerWebhookRoutes(app, ctx);
+    deps.onReady?.(ctx);
   }
   return app;
 }

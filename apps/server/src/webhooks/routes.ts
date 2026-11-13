@@ -9,6 +9,8 @@
 import { PreMessagingResponse, WebhookEnvelope } from '@crewarcade/shared';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Ctx } from '../context';
+import { routeIncoming } from '../agents/runtime';
+import type { AgentServices } from '../agents/runtime-deps';
 import { claimWebhookEvent } from '../repo/webhooks';
 import { processWebhook } from './process';
 import { verifyWebhook } from './verify';
@@ -56,7 +58,8 @@ export function registerWebhookRoutes(app: FastifyInstance, ctx: Ctx): void {
       return reply.code(200).send({ ok: true, duplicate: true });
     }
     ctx.runInBackground(`webhook ${event.type}`, async () => {
-      const r = await processWebhook(ctx, event);
+      const agents = ctx.agents;
+      const r = await processWebhook(ctx, event, agents ? m => routeIncoming({ ...ctx, agents } as Ctx & { agents: AgentServices }, m) : undefined);
       ctx.log.debug({ type: event.type, eventId: event.id, ...r }, 'webhook: processed');
     });
     return reply.code(200).send({ ok: true });

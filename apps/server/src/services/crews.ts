@@ -16,6 +16,7 @@ import {
 import type { Ctx } from '../context';
 import { createGroup, joinGroup, sendGroupMessage } from '../nexconn/api';
 import { addMember, countMembers, countOwnedCrews, getCrewDetail, insertCrewWithMembers, isInviteCodeTaken, type CrewRow } from '../repo/crews';
+import { listCrewGames } from '../repo/games';
 import type { UserRow } from '../repo/users';
 import { ensureRegistered, requireNexconn } from './chat-users';
 
@@ -116,6 +117,12 @@ export async function joinCrew(ctx: Ctx, crew: CrewRow, user: UserRow, currentRo
   const nexconn = requireNexconn(ctx);
   await ensureRegistered(ctx, [user.id]);
   await joinGroup(nexconn, { channelId: crew.groupChannelId, userIds: [nexconnUserId(user.id)] });
+  // New members see every game room of the crew too.
+  for (const g of await listCrewGames(ctx.db, crew.id))
+    if (g.roomChannelId)
+      await joinGroup(nexconn, { channelId: g.roomChannelId, userIds: [nexconnUserId(user.id)] }).catch(e =>
+        ctx.log.warn({ err: e, gameId: g.id }, 'could not add the new member to a game room'),
+      );
   const added = await addMember(ctx.db, crew.id, user.id, 'member');
   if (added) {
     ctx.log.info({ crewId: crew.id, userId: user.id }, 'member joined');

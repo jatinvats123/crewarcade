@@ -27,7 +27,10 @@ export const ConnectionStatusData = z.object({
 
 export type ProcessCtx = Pick<Ctx, 'db' | 'log'>;
 
-export async function processWebhook(ctx: ProcessCtx, event: WebhookEnvelope): Promise<{ handled: number; skipped: number }> {
+/** Called for every logged message (the agent router). Errors are logged, never fatal. */
+export type OnMessage = (m: { messageId: string; channelId: string; userId: string; messageType: string; content: string }) => Promise<unknown>;
+
+export async function processWebhook(ctx: ProcessCtx, event: WebhookEnvelope, onMessage?: OnMessage): Promise<{ handled: number; skipped: number }> {
   let handled = 0;
   let skipped = 0;
   switch (event.type) {
@@ -54,6 +57,8 @@ export async function processWebhook(ctx: ProcessCtx, event: WebhookEnvelope): P
           createdAt: new Date(d.data.time),
         });
         handled++;
+        if (onMessage && d.data.channelType === 3)
+          await onMessage(d.data).catch(err => ctx.log.error({ err, messageId: d.data.messageId }, 'webhook: agent routing failed'));
       }
       break;
     case 'user:connection_status':

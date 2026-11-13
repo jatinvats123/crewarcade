@@ -1,0 +1,46 @@
+// Rooms: a Nexconn group channel is either a crew's main chat or one game's room. Game rooms are
+// created when a plan is approved: same members as the crew (humans + the three agents).
+import { AGENT_ID_LIST, newId, nexconnUserId } from '@crewarcade/shared';
+import type { Ctx } from '../context';
+import { createGroup, joinGroup } from '../nexconn/api';
+import { getCrew, getCrewByChannel, listMembers, type CrewRow } from '../repo/crews';
+import { getGameByRoom, type GameRow } from '../repo/games';
+import { ensureRegistered, requireNexconn } from './chat-users';
+import { CREW_GROUP_PERMISSIONS } from './crews';
+
+export type Room = { kind: 'crew'; crew: CrewRow; game: null } | { kind: 'game'; crew: CrewRow; game: GameRow };
+
+export async function resolveRoom(ctx: Pick<Ctx, 'db'>, channelId: string): Promise<Room | null> {
+  const crew = await getCrewByChannel(ctx.db, channelId);
+  if (crew) return { kind: 'crew', crew, game: null };
+  const game = await getGameByRoom(ctx.db, channelId);
+  if (!game) return null;
+  const owner = await getCrew(ctx.db, game.crewId);
+  return owner ? { kind: 'game', crew: owner, game } : null;
+}
+
+/** "🎮 Chai Dash": Nexconn group names are <= 64 chars. */
+export const gameRoomName = (title: string) => `🎮 ${title}`.slice(0, 64);
+
+/** Creates the game room group channel with every crew member (owner = crew owner). Returns its id. */
+export async function createGameRoom(ctx: Ctx, crew: CrewRow, game: Pick<GameRow, 'id' | 'title'>): Promise<string> {
+  const nexconn = requireNexconn(ctx);
+  const members = await listMembers(ctx.db, crew.id);
+  const humans = members.filter(m => !m.isAgent).map(m => m.id);
+  await ensureRegistered(ctx, [...humans, ...AGENT_ID_LIST]);
+  const others = [...humans.filter(id => id !== crew.ownerId), ...AGENT_ID_LIST].map(nexconnUserId);
+  const channelId = newId('gameChannel');
+  // create takes <= 30 userIds; anyone beyond that joins right after.
+  await createGroup(nexconn, {
+    channelId,
+    name: gameRoomName(game.title),
+    owner: nexconnUserId(crew.ownerId),
+    userIds: others.slice(0, 30),
+    groupProfile: { introduction: `Game room for ${game.title.slice(0, 40)}: plan, builds, playtests.` },
+    permissions: CREW_GROUP_PERMISSIONS,
+    groupExtProfile: { ext_crewId: crew.id, ext_gameId: game.id },
+  });
+  for (let i = 30; i < others.length; i += 100) await joinGroup(nexconn, { channelId, userIds: others.slice(i, i + 100) });
+  ctx.log.info({ crewId: crew.id, gameId: game.id, channelId, members: others.length + 1 }, 'game room created');
+  return channelId;
+}

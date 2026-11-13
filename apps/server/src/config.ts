@@ -66,21 +66,29 @@ const BaseSchema = z.object({
   DAILY_BUDGET_USD: z.coerce.number().min(0).default(25),
   /** Run the pg-boss job workers in this process (one Render service runs API + workers). */
   RUN_WORKERS: bool.default(true),
+  /** pg-boss needs session-level features: use a direct or session-pooler URL (Supabase port 5432)
+   *  here when DATABASE_URL is the transaction pooler (port 6543). Defaults to DATABASE_URL. */
+  JOBS_DATABASE_URL: z
+    .string()
+    .url()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  /** Agent jobs run at once per process (one per room at a time on top of this). */
+  AGENT_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
+  /** Deterministic canned agent outputs with realistic delays (e2e tests, demo safety net). */
+  FAKE_AGENTS: bool.default(false),
+  /** Per-call timeout for Claude requests. */
+  AI_TIMEOUT_MS: z.coerce.number().int().min(5000).default(120_000),
 });
 
 export const ConfigSchema = BaseSchema.superRefine((c, ctx) => {
   if (c.NODE_ENV !== 'production') return;
-  for (const key of [
-    'NEXCONN_APP_KEY',
-    'NEXCONN_APP_SECRET',
-    'SUPABASE_URL',
-    'SUPABASE_SERVICE_ROLE_KEY',
-    'ANTHROPIC_API_KEY',
-    'TOKEN_ENCRYPTION_KEY',
-    'SESSION_SECRET',
-  ] as const) {
+  for (const key of ['NEXCONN_APP_KEY', 'NEXCONN_APP_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'TOKEN_ENCRYPTION_KEY', 'SESSION_SECRET'] as const) {
     if (!c[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'is required in production' });
   }
+  // The fake agents need no key; real ones do.
+  if (!c.ANTHROPIC_API_KEY && !c.FAKE_AGENTS)
+    ctx.addIssue({ code: 'custom', path: ['ANTHROPIC_API_KEY'], message: 'is required in production (or set FAKE_AGENTS=1)' });
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -115,6 +123,7 @@ export function integrations(c: Config): Record<string, boolean> {
     nexconn: !!(c.NEXCONN_APP_KEY && c.NEXCONN_APP_SECRET),
     supabaseStorage: !!(c.SUPABASE_URL && c.SUPABASE_SERVICE_ROLE_KEY),
     anthropic: !!c.ANTHROPIC_API_KEY,
+    fakeAgents: c.FAKE_AGENTS,
     sarvam: !!c.SARVAM_API_KEY,
     tokenEncryption: !!c.TOKEN_ENCRYPTION_KEY,
     sessionSecret: !!c.SESSION_SECRET,

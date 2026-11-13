@@ -3,6 +3,7 @@ import { AGENT_ID_LIST, nexconnUserId, type AgentId, type CrewDetail, type CrewM
 import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/types';
 import { crewMembers, crews, users } from '../db/schema';
+import { listCrewGames, toGameSummary } from './games';
 
 export type CrewRow = typeof crews.$inferSelect;
 
@@ -25,6 +26,15 @@ export async function isInviteCodeTaken(db: Db, code: string): Promise<boolean> 
 export async function getCrew(db: Db, id: string): Promise<CrewRow | null> {
   const [row] = await db.select().from(crews).where(eq(crews.id, id)).limit(1);
   return row ?? null;
+}
+
+export async function getCrewByChannel(db: Db, channelId: string): Promise<CrewRow | null> {
+  const [row] = await db.select().from(crews).where(eq(crews.groupChannelId, channelId)).limit(1);
+  return row ?? null;
+}
+
+export async function setCrewSettings(db: Db, id: string, settings: Record<string, unknown>): Promise<void> {
+  await db.update(crews).set({ settings }).where(eq(crews.id, id));
 }
 
 export async function getCrewByInvite(db: Db, code: string): Promise<CrewRow | null> {
@@ -123,6 +133,6 @@ export async function listMembers(db: Db, crewId: string): Promise<CrewMember[]>
 }
 
 export async function getCrewDetail(db: Db, crew: CrewRow, viewerRole: CrewRole): Promise<CrewDetail> {
-  const members = await listMembers(db, crew.id);
-  return { ...summary(crew, viewerRole, members.length), ownerId: crew.ownerId, members };
+  const [members, crewGames] = await Promise.all([listMembers(db, crew.id), listCrewGames(db, crew.id)]);
+  return { ...summary(crew, viewerRole, members.length), ownerId: crew.ownerId, members, games: crewGames.map(toGameSummary) };
 }

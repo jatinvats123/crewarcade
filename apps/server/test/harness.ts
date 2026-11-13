@@ -5,8 +5,16 @@ import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
+import { createAgentServices } from '../src/agents';
+import { createMemoryQueue } from '../src/agents/queue';
+import { handleAgentJob } from '../src/agents/runtime';
+import type { AgentServices } from '../src/agents/runtime-deps';
+import { createFakeAiClient } from '../src/ai/fake';
+import type { AiClient } from '../src/ai/claude';
 import { buildApp } from '../src/app';
 import { loadConfig } from '../src/config';
+import type { Ctx } from '../src/context';
+import { nexconnSignature } from '../src/crypto';
 import { schema } from '../src/db/schema';
 import { seedAgents } from '../src/db/seed-agents';
 import type { Db } from '../src/db/types';
@@ -33,9 +41,16 @@ export interface Harness {
   flush: () => Promise<void>;
   close: () => Promise<void>;
   now: { t: number };
+  /** Present with { agents: true }: memory queue + fake (or given) AI, worker started. */
+  agents: (AgentServices & { queue: ReturnType<typeof createMemoryQueue> }) | null;
+  /** Waits for background webhook work and every queued agent job. */
+  settle: () => Promise<void>;
+  /** POSTs a signed webhook event. */
+  webhook: (type: string, data: Array<Record<string, unknown>>, id?: string) => Promise<LightMyRequestResponse>;
+  ctx: () => Ctx;
 }
 
-export async function createHarness(opts: { nexconn?: boolean } = {}): Promise<Harness> {
+export async function createHarness(opts: { nexconn?: boolean; agents?: boolean; ai?: AiClient | null; env?: Record<string, string> } = {}): Promise<Harness> {
   const pg = new PGlite();
   const db = drizzle(pg, { schema, casing: 'snake_case' }) as unknown as Db;
   await migrate(drizzle(pg, { schema, casing: 'snake_case' }), { migrationsFolder: path.resolve(import.meta.dirname, '..', 'drizzle') });
@@ -59,6 +74,10 @@ export async function createHarness(opts: { nexconn?: boolean } = {}): Promise<H
     if (p === '/v4/group-channel/message/send')
       res = { code: 0, result: { messageIds: (body.toChannelIds as string[]).map(c => ({ channelId: c, messageId: `MSG-${++msg}` })) } };
     if (p === '/v4/group-channel/join') res = { code: 0, result: { channelId: body.channelId, memberCount: 5 } };
+    if (p === '/v4/group-channel/message/stream/send') {
+      const content = body.content as { seq: number };
+      res = { code: 0, result: content.seq === 1 ? { messageId: `STREAM-${++msg}` } : {} };
+    }
     return { status: 200, text: async () => JSON.stringify(res) };
   };
   const now = { t: Date.now() };
@@ -80,17 +99,40 @@ export async function createHarness(opts: { nexconn?: boolean } = {}): Promise<H
     NEXCONN_APP_SECRET: APP_SECRET,
     TOKEN_ENCRYPTION_KEY: ENC_KEY,
     SESSION_SECRET: 'x'.repeat(40),
+    ...opts.env,
   });
   const tasks: Promise<void>[] = [];
+  const ctxRef: { current: Ctx | null } = { current: null };
+  const silent = { info: () => {}, warn: () => {}, error: () => {} };
+  const queue = createMemoryQueue({ concurrency: 4, log: silent });
+  const agents = opts.agents
+    ? (createAgentServices({
+        config,
+        nexconn,
+        ai: opts.ai === undefined ? createFakeAiClient({ speed: 0 }) : opts.ai,
+        queue,
+        ctxRef,
+        log: silent,
+      }) as AgentServices & {
+        queue: typeof queue;
+      })
+    : null;
   const app = await buildApp({
     config,
     pingDb: async () => {},
     db,
     nexconn,
+    agents,
     logger: false,
     now: () => now.t,
     runInBackground: (_name, task) => void tasks.push(task()),
+    onReady: c => (ctxRef.current = c),
   });
+  if (agents && ctxRef.current) {
+    const c = ctxRef.current;
+    await queue.start(job => handleAgentJob({ ...c, agents }, job));
+  }
+  let eventNo = 0;
   return {
     app,
     db,
@@ -101,10 +143,33 @@ export async function createHarness(opts: { nexconn?: boolean } = {}): Promise<H
       await Promise.all(tasks.splice(0));
     },
     close: async () => {
+      agents?.states.stopAll();
       await app.close();
       await pg.close();
     },
     now,
+    agents,
+    settle: async () => {
+      for (let i = 0; i < 5; i++) {
+        await Promise.all(tasks.splice(0));
+        await queue.idle();
+        if (tasks.length === 0) break;
+      }
+    },
+    webhook: (type, data, id) => {
+      const nonce = `n${++eventNo}x`;
+      const ts = String(now.t);
+      return app.inject({
+        method: 'POST',
+        url: '/webhooks/nexconn',
+        headers: { appkey: APP_KEY, nonce, timestamp: ts, signature: nexconnSignature(APP_SECRET, nonce, ts), 'content-type': 'application/json' },
+        payload: { type, id: id ?? `evt-${eventNo}-${Math.random().toString(36).slice(2)}`, time: now.t, data },
+      });
+    },
+    ctx: () => {
+      if (!ctxRef.current) throw new Error('no ctx');
+      return ctxRef.current;
+    },
   };
 }
 

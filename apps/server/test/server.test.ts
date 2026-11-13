@@ -21,7 +21,31 @@ describe('config', () => {
       ANTHROPIC_MODEL: 'claude-opus-5-5',
       RUN_WORKERS: true,
     });
-    expect(integrations(c)).toEqual({ nexconn: false, supabaseStorage: false, anthropic: false, sarvam: false, tokenEncryption: false, sessionSecret: false });
+    expect(integrations(c)).toEqual({
+      nexconn: false,
+      supabaseStorage: false,
+      anthropic: false,
+      fakeAgents: false,
+      sarvam: false,
+      tokenEncryption: false,
+      sessionSecret: false,
+    });
+    expect(c).toMatchObject({ AGENT_CONCURRENCY: 4, FAKE_AGENTS: false, AI_TIMEOUT_MS: 120_000 });
+  });
+
+  it('production needs ANTHROPIC_API_KEY unless FAKE_AGENTS is on', () => {
+    const prod = {
+      NODE_ENV: 'production',
+      DATABASE_URL: DB,
+      NEXCONN_APP_KEY: 'k',
+      NEXCONN_APP_SECRET: 's',
+      SUPABASE_URL: 'https://x.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: 'r',
+      TOKEN_ENCRYPTION_KEY: Buffer.alloc(32).toString('base64'),
+      SESSION_SECRET: 'x'.repeat(40),
+    };
+    expect(() => loadConfig(prod)).toThrow(/ANTHROPIC_API_KEY/);
+    expect(loadConfig({ ...prod, FAKE_AGENTS: '1' }).FAKE_AGENTS).toBe(true);
   });
 
   it('fails fast listing every missing value', () => {

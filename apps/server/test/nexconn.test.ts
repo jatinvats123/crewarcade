@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { nexconnSignature } from '../src/crypto';
 import {
   createGroup,
+  createOpenChannel,
   issueToken,
   NexconnApiError,
   NexconnClient,
@@ -199,7 +200,17 @@ describe('input rules (checked before anything is sent)', () => {
     expect(f.calls).toHaveLength(0);
   });
   it('stubs point at the docs for later phases', async () => {
-    await expect(streamGroupMessage(c, {})).rejects.toBeInstanceOf(NotImplementedYetError);
-    await expect(streamGroupMessage(c, {})).rejects.toThrow(/send-group-stream\.md/);
+    await expect(createOpenChannel(c, {})).rejects.toBeInstanceOf(NotImplementedYetError);
+    await expect(createOpenChannel(c, {})).rejects.toThrow(/open-channel\/create\.md/);
+  });
+  it('validates stream chunks before they leave (seq, messageId, first-chunk fields)', async () => {
+    const base = { fromUserId: 'agentpixel', toChannelId: 'crew1', messageType: 'RC:StreamMsg' as const };
+    await expect(streamGroupMessage(c, { ...base, content: { content: 'x', seq: 0, complete: false } })).rejects.toThrow();
+    await expect(streamGroupMessage(c, { ...base, content: { content: 'x', seq: 1, complete: false, messageId: 'M1' } })).rejects.toThrow(/first chunk/);
+    await expect(streamGroupMessage(c, { ...base, content: { content: 'x', seq: 2, complete: false } })).rejects.toThrow(/messageId/);
+    await expect(streamGroupMessage(c, { ...base, content: { content: 'x', seq: 2, complete: false, messageId: 'M1', type: 'markdown' } })).rejects.toThrow(
+      /first chunk only/,
+    );
+    expect(f.calls).toHaveLength(0);
   });
 });
