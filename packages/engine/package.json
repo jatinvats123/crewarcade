@@ -1,0 +1,36 @@
+{
+  "name": "@crewarcade/engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CrewArcade game engine: starter template, static checker, headless playtester, GIF clipper, versioning helpers.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./starter/index.html": "./starter/index.html",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "check": "tsx src/cli/check.ts",
+    "playtest": "tsx src/cli/playtest.ts",
+    "clip": "tsx src/cli/clip.ts",
+    "new-version": "tsx src/cli/new-version.ts",
+    "eval": "tsx eval/eval-playtest.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "browsers": "playwright install chromium"
+  },
+  "dependencies": {
+    "gifenc": "1.0.3",
+    "playwright": "1.64.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}

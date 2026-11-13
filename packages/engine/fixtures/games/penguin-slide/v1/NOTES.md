@@ -1,0 +1,5 @@
+- The penguin auto-slides; the player steers with ArrowLeft/ArrowRight (or A/D, or the on-screen buttons).
+- +1 per second survived and +10 per fish, with a "+10 fish!" popup and sparkle burst; a snowman ends the run.
+- Difficulty ramps via `speed = 1 + runTime * 0.08` (faster objects, shorter spawn interval).
+- Snow trail, drifting background snow, icy gradient, shake + ice-shard burst + thud on a hit.
+- `state()` exposes `playerX`, `speed`, `snowmen`, `fish` alongside the engine fields.

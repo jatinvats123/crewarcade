@@ -1,0 +1,32 @@
+{
+  "title": "Penguin Slide",
+  "slug": "penguin-slide",
+  "pitch": "A penguin slides down an icy hill, dodging snowmen and grabbing fish, speeding up the longer it survives.",
+  "credits": [],
+  "approvedBy": [],
+  "controls": { "keyboard": "ArrowLeft / ArrowRight to slide sideways.", "touch": "On-screen left and right buttons." },
+  "coreLoop": "The penguin auto-slides down an endless icy hill; snowmen and fish come at it at increasing speed and spawn rate the longer the run lasts.",
+  "winLose": "No win state: survive as long as possible. Touching a snowman ends the run.",
+  "scoring": "+1 per second survived, +10 for each fish grabbed.",
+  "lookAndFeel": "Cool blues and whites, icy gradient background, a snow trail behind the penguin, screen shake and an ice-shard burst on a snowman hit, a sparkle on fish pickup.",
+  "sound": "A soft tick per score second, a cheerful blip on fish pickup, a crunchy thud on a snowman hit.",
+  "acceptance": [
+    { "id": "A1", "text": "Score increases while the player is alive (state().score)." },
+    { "id": "A2", "text": "Speed increases as time passes (state().speed rises with state().time)." },
+    { "id": "A3", "text": "Touching a snowman ends the run (state().scene === 'over')." },
+    { "id": "A4", "text": "Grabbing a fish increases state().score by 10 and removes that fish." },
+    { "id": "A5", "text": "start() moves the scene from 'title' to 'playing' and resets score to 0." },
+    { "id": "A6", "text": "reset() returns the scene to 'title'." }
+  ],
+  "changes": [
+    {
+      "version": 2,
+      "askedBy": [],
+      "hotfix": true,
+      "summary": "Hugging the right wall let the penguin dodge every snowman. Obstacles now spawn across the full width and the penguin stops a little short of the edge.",
+      "acceptance": [
+        { "id": "A7", "text": "Holding ArrowRight against the wall for 30 s still ends the run (state().scene === 'over')." }
+      ]
+    }
+  ]
+}

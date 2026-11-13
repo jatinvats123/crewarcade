@@ -1,0 +1,5 @@
+- Remix of Cat vs Cucumbers: same dodge loop, now a space cat in a starfield dodging comets and collecting stars.
+- Comets and stars ramp fall speed with `speed = 1 + runTime * 0.07`; spawn intervals shrink as speed rises.
+- Stars give +10 with a sparkle burst and chime; survival adds +1 per second.
+- Hitting a comet: spark burst, screen shake, low thud, `scene === 'over'`.
+- `state()` exposes `catX`, `comets`, `stars`, `speed` on top of the engine fields.

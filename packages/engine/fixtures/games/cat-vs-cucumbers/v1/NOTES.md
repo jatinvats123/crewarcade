@@ -1,0 +1,5 @@
+- Cat moves left/right along the bottom; cucumbers spawn at random x at the top and fall straight down.
+- Fall speed and spawn rate scale with `speed = 1 + time * 0.08`, exposed as `state().speed`.
+- Score ticks up by 1 every second survived while playing, with a soft tick beep.
+- A cucumber touching the cat: green burst, screen shake, low thud, then `scene === 'over'`.
+- Bright sky gradient with an orange/green accent pair and a translucent HUD bar for legibility.

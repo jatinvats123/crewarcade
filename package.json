@@ -1,0 +1,15 @@
+{
+  "name": "crewarcade",
+  "private": true,
+  "description": "CrewArcade: your friends + 3 AI agents. One chat. A new game in minutes.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "test": "pnpm -r --if-present test",
+    "eval": "pnpm --filter @crewarcade/engine eval"
+  }
+}

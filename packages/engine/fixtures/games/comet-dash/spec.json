@@ -1,0 +1,23 @@
+{
+  "title": "Comet Dash",
+  "slug": "comet-dash",
+  "pitch": "A space cat in a bubble helmet dodges comets and grabs stars in a speeding starfield.",
+  "credits": [],
+  "remixOf": "cat-vs-cucumbers",
+  "approvedBy": [],
+  "controls": { "keyboard": "ArrowLeft / ArrowRight to strafe.", "touch": "On-screen left and right buttons." },
+  "coreLoop": "The cat floats along the bottom of a starfield. Comets and stars fall from the top; both fall faster and spawn more often as the run goes on.",
+  "winLose": "No win state. A comet touching the cat ends the run.",
+  "scoring": "+1 per second survived, +10 per star grabbed.",
+  "lookAndFeel": "Deep-space gradient, twinkling stars, a round-helmet space cat with a thruster trail, spark bursts and screen shake on a hit.",
+  "sound": "A chime on star pickup, a soft tick per second, a low thud on a hit.",
+  "acceptance": [
+    { "id": "A1", "text": "Score increases while playing (state().score)." },
+    { "id": "A2", "text": "state().speed increases as state().time increases." },
+    { "id": "A3", "text": "A comet overlapping the cat ends the run (state().scene === 'over')." },
+    { "id": "A4", "text": "Grabbing a star adds 10 to state().score and removes that star." },
+    { "id": "A5", "text": "start() moves the scene from 'title' to 'playing' with score 0." },
+    { "id": "A6", "text": "reset() returns the scene to 'title'." }
+  ],
+  "changes": []
+}

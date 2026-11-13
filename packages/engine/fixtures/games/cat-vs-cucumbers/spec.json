@@ -1,0 +1,22 @@
+{
+  "title": "Cat vs Cucumbers",
+  "slug": "cat-vs-cucumbers",
+  "pitch": "A jumpy cat dodges falling cucumbers that keep getting faster.",
+  "credits": [],
+  "approvedBy": [],
+  "controls": { "keyboard": "ArrowLeft / ArrowRight to move.", "touch": "On-screen left and right buttons." },
+  "coreLoop": "The cat walks along the bottom of the screen. Cucumbers spawn at random x positions at the top and fall straight down. Fall speed and spawn rate both ramp up steadily the longer the run lasts.",
+  "winLose": "No win state: an endless survivor. Any cucumber touching the cat ends the run. Restart with Space, Enter or tap.",
+  "scoring": "Score increases every second survived. best keeps the top score.",
+  "lookAndFeel": "Bright flat-colour canvas art: an orange cat (triangle ears, circle body) and green rounded cucumbers falling from a light sky. Screen shake and a particle burst on a hit.",
+  "sound": "WebAudio beeps: a soft tick on each second scored, a low thud on game over.",
+  "acceptance": [
+    { "id": "A1", "text": "Score increases while state().scene === 'playing'." },
+    { "id": "A2", "text": "state().speed (fall speed / spawn rate) increases as state().time increases." },
+    { "id": "A3", "text": "A cucumber overlapping the cat sets state().scene === 'over'." },
+    { "id": "A4", "text": "start() from the title screen moves state().scene to 'playing' with score 0." },
+    { "id": "A5", "text": "reset() returns to state().scene === 'title'." },
+    { "id": "A6", "text": "The game runs with only ArrowLeft / ArrowRight and the on-screen touch buttons." }
+  ],
+  "changes": []
+}
