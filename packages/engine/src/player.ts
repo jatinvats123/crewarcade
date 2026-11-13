@@ -94,10 +94,7 @@ export const FREEZE_MS = 20_000;
 export function guard<T>(clockMove: Promise<T>, what: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const frozen = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`game froze: ${what} didn't finish in ${FREEZE_MS / 1000} s (a loop that waits on the clock?)`)),
-      FREEZE_MS,
-    );
+    timer = setTimeout(() => reject(new Error(`game froze: ${what} didn't finish in ${FREEZE_MS / 1000} s (a loop that waits on the clock?)`)), FREEZE_MS);
   });
   return Promise.race([clockMove, frozen]).finally(() => clearTimeout(timer));
 }

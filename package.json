@@ -9,7 +9,30 @@
     "node": ">=22.12"
   },
   "scripts": {
-    "test": "pnpm -r --if-present test",
-    "eval": "pnpm --filter @crewarcade/engine eval"
+    "dev": "pnpm --parallel --filter @crewarcade/web --filter @crewarcade/server dev",
+    "build": "pnpm --filter @crewarcade/web --filter @crewarcade/server build",
+    "test": "pnpm -r --if-present test && vitest run",
+    "lint": "eslint . --max-warnings 0 && prettier --check . && node scripts/check-client-secrets.mjs",
+    "format": "prettier --write .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "e2e": "pnpm --filter @crewarcade/web e2e",
+    "eval": "pnpm --filter @crewarcade/engine eval",
+    "eval:fast": "pnpm --filter @crewarcade/engine eval --fast --jobs 2",
+    "db:generate": "pnpm --filter @crewarcade/server db:generate",
+    "db:migrate": "pnpm --filter @crewarcade/server db:migrate",
+    "db:seed": "pnpm --filter @crewarcade/server db:seed",
+    "check:secrets": "node scripts/check-client-secrets.mjs",
+    "browsers": "pnpm --filter @crewarcade/engine browsers"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@next/eslint-plugin-next": "16.4.4",
+    "eslint": "9.39.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.14.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.2",
+    "vitest": "5.0.5"
   }
 }

@@ -25,7 +25,11 @@ export function loadVersion(gamesDir: string, slug: string, n: number): Playtest
   const previous: ScenarioRef[] = [];
   for (const v of listVersions(gamesDir, slug).filter(v => v <= n)) {
     const vdir = versionDir(gamesDir, slug, v);
-    for (const f of fs.readdirSync(vdir).filter(f => REPRO_FILE.test(f)).sort()) repros.push(readScenarioFile(path.join(vdir, f), undefined, v));
+    for (const f of fs
+      .readdirSync(vdir)
+      .filter(f => REPRO_FILE.test(f))
+      .sort())
+      repros.push(readScenarioFile(path.join(vdir, f), undefined, v));
     if (v < n && fs.existsSync(path.join(vdir, 'scenario.json'))) previous.push(readScenarioFile(path.join(vdir, 'scenario.json'), 'scenario', v));
   }
   return {

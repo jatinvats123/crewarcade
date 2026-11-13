@@ -3,8 +3,7 @@
 import { z } from 'zod';
 
 /** Key names a scenario may press: KeyboardEvent.code values the headless player can send. */
-export const KEYBOARD =
-  /^(Arrow(Up|Down|Left|Right)|Key[A-Z]|Digit\d|Space|Enter|Shift(Left|Right)|Control(Left|Right)|Tab|Escape|Backspace)$/;
+export const KEYBOARD = /^(Arrow(Up|Down|Left|Right)|Key[A-Z]|Digit\d|Space|Enter|Shift(Left|Right)|Control(Left|Right)|Tab|Escape|Backspace)$/;
 
 const label = z.string().min(1).max(200);
 
@@ -54,12 +53,10 @@ export function parseScenario(raw: unknown): ParseResult {
 }
 
 /** Game time a scenario spends (press ms default 100, waits): used to plan a clip. */
-export const scenarioMs = (steps: readonly Step[]): number =>
-  steps.reduce((t, s) => t + ('press' in s ? (s.ms ?? 100) : 'wait' in s ? s.wait : 0), 0);
+export const scenarioMs = (steps: readonly Step[]): number => steps.reduce((t, s) => t + ('press' in s ? (s.ms ?? 100) : 'wait' in s ? s.wait : 0), 0);
 
 /** Labels of the expect steps, in order (what a report will list). */
-export const expectLabels = (steps: readonly Step[]): string[] =>
-  steps.flatMap(s => ('expect' in s ? [s.label ?? s.expect] : []));
+export const expectLabels = (steps: readonly Step[]): string[] => steps.flatMap(s => ('expect' in s ? [s.label ?? s.expect] : []));
 
 /** The bug check of a repro: the last expect labelled "BUG ...", else the last expect. -1 if none. */
 export function bugStepIndex(steps: readonly Step[]): number {

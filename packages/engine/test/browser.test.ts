@@ -22,12 +22,7 @@ describe('playtest()', () => {
     const res = await playtest({
       html: starterHtml(),
       label: 'starter',
-      scenario: [
-        { call: 'start' },
-        { mark: 'a' },
-        { wait: 2000 },
-        { expect: "state.scene === 'playing' || state.scene === 'over'", label: 'A1 runs' },
-      ],
+      scenario: [{ call: 'start' }, { mark: 'a' }, { wait: 2000 }, { expect: "state.scene === 'playing' || state.scene === 'over'", label: 'A1 runs' }],
       profile: 'fast',
       browser,
     });
@@ -43,7 +38,10 @@ describe('playtest()', () => {
 
   it('fails a game whose score hook was removed and one that logs errors', async () => {
     const noHook = starterHtml().replace("notifyHost({ type: 'crewarcade:start' });", '');
-    const errors = replaceGameRegion(starterHtml(), starterHtml().split('// === GAME START ===')[1]!.split('// === GAME END ===')[0]!.replace('init() {', "init() { console.error('boom');"));
+    const errors = replaceGameRegion(
+      starterHtml(),
+      starterHtml().split('// === GAME START ===')[1]!.split('// === GAME END ===')[0]!.replace('init() {', "init() { console.error('boom');"),
+    );
     const [a, b] = await Promise.all([
       playtest({ html: noHook, scenario: [{ call: 'start' }, { expect: 'true' }], profile: 'fast', browser }),
       playtest({ html: errors, scenario: [{ call: 'start' }, { expect: 'true' }], profile: 'fast', browser }),
@@ -58,10 +56,7 @@ describe('playtest()', () => {
     const repro = findRepro(FIXTURES, 'penguin-slide', 'repro-1.json')!;
     const v1 = loadVersion(FIXTURES, 'penguin-slide', 1);
     const v2 = loadVersion(FIXTURES, 'penguin-slide', 2);
-    const [old, fixed] = await Promise.all([
-      playtest({ ...v1, only: repro, browser }),
-      playtest({ ...v2, only: repro, browser }),
-    ]);
+    const [old, fixed] = await Promise.all([playtest({ ...v1, only: repro, browser }), playtest({ ...v2, only: repro, browser })]);
     expect(old.pass).toBe(false);
     expect(old.expects[0]).toMatchObject({ pass: false, label: expect.stringMatching(/^BUG 1/) });
     expect(fixed.pass).toBe(true);

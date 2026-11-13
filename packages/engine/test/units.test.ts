@@ -37,7 +37,15 @@ describe('scenarios', () => {
     expect(parseScenario([{ wait: 10, extra: 1 }]).ok).toBe(false);
   });
   it('measures game time and finds the bug check', () => {
-    const steps = [{ call: 'start' as const }, { press: 'ArrowRight', ms: 500 }, { press: 'Space' }, { wait: 1000 }, { expect: 'true', label: 'A1' }, { expect: 'state.scene', label: 'BUG 1: x' }, { expect: '1' }];
+    const steps = [
+      { call: 'start' as const },
+      { press: 'ArrowRight', ms: 500 },
+      { press: 'Space' },
+      { wait: 1000 },
+      { expect: 'true', label: 'A1' },
+      { expect: 'state.scene', label: 'BUG 1: x' },
+      { expect: '1' },
+    ];
     expect(scenarioMs(steps)).toBe(1600);
     expect(bugStepIndex(steps)).toBe(5);
     expect(bugStepIndex([{ expect: 'a' }, { expect: 'b' }])).toBe(1);

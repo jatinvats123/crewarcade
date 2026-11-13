@@ -40,8 +40,17 @@ function usage(msg: string): never {
   console.error(`${msg}\n${USAGE}\nKinds: ${KINDS.join(', ')}`);
   process.exit(2);
 }
-const allGames = fs.readdirSync(FIXTURES).filter(g => listVersions(FIXTURES, g).length).sort();
-const games = typeof opts['--only'] === 'string' ? opts['--only'].split(',').map(s => s.trim()).filter(Boolean) : allGames;
+const allGames = fs
+  .readdirSync(FIXTURES)
+  .filter(g => listVersions(FIXTURES, g).length)
+  .sort();
+const games =
+  typeof opts['--only'] === 'string'
+    ? opts['--only']
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+    : allGames;
 for (const g of games) if (!allGames.includes(g)) usage(`no fixture game "${g}"`);
 const kindFilter = typeof opts['--kind'] === 'string' ? (opts['--kind'] as MutantKind) : null;
 if (kindFilter && !KINDS.includes(kindFilter)) usage(`unknown kind "${kindFilter}"`);
@@ -132,7 +141,9 @@ const results = await pool(jobs, jobsLimit, async (job): Promise<JobResult> => {
   const name = job.mutant ? job.mutant.id : `${job.game} (clean)`;
   const verdict = res.status === 'error' ? 'ERROR' : job.mutant ? (res.status === 'fail' ? 'caught' : 'MISSED') : res.status === 'pass' ? 'pass' : 'FALSE FAIL';
   const why = res.status === 'error' ? res.detail : res.failed.join('; ');
-  console.log(`[${String(++done).padStart(2)}/${jobs.length}] ${name.padEnd(36)} ${verdict.padEnd(10)} ${res.seconds}s${res.rerun ? ' (rerun)' : ''}${why ? `  ${why}`.slice(0, 160) : ''}`);
+  console.log(
+    `[${String(++done).padStart(2)}/${jobs.length}] ${name.padEnd(36)} ${verdict.padEnd(10)} ${res.seconds}s${res.rerun ? ' (rerun)' : ''}${why ? `  ${why}`.slice(0, 160) : ''}`,
+  );
   return res;
 });
 await browser.close();
@@ -149,18 +160,27 @@ const headline = `Caught ${caught.length}/${muts.length} planted bugs · ${plura
 const minutes = ((Date.now() - T0) / 60000).toFixed(1);
 
 if (opts['--doc']) {
-  const cell = (s: unknown) => String(s ?? '').replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
+  const cell = (s: unknown) =>
+    String(s ?? '')
+      .replace(/\r?\n/g, ' ')
+      .replace(/\|/g, '\\|');
   const L: string[] = ['# Playtester eval: planted bugs', ''];
-  L.push(`_Generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC by \`pnpm --filter @crewarcade/engine eval${fast ? ' --fast' : ''} --doc\` in ${minutes} min._`, '');
+  L.push(
+    `_Generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC by \`pnpm --filter @crewarcade/engine eval${fast ? ' --fast' : ''} --doc\` in ${minutes} min._`,
+    '',
+  );
   L.push(`**${headline}**`, '');
   L.push(
     'Each fixture game gets planted bugs ("mutants", `eval/mutants/<slug>.ts`): small deterministic edits of the latest version, ' +
       `one per kind (${KINDS.map(k => `\`${k}\``).join(', ')}). Every mutant, and each clean game, is played by the real playtester ` +
-      'with the game\'s own scenario and saved repros. A mutant is **caught** when the playtest FAILs; a clean game must PASS.',
+      "with the game's own scenario and saved repros. A mutant is **caught** when the playtest FAILs; a clean game must PASS.",
     '',
   );
   L.push('## Clean games', '', '| game | result | failed checks | time |', '|---|---|---|---|');
-  for (const r of clean) L.push(`| ${r.game} | ${r.status === 'pass' ? 'PASS' : r.status === 'fail' ? 'false FAIL' : 'error'} | ${cell(r.failed.join('; ')) || '-'} | ${r.seconds}s |`);
+  for (const r of clean)
+    L.push(
+      `| ${r.game} | ${r.status === 'pass' ? 'PASS' : r.status === 'fail' ? 'false FAIL' : 'error'} | ${cell(r.failed.join('; ')) || '-'} | ${r.seconds}s |`,
+    );
   L.push('');
   for (const kind of KINDS) {
     if (kindFilter && kind !== kindFilter) continue;
@@ -169,7 +189,9 @@ if (opts['--doc']) {
     if (!rows.length) continue;
     L.push('| game | mutant | what was planted | result | caught by |', '|---|---|---|---|---|');
     for (const r of rows)
-      L.push(`| ${r.game} | \`${cell(r.mutant!.id)}\` | ${cell(r.mutant!.description)} | ${r.status === 'fail' ? 'caught' : r.status === 'pass' ? 'MISSED' : 'error'} | ${cell(r.status === 'error' ? r.detail : r.failed.join('; ')) || '-'} |`);
+      L.push(
+        `| ${r.game} | \`${cell(r.mutant!.id)}\` | ${cell(r.mutant!.description)} | ${r.status === 'fail' ? 'caught' : r.status === 'pass' ? 'MISSED' : 'error'} | ${cell(r.status === 'error' ? r.detail : r.failed.join('; ')) || '-'} |`,
+      );
     L.push('');
   }
   fs.writeFileSync(path.join(HERE, 'RESULTS.md'), L.join('\n'));

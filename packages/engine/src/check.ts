@@ -33,13 +33,11 @@ const HOOK_MEMBERS = ['state()', 'start()', 'reset()', 'seed(', 'controls'] as c
 export function checkHtml(html: string): CheckResult {
   const problems: string[] = [];
   const sizeBytes = Buffer.byteLength(html);
-  if (sizeBytes > MAX_GAME_BYTES)
-    problems.push(`File is ${(sizeBytes / 1024).toFixed(1)} KB; the limit is ${MAX_GAME_BYTES / 1024} KB.`);
+  if (sizeBytes > MAX_GAME_BYTES) problems.push(`File is ${(sizeBytes / 1024).toFixed(1)} KB; the limit is ${MAX_GAME_BYTES / 1024} KB.`);
 
   const lineOf = (i: number) => html.slice(0, i).split('\n').length;
   for (const [re, what] of NETWORK)
-    for (const m of html.matchAll(re))
-      problems.push(`Network/external asset (${what}) at line ${lineOf(m.index ?? 0)}: ${m[0].trim().slice(0, 80)}`);
+    for (const m of html.matchAll(re)) problems.push(`Network/external asset (${what}) at line ${lineOf(m.index ?? 0)}: ${m[0].trim().slice(0, 80)}`);
 
   const hasHook = html.includes('window.__crew');
   if (!hasHook) problems.push('window.__crew test hook is missing (keep the starter engine).');
@@ -47,8 +45,7 @@ export function checkHtml(html: string): CheckResult {
 
   if (!html.includes("'crewarcade:score'") || !html.includes("'crewarcade:start'"))
     problems.push('Score hook is missing: the engine must post crewarcade:start and crewarcade:score to window.parent (keep the starter engine).');
-  if (!html.includes('// === GAME START ===') || !html.includes('// === GAME END ==='))
-    problems.push('GAME START / GAME END markers are missing.');
+  if (!html.includes('// === GAME START ===') || !html.includes('// === GAME END ===')) problems.push('GAME START / GAME END markers are missing.');
   if (!/<canvas\b/i.test(html)) problems.push('No <canvas> element found.');
 
   const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];

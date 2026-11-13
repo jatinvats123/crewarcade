@@ -69,6 +69,10 @@ export function specToMarkdown(spec: GameSpec): string {
     list(spec.acceptance),
   ];
   for (const c of spec.changes)
-    out.push(`## v${c.version} ${c.hotfix ? 'hotfix' : 'changes'}${c.askedBy.length ? ` (asked by ${c.askedBy.join(', ')})` : ''}`, c.summary, list(c.acceptance));
+    out.push(
+      `## v${c.version} ${c.hotfix ? 'hotfix' : 'changes'}${c.askedBy.length ? ` (asked by ${c.askedBy.join(', ')})` : ''}`,
+      c.summary,
+      list(c.acceptance),
+    );
   return out.filter(Boolean).join('\n\n') + '\n';
 }

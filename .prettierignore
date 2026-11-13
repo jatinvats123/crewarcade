@@ -1,0 +1,13 @@
+node_modules
+pnpm-lock.yaml
+dist
+.next
+coverage
+test-results
+playwright-report
+.claude
+apps/server/drizzle
+packages/engine/fixtures
+packages/engine/starter
+packages/engine/eval/RESULTS.md
+*.svg

@@ -18,3 +18,6 @@ Thumbs.db
 .claude/skills/*/references/cache/
 .claude/skills/*/references/llms.txt
 .claude/settings.local.json
+
+# Next.js generated
+next-env.d.ts

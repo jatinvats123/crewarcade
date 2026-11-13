@@ -10,7 +10,19 @@
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { checkHtml } from './check';
 import { KEYBOARD, type Scenario } from './scenario';
-import { PHONE_CPU_THROTTLE, SEED, freshPage as openPage, gameContext, hold, launchBrowser, playSteps, readState, run, serveHtml, type GameState } from './player';
+import {
+  PHONE_CPU_THROTTLE,
+  SEED,
+  freshPage as openPage,
+  gameContext,
+  hold,
+  launchBrowser,
+  playSteps,
+  readState,
+  run,
+  serveHtml,
+  type GameState,
+} from './player';
 
 export type CheckKind = 'generic' | 'scenario' | 'repro' | 'regression' | 'only';
 
@@ -200,8 +212,11 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
         const fns = (['state', 'start', 'reset', 'seed'] as const).filter(f => typeof j[f] === 'function');
         return { fns, controls: Array.isArray(j.controls) ? j.controls : null };
       });
-      add('__crew hook', hook && hook.fns.length === 4 && hook.controls,
-        hook ? `functions: ${hook.fns.join(',')}; controls: ${JSON.stringify(hook.controls)}` : 'window.__crew missing');
+      add(
+        '__crew hook',
+        hook && hook.fns.length === 4 && hook.controls,
+        hook ? `functions: ${hook.fns.join(',')}; controls: ${JSON.stringify(hook.controls)}` : 'window.__crew missing',
+      );
       if (!hook || hook.fns.length < 4) throw new Error('cannot play without window.__crew');
       controls = hook.controls ?? [];
       add('loads without errors', errors.length === 0, errors.slice(0, 2).join(' | '));
@@ -255,8 +270,11 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
         await hold(q, key, 600);
         const ds = stateDiff(baseState, await readState(q));
         const dp = pixDiff(basePix, await pixels(q));
-        add(`key ${key} has an effect`, ds.length || dp > 0.5,
-          ds.length ? `changes ${ds.slice(0, 4).join(', ')}` : dp > 0.5 ? 'changes the picture' : 'no change to state or picture after 600 ms');
+        add(
+          `key ${key} has an effect`,
+          ds.length || dp > 0.5,
+          ds.length ? `changes ${ds.slice(0, 4).join(', ')}` : dp > 0.5 ? 'changes the picture' : 'no change to state or picture after 600 ms',
+        );
         await q.close();
       }
 
@@ -288,7 +306,7 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
       const rnd = () => (r = (r * 1103515245 + 12345) % 2147483648) / 2147483648;
       const pool = [...keyList, 'Space', 'Enter'];
       const randomMs = fast ? 5_000 : 20_000;
-      for (let t = 0; t < randomMs && timeLeft() > 30_000; ) {
+      for (let t = 0; t < randomMs && timeLeft() > 30_000;) {
         const ms = 100 + Math.floor(rnd() * 300);
         await hold(p, pool[Math.floor(rnd() * pool.length)]!, ms);
         t += ms;
@@ -299,8 +317,11 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
           t += 700;
         }
       }
-      add(`${randomMs / 1000} s random input, no exceptions`, errors.length === errBefore,
-        errors.length > errBefore ? errors.slice(errBefore, errBefore + 2).join(' | ') : `${restarts} restarts`);
+      add(
+        `${randomMs / 1000} s random input, no exceptions`,
+        errors.length === errBefore,
+        errors.length > errBefore ? errors.slice(errBefore, errBefore + 2).join(' | ') : `${restarts} restarts`,
+      );
       await p.close();
 
       // 7. Game over reachable within 60 s with no input, the score hook reports it, then restart;
@@ -321,16 +342,24 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
         add('game over reachable (no input)', true, `over after ${secs + 1} s`);
         const st = await readState(p);
         const msg = (await hostMessages(p)).filter(m => m.type === 'crewarcade:score').at(-1);
-        add('score hook: crewarcade:score posted', msg && msg.score === st.score && typeof msg.best === 'number' && typeof msg.time === 'number',
-          msg ? `score=${String(msg.score)} best=${String(msg.best)} time=${String(msg.time)} (state score=${st.score})` : 'no crewarcade:score message after game over');
+        add(
+          'score hook: crewarcade:score posted',
+          msg && msg.score === st.score && typeof msg.best === 'number' && typeof msg.time === 'number',
+          msg
+            ? `score=${String(msg.score)} best=${String(msg.best)} time=${String(msg.time)} (state score=${st.score})`
+            : 'no crewarcade:score message after game over',
+        );
         await run(p, 800);
         await p.keyboard.press('Space');
         await run(p, 100);
         const sr = await readState(p);
         add('restart from game over', sr.scene === 'playing', `Space after game over -> scene=${sr.scene}`);
       } else {
-        add('game over reachable (no input)', scenarioCoversOver,
-          scenarioCoversOver ? 'not with no input; the scenario covers it' : `still playing after ${secs} s with no input`);
+        add(
+          'game over reachable (no input)',
+          scenarioCoversOver,
+          scenarioCoversOver ? 'not with no input; the scenario covers it' : `still playing after ${secs} s with no input`,
+        );
       }
       const rs = await p.evaluate(() => window.__crew.reset());
       add('reset() -> title', rs.scene === 'title', `scene=${rs.scene}`);
@@ -340,7 +369,14 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
       for (const ref of input.previous ?? []) {
         const tag = `[${ref.version ? `v${ref.version} ` : ''}${ref.name}]`;
         if (fast || timeLeft() < 20_000) {
-          checks.push({ name: `${tag} skipped`, pass: true, detail: fast ? 'skipped: fast profile' : 'skipped: time budget', kind: 'regression', advisory: true, skipped: true });
+          checks.push({
+            name: `${tag} skipped`,
+            pass: true,
+            detail: fast ? 'skipped: fast profile' : 'skipped: time budget',
+            kind: 'regression',
+            advisory: true,
+            skipped: true,
+          });
           continue;
         }
         await runRef(ref, 'regression', true);
@@ -370,9 +406,11 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
   ];
   if (adv.length || advSkipped)
     lines.push(
-      (`Advisory (earlier versions' scenarios): ${adv.length - advFailed.length}/${adv.length} still hold` +
+      (
+        `Advisory (earlier versions' scenarios): ${adv.length - advFailed.length}/${adv.length} still hold` +
         (advFailed.length ? `; first change: ${advFailed[0]!.name}` : '') +
-        (advSkipped ? `; ${advSkipped} skipped` : '')).slice(0, 200),
+        (advSkipped ? `; ${advSkipped} skipped` : '')
+      ).slice(0, 200),
     );
   lines.push(pass ? 'PLAYTEST PASS' : 'PLAYTEST FAIL');
   return { pass, label, seed: SEED, fps, controls, seconds, checks, failed, expects, logs, screenshot, summary: lines.join('\n') };

@@ -1,0 +1,5 @@
+# Keep LF everywhere (Docker/Linux builds, Prettier endOfLine: lf).
+* text=auto eol=lf
+*.png binary
+*.gif binary
+*.ico binary

@@ -16,15 +16,7 @@ export {
   type ParseResult,
 } from './scenario';
 export { SEED, VIEWPORT, PHONE_CPU_THROTTLE, launchBrowser, serveHtml, type GameState } from './player';
-export {
-  playtest,
-  playtestReport,
-  type PlaytestInput,
-  type PlaytestResult,
-  type PlaytestCheck,
-  type ScenarioRef,
-  type CheckKind,
-} from './playtest';
+export { playtest, playtestReport, type PlaytestInput, type PlaytestResult, type PlaytestCheck, type ScenarioRef, type CheckKind } from './playtest';
 export { clip, encodeGif, type ClipInput, type ClipResult, type ClipSide } from './clip';
 export {
   GameSpecSchema,

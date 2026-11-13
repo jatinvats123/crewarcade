@@ -190,7 +190,12 @@ export async function clip(input: ClipInput): Promise<ClipResult> {
       } else {
         const old = i === 0;
         const t = await bar({
-          w: W, h: TOP, bg: '#0d0b1f', left: `v${r.version}`, icon: r.ok ? 'check' : 'x', iconColor: r.ok ? '#2ecc71' : '#ff4d5e',
+          w: W,
+          h: TOP,
+          bg: '#0d0b1f',
+          left: `v${r.version}`,
+          icon: r.ok ? 'check' : 'x',
+          iconColor: r.ok ? '#2ecc71' : '#ff4d5e',
           tag: old ? (r.ok ? 'no bug' : 'bug') : r.ok ? 'fixed' : 'still buggy',
           right: old ? `same moves (${reproName})` : `seed ${SEED}${speedNote}`,
         });
@@ -231,13 +236,21 @@ export async function clip(input: ClipInput): Promise<ClipResult> {
     if (gif.length > MAX_BYTES) throw new Error(`GIF would be ${(gif.length / 1048576).toFixed(1)} MB even at half the frame rate (limit 5 MB)`);
 
     const seconds = +(((used.length - 1) * delay) / 1000).toFixed(1);
-    const lines = [`CLIP ${input.kind}: ${(gif.length / 1048576).toFixed(2)} MB, ${used.length} frames, ${seconds} s${speed > 1 ? ` (${speed}x speed)` : ''}, ${FW}x${FH}`];
+    const lines = [
+      `CLIP ${input.kind}: ${(gif.length / 1048576).toFixed(2)} MB, ${used.length} frames, ${seconds} s${speed > 1 ? ` (${speed}x speed)` : ''}, ${FW}x${FH}`,
+    ];
     if (input.kind !== 'clip')
-      for (const r of results) lines.push(`v${r.version} ${reproName}: "${checkLabel}" ${r.ok ? 'PASSES' : 'FAILS'}${r.err ? ` (${r.err})` : ''}${r.ok ? '' : ' -> bug on camera'}`);
+      for (const r of results)
+        lines.push(`v${r.version} ${reproName}: "${checkLabel}" ${r.ok ? 'PASSES' : 'FAILS'}${r.err ? ` (${r.err})` : ''}${r.ok ? '' : ' -> bug on camera'}`);
     if (input.kind === 'fix' && !(results[0]!.ok === false && results[1]!.ok === true))
       lines.push(`NOTE: expected v${results[0]!.version} to fail and v${results[1]!.version} to pass; the labels show what really happened`);
     return {
-      gif, width: FW, height: FH, frames: used.length, seconds, speed,
+      gif,
+      width: FW,
+      height: FH,
+      frames: used.length,
+      seconds,
+      speed,
       sides: results.map(r => ({ version: r.version, ok: r.ok, err: r.err })),
       ...(checkLabel && { checkLabel }),
       summary: lines.join('\n'),
@@ -250,7 +263,11 @@ export async function clip(input: ClipInput): Promise<ClipResult> {
 }
 
 interface GifEnc {
-  GIFEncoder: () => { writeFrame(index: Uint8Array, w: number, h: number, o: { palette?: number[][]; delay?: number }): void; finish(): void; bytes(): Uint8Array };
+  GIFEncoder: () => {
+    writeFrame(index: Uint8Array, w: number, h: number, o: { palette?: number[][]; delay?: number }): void;
+    finish(): void;
+    bytes(): Uint8Array;
+  };
   quantize: (rgba: Uint8Array, maxColors: number) => number[][];
   applyPalette: (rgba: Uint8Array, palette: number[][]) => Uint8Array;
 }
