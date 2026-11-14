@@ -93,23 +93,103 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
   const [attempt, setAttempt] = useState(0);
   const userId = user?.id ?? null;
 
-  /** Streams we already asked the SDK to deliver (requestStreamMessage), by messageId. */
-  const streamsRequested = useRef(new Set<string>());
-  /** A stream still being written: ask the SDK for its chunks (they arrive as onStreamMessageRequestDelta). */
-  const followStream = useCallback((m: Message) => {
-    if (m.messageType !== BUILTIN_MESSAGE_TYPES.stream || !m.messageId || streamsRequested.current.has(m.messageId)) return;
-    const st = parseStreamContent(m.content);
-    if (!st || st.complete) return;
-    streamsRequested.current.add(m.messageId);
-    void m.requestStreamMessage().then(r => {
-      if (!r.isOk) console.warn('[nexconn] requestStreamMessage failed', r.code);
-    });
-  }, []);
-
   const isActive = (channelId: string) => activeRef.current === channelId && typeof document !== 'undefined' && document.visibilityState === 'visible';
   const normalize = useCallback(
     (m: Message, extra?: Partial<ChatMessage>) => normalizeMessage(m as unknown as SdkMessageLike, myIdRef.current ?? '', extra),
     [],
+  );
+
+  /** The channel already holding this message, if any. */
+  const channelOfMessage = useCallback(
+    (messageId: string): string | undefined => {
+      const channels = store.getState().channels;
+      return Object.keys(channels).find(id => channels[id]!.messages.some(m => m.messageId === messageId));
+    },
+    [store],
+  );
+
+  /** Stream events for messages we don't have yet: latest text + whether it finished. */
+  const orphanStreams = useRef(new Map<string, { text: string; complete: boolean; looking: boolean; tries: number }>());
+  const adoptStream = useCallback(
+    async (messageId: string) => {
+      const o = orphanStreams.current.get(messageId);
+      const sdk = sdkRef.current;
+      if (!o || o.looking || !sdk) return;
+      o.looking = true;
+      const candidates = [...new Set([activeRef.current, ...Object.keys(store.getState().channels)].filter((c): c is string => !!c))];
+      for (const channelId of candidates) {
+        const r = await sdk.BaseChannel.getMessagesByIds({ channelIdentifier: new sdk.GroupChannel(channelId).identifier, messageIds: [messageId] });
+        const found = r.isOk ? r.data?.[messageId] : undefined;
+        if (!found) continue;
+        const latest = orphanStreams.current.get(messageId) ?? o;
+        orphanStreams.current.delete(messageId);
+        const n = normalize(found);
+        const text = (n.text ?? '').length >= latest.text.length ? (n.text ?? '') : latest.text;
+        store.dispatch({
+          type: 'message/received',
+          message: { ...n, kind: 'stream', text, streamComplete: latest.complete || !!n.streamComplete },
+          active: isActive(channelId),
+        });
+        return;
+      }
+      // Not stored yet (still streaming): try again shortly, a few times.
+      o.looking = false;
+      if (++o.tries < 10) setTimeout(() => void adoptStream(messageId), 800);
+      else orphanStreams.current.delete(messageId);
+    },
+    [store, normalize],
+  );
+  const noteOrphanStream = useCallback(
+    (messageId: string, patch: { text?: string; complete?: boolean }) => {
+      const o = orphanStreams.current.get(messageId) ?? { text: '', complete: false, looking: false, tries: 0 };
+      if (patch.text !== undefined && patch.text.length >= o.text.length) o.text = patch.text;
+      if (patch.complete) o.complete = true;
+      orphanStreams.current.set(messageId, o);
+      // Once adopted, deltas go straight to the reducer.
+      const channelId = channelOfMessage(messageId);
+      if (channelId) {
+        orphanStreams.current.delete(messageId);
+        if (o.text) store.dispatch({ type: 'stream/delta', messageId, text: o.text });
+        if (o.complete) store.dispatch({ type: 'stream/complete', messageId });
+        return;
+      }
+      void adoptStream(messageId);
+    },
+    [store, channelOfMessage, adoptStream],
+  );
+
+  /** Streams we already followed, by messageId. */
+  const streamsRequested = useRef(new Set<string>());
+  /**
+   * An agent's streamed reply. While it is being written, ask the SDK for its chunks (they arrive on
+   * onStreamMessageRequestDelta). Verified live (2026-11-14): a short stream can arrive already
+   * complete with EMPTY content, so then we also request it and re-fetch the stored message by id
+   * until its final text is there.
+   */
+  const followStream = useCallback(
+    (m: Message) => {
+      if (m.messageType !== BUILTIN_MESSAGE_TYPES.stream || !m.messageId || streamsRequested.current.has(m.messageId)) return;
+      const st = parseStreamContent(m.content);
+      if (!st || (st.complete && st.text)) return;
+      streamsRequested.current.add(m.messageId);
+      void m.requestStreamMessage().then(r => {
+        if (!r.isOk) console.warn('[nexconn] requestStreamMessage failed', r.code);
+      });
+      if (st.text) return;
+      const { messageId, channelIdentifier } = m;
+      const refetch = async (attempt: number) => {
+        const sdk = sdkRef.current;
+        const current = store.getState().channels[channelIdentifier.channelId]?.messages.find(x => x.messageId === messageId);
+        if (!sdk || (current?.text && current.streamComplete)) return;
+        const r = await sdk.BaseChannel.getMessagesByIds({ channelIdentifier, messageIds: [messageId] });
+        const fresh = r.isOk ? r.data?.[messageId] : undefined;
+        const parsed = fresh ? parseStreamContent(fresh.content) : null;
+        if (fresh && parsed?.text) store.dispatch({ type: 'message/received', message: normalize(fresh), active: true });
+        else if (attempt < 4) setTimeout(() => void refetch(attempt + 1), 1500 * attempt);
+      };
+      setTimeout(() => void refetch(1), 800);
+    },
+    [store, normalize],
   );
 
   // ---- read receipts: debounced, for messages of the active channel that asked for one
@@ -138,6 +218,39 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
     [flushReceipts],
   );
 
+  // ---- catch-up for agent replies streamed while we were watching
+  // Live check (2026-11-14, Web SDK 26.2.1): server-sent RC:StreamMsg replies reached this client
+  // neither through onMessageReceived nor the stream events, but they are in history. So whenever an
+  // agent message arrives live (e.g. the plan card right after the intro), the newest messages of
+  // that room are fetched and merged; the reply then appears just above the card.
+  const catchUpTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const catchUp = useCallback(
+    (channelId: string) => {
+      const pending = catchUpTimers.current.get(channelId);
+      if (pending) clearTimeout(pending);
+      catchUpTimers.current.set(
+        channelId,
+        setTimeout(() => {
+          catchUpTimers.current.delete(channelId);
+          const sdk = sdkRef.current;
+          if (!sdk) return;
+          const q = sdk.BaseChannel.createMessagesQuery({
+            channelIdentifier: new sdk.GroupChannel(channelId).identifier,
+            startTime: Date.now() + 10_000,
+            pageSize: 10,
+            isAscending: false,
+          });
+          void q.loadNextPage().then(res => {
+            if (!res.isOk || !res.data) return;
+            const fresh = (res.data.data as Message[]).filter(x => x.messageType === BUILTIN_MESSAGE_TYPES.stream && !channelOfMessage(x.messageId));
+            for (const x of fresh) store.dispatch({ type: 'message/received', message: normalize(x), active: isActive(channelId) });
+          });
+        }, 400),
+      );
+    },
+    [store, normalize, channelOfMessage],
+  );
+
   // ---- incoming
   const handleIncoming = useCallback(
     (m: Message) => {
@@ -156,10 +269,12 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       const active = isActive(channelId);
       store.dispatch({ type: 'message/received', message: normalize(m), active });
       followStream(m);
+      // Agent ids are "agentpixel", "agentforge", "agentglitch" on Nexconn.
+      if (m.senderUserId.startsWith('agent') && m.messageType !== BUILTIN_MESSAGE_TYPES.stream) catchUp(channelId);
       if (!store.getState().channels[channelId]?.loaded) for (const l of unknownListeners.current) l(channelId);
       if (active) markRead(channelId);
     },
-    [store, normalize, markRead, followStream],
+    [store, normalize, markRead, followStream, catchUp],
   );
 
   const refreshChannelList = useCallback(async () => {
@@ -255,8 +370,20 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
           // Card votes/approvals (metadata/set on the server) update the card in place.
           onMessageMetadataUpdated: ({ messageId, channelIdentifier, metadata }) =>
             store.dispatch({ type: 'message/metadata', channelId: channelIdentifier.channelId, messageId, metadata }),
-          onStreamMessageRequestDelta: ({ messageId, chunkInfo }) => store.dispatch({ type: 'stream/delta', messageId, text: chunkInfo.messageContent }),
-          onStreamMessageRequestComplete: ({ messageId }) => store.dispatch({ type: 'stream/complete', messageId }),
+          // Live (2026-11-14): agent streams reach group members only through these events, keyed by
+          // messageId with no channel. Unknown ids are adopted: the text is kept and the message is
+          // looked up in the open room (then the other loaded rooms) so it appears and keeps growing.
+          onStreamMessageRequestInit: ({ messageId }) => {
+            if (!channelOfMessage(messageId)) noteOrphanStream(messageId, {});
+          },
+          onStreamMessageRequestDelta: ({ messageId, chunkInfo }) => {
+            if (channelOfMessage(messageId)) store.dispatch({ type: 'stream/delta', messageId, text: chunkInfo.messageContent });
+            else noteOrphanStream(messageId, { text: chunkInfo.messageContent });
+          },
+          onStreamMessageRequestComplete: ({ messageId }) => {
+            if (channelOfMessage(messageId)) store.dispatch({ type: 'stream/complete', messageId });
+            else noteOrphanStream(messageId, { complete: true });
+          },
           onMessageReceiptResponse: ({ responses }) => {
             for (const r of responses)
               store.dispatch({
@@ -304,7 +431,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [session, userId, attempt, handleIncoming, refreshChannelList, refreshPresence, store]);
+  }, [session, userId, attempt, handleIncoming, refreshChannelList, refreshPresence, store, channelOfMessage, noteOrphanStream]);
 
   // Sign-out / unmount: drop the connection.
   useEffect(() => {

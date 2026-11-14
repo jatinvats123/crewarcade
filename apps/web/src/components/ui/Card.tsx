@@ -37,7 +37,7 @@ export function CardShell({ agent, title, meta, badges, children, actions, class
         </div>
       </header>
       {children && <div className="px-4 pb-3 text-sm text-text">{children}</div>}
-      {actions && <footer className="flex flex-col gap-2 border-t border-border bg-surface-2/50 p-3 sm:flex-row sm:justify-end">{actions}</footer>}
+      {actions && <footer className="flex flex-col gap-2 border-t border-border bg-surface-2/50 p-3 sm:flex-row sm:flex-wrap sm:justify-end">{actions}</footer>}
     </article>
   );
 }
