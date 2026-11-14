@@ -110,12 +110,12 @@ real chat message was delivered to the local server by a signed script; everythi
 - **Fixed during the run:** an empty `COOKIE_SECURE=` from `.env.example` stopped the server;
   `groupExtProfile` made group creation fail with 25415 (NEXCONN.md discrepancy 16); the card action
   row cut off Approve in the chat column.
-- **Open: streamed replies are not shown live.** The server streams every intro and Nexconn accepts
-  every chunk, but the Web SDK delivered nothing live (no message, no stream events), and the stream
-  only appeared in history about 3 minutes later. The client now adopts stream events for unknown
-  messages and re-fetches a room's latest messages when an agent message arrives; neither surfaced the
-  intro live yet. NEXCONN.md discrepancy 17 has the evidence; next step is a minimal stream test and a
-  question to Nexconn support.
+- **Streamed replies, found and fixed:** Nexconn kept only the **first chunk** of a multi-chunk stream
+  (a two-chunk test showed only "part one,"), and Web clients got no live deltas. The server now sends
+  each agent reply as **one complete `RC:StreamMsg` chunk** (`mode: 'single'`, default; `'chunked'`
+  kept behind the option), and the client fetches a room's newest messages when an agent message
+  arrives. Verified: Pixel's intro appears live and complete, just before the plan card.
+- Pixel answers on its own once the console webhook points at the server (quick tunnel for now).
 
 ### Cost per plan (not measured yet)
 
