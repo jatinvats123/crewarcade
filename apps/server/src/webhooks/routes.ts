@@ -39,6 +39,13 @@ export function registerWebhookRoutes(app: FastifyInstance, ctx: Ctx): void {
         { reason: v.reason, ip: req.ip, headerNames: Object.keys(req.headers).sort(), timestampShape: typeof ts === 'string' ? `${ts.length} chars, digits=${/^\d+$/.test(ts)}` : typeof ts },
         'webhook: rejected',
       );
+      // An UNSIGNED request (e.g. the console checking the URL on save) gets a 200 so the URL is
+      // accepted, but nothing is processed. Signed requests that fail the check still get 401.
+      if (v.reason === 'missing_headers') {
+        const body = req.body as unknown;
+        ctx.log.warn({ bodyShape: body && typeof body === 'object' ? Object.keys(body).sort() : typeof body }, 'webhook: unsigned request ignored');
+        return reply.code(200).send({ ok: false, ignored: 'unsigned' });
+      }
       return reply.code(401).send({ error: 'invalid_signature' });
     }
     const parsed = WebhookEnvelope.safeParse(req.body);

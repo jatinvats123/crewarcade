@@ -61,9 +61,11 @@ describe('signature verification', () => {
     expect(verifyWebhook(signed(h.now.t - 11 * 60_000), opts())).toEqual({ ok: false, reason: 'stale' });
     expect(verifyWebhook({ ...s, timestamp: 'abc' }, opts())).toEqual({ ok: false, reason: 'missing_headers' });
   });
-  it('the route answers 401 to unsigned or forged requests and stores nothing', async () => {
+  it('unsigned requests (e.g. a console URL check) get 200 "ignored"; forged ones 401; neither stores anything', async () => {
     const before = (await h.db.select().from(webhookEvents)).length;
-    expect((await send(event('message:send', [textMsg()]), { 'content-type': 'application/json' })).statusCode).toBe(401);
+    const unsigned = await send(event('message:send', [textMsg()]), { 'content-type': 'application/json' });
+    expect(unsigned.statusCode).toBe(200);
+    expect(unsigned.json()).toEqual({ ok: false, ignored: 'unsigned' });
     expect((await send(event('message:send', [textMsg()]), signed(h.now.t, 'abc', { signature: '0'.repeat(40) }))).statusCode).toBe(401);
     expect((await h.db.select().from(webhookEvents)).length).toBe(before);
   });
@@ -188,6 +190,8 @@ describe('pre-messaging', () => {
     expect(await h.db.select().from(webhookEvents).where(eq(webhookEvents.id, e.id))).toEqual([]);
   });
   it('still needs a valid signature', async () => {
-    expect((await send(pre(), { 'content-type': 'application/json' })).statusCode).toBe(401);
+    const unsigned = await send(pre(), { 'content-type': 'application/json' });
+    expect(unsigned.json()).toEqual({ ok: false, ignored: 'unsigned' }); // no pass decision
+    expect((await send(pre(), signed(h.now.t, 'abc', { signature: '0'.repeat(40) }))).statusCode).toBe(401);
   });
 });
