@@ -3,7 +3,12 @@
 // required in production. Every variable is documented in apps/server/.env.example.
 import { z } from 'zod';
 
-const bool = z.enum(['true', 'false', '1', '0']).transform(v => v === 'true' || v === '1');
+// Boolean switches. An empty value (e.g. COOKIE_SECURE= copied from .env.example) means "not set", so
+// the default applies (zod's .default() only fires for undefined, so the default lives in here).
+const bool = <D extends boolean | undefined>(def: D) =>
+  z
+    .preprocess(v => (v === '' ? undefined : v), z.enum(['true', 'false', '1', '0']).optional())
+    .transform(v => (v === undefined ? def : v === 'true' || v === '1'));
 
 const optionalSecret = z
   .string()
@@ -53,7 +58,7 @@ const BaseSchema = z.object({
   /** Signs session cookies (HS256 JWT). At least 32 characters. Required in production. */
   SESSION_SECRET: optionalSecret.refine(v => v === undefined || v.length >= 32, 'must be at least 32 characters'),
   /** Secure flag on the session cookie. Defaults to true in production. */
-  COOKIE_SECURE: bool.optional(),
+  COOKIE_SECURE: bool(undefined).optional(),
   /** Webhooks whose Timestamp header is further than this from now are rejected: the Nexconn
    *  signature does not cover the body, so a fresh timestamp is what stops replayed headers. */
   WEBHOOK_MAX_SKEW_MS: z.coerce
@@ -65,7 +70,7 @@ const BaseSchema = z.object({
   /** Global daily AI spend guard in USD (builds stop for the day when reached). */
   DAILY_BUDGET_USD: z.coerce.number().min(0).default(25),
   /** Run the pg-boss job workers in this process (one Render service runs API + workers). */
-  RUN_WORKERS: bool.default(true),
+  RUN_WORKERS: bool(true),
   /** pg-boss needs session-level features: use a direct or session-pooler URL (Supabase port 5432)
    *  here when DATABASE_URL is the transaction pooler (port 6543). Defaults to DATABASE_URL. */
   JOBS_DATABASE_URL: z
@@ -76,7 +81,7 @@ const BaseSchema = z.object({
   /** Agent jobs run at once per process (one per room at a time on top of this). */
   AGENT_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
   /** Deterministic canned agent outputs with realistic delays (e2e tests, demo safety net). */
-  FAKE_AGENTS: bool.default(false),
+  FAKE_AGENTS: bool(false),
   /** Per-call timeout for Claude requests. */
   AI_TIMEOUT_MS: z.coerce.number().int().min(5000).default(120_000),
 });

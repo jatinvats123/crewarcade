@@ -69,6 +69,12 @@ describe('config', () => {
     throw new Error('expected a ConfigError');
   });
 
+  it('treats empty switches from a copied .env.example as unset', () => {
+    const c = loadConfig({ DATABASE_URL: DB, COOKIE_SECURE: '', FAKE_AGENTS: '', RUN_WORKERS: '' });
+    expect(c.COOKIE_SECURE).toBeUndefined();
+    expect(c).toMatchObject({ FAKE_AGENTS: false, RUN_WORKERS: true });
+  });
+
   it('rejects malformed values', () => {
     expect(() => loadConfig({ DATABASE_URL: 'mysql://x' })).toThrow(/postgres/);
     expect(() => loadConfig({ DATABASE_URL: DB, PORT: 'abc' })).toThrow(/PORT/);
