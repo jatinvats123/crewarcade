@@ -49,6 +49,10 @@ const BaseSchema = z.object({
 
   ANTHROPIC_API_KEY: optionalSecret,
   ANTHROPIC_MODEL: z.string().default('claude-opus-5-5'),
+  /** Which AI runs the agents: anthropic (Claude) or gemini (Google AI Studio key; free tier). */
+  AI_PROVIDER: z.preprocess(v => (v === '' ? undefined : v), z.enum(['anthropic', 'gemini']).default('anthropic')),
+  GEMINI_API_KEY: optionalSecret,
+  GEMINI_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().default('gemini-3.5-flash-lite')),
 
   SARVAM_API_KEY: optionalSecret,
 
@@ -92,8 +96,10 @@ export const ConfigSchema = BaseSchema.superRefine((c, ctx) => {
     if (!c[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'is required in production' });
   }
   // The fake agents need no key; real ones do.
-  if (!c.ANTHROPIC_API_KEY && !c.FAKE_AGENTS)
-    ctx.addIssue({ code: 'custom', path: ['ANTHROPIC_API_KEY'], message: 'is required in production (or set FAKE_AGENTS=1)' });
+  if (!c.FAKE_AGENTS && c.AI_PROVIDER === 'anthropic' && !c.ANTHROPIC_API_KEY)
+    ctx.addIssue({ code: 'custom', path: ['ANTHROPIC_API_KEY'], message: 'is required in production (or set FAKE_AGENTS=1 or AI_PROVIDER=gemini)' });
+  if (!c.FAKE_AGENTS && c.AI_PROVIDER === 'gemini' && !c.GEMINI_API_KEY)
+    ctx.addIssue({ code: 'custom', path: ['GEMINI_API_KEY'], message: 'is required when AI_PROVIDER=gemini' });
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -128,6 +134,7 @@ export function integrations(c: Config): Record<string, boolean> {
     nexconn: !!(c.NEXCONN_APP_KEY && c.NEXCONN_APP_SECRET),
     supabaseStorage: !!(c.SUPABASE_URL && c.SUPABASE_SERVICE_ROLE_KEY),
     anthropic: !!c.ANTHROPIC_API_KEY,
+    gemini: !!c.GEMINI_API_KEY,
     fakeAgents: c.FAKE_AGENTS,
     sarvam: !!c.SARVAM_API_KEY,
     tokenEncryption: !!c.TOKEN_ENCRYPTION_KEY,

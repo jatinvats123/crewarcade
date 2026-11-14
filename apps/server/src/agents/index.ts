@@ -3,6 +3,7 @@
 import type { AiClient } from '../ai/claude';
 import { createClaudeClient } from '../ai/claude';
 import { createFakeAiClient } from '../ai/fake';
+import { createGeminiClient } from '../ai/gemini';
 import type { Config } from '../config';
 import type { Ctx } from '../context';
 import type { NexconnClient } from '../nexconn/client';
@@ -13,10 +14,14 @@ import type { AgentServices } from './runtime-deps';
 import { createAgentStates } from './states';
 
 export function createAi(
-  config: Pick<Config, 'FAKE_AGENTS' | 'ANTHROPIC_API_KEY' | 'ANTHROPIC_MODEL' | 'AI_TIMEOUT_MS'>,
+  config: Pick<Config, 'FAKE_AGENTS' | 'ANTHROPIC_API_KEY' | 'ANTHROPIC_MODEL' | 'AI_TIMEOUT_MS' | 'AI_PROVIDER' | 'GEMINI_API_KEY' | 'GEMINI_MODEL'>,
   log?: QueueLog & { debug(o: object, m: string): void },
 ): AiClient | null {
   if (config.FAKE_AGENTS) return createFakeAiClient();
+  if (config.AI_PROVIDER === 'gemini')
+    return config.GEMINI_API_KEY
+      ? createGeminiClient({ apiKey: config.GEMINI_API_KEY, model: config.GEMINI_MODEL, timeoutMs: config.AI_TIMEOUT_MS, ...(log && { log }) })
+      : null;
   if (!config.ANTHROPIC_API_KEY) return null;
   return createClaudeClient({ apiKey: config.ANTHROPIC_API_KEY, model: config.ANTHROPIC_MODEL, timeoutMs: config.AI_TIMEOUT_MS, ...(log && { log }) });
 }

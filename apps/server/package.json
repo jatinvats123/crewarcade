@@ -21,6 +21,7 @@
     "@anthropic-ai/sdk": "1.8.0",
     "@crewarcade/engine": "workspace:*",
     "@crewarcade/shared": "workspace:*",
+    "@google/genai": "3.3.0",
     "drizzle-orm": "0.45.4",
     "fastify": "5.12.8",
     "gifenc": "1.0.3",

@@ -1,0 +1,145 @@
+// Google Gemini client (AI Studio key) behind the same AiClient interface as Claude, so agents,
+// ledger and tests do not change. Chosen with AI_PROVIDER=gemini (owner decision 2026-11-14: no
+// Anthropic budget; the AI Studio free tier is used). Structured output: responseMimeType JSON +
+// responseJsonSchema (generated from the zod schema), streamed so Pixel's intro can still be shown
+// as it is generated. Safety blocks become AiRefusalError (the friendly "I can't make that one").
+// Free-tier calls are logged with real token counts and $0 cost. SDK names checked in
+// node_modules/@google/genai (3.3.0): GoogleGenAI, models.generateContentStream, usageMetadata.
+import { GoogleGenAI, type GenerateContentResponse } from '@google/genai';
+import {
+  AiNotConfiguredError,
+  AiOutputError,
+  AiRefusalError,
+  AiTimeoutError,
+  AiUnavailableError,
+  channel,
+  outputJsonSchema,
+  type AiClient,
+  type AiUsage,
+  type StructuredCall,
+  type StructuredRun,
+  type TextCall,
+  type TextRun,
+} from './claude';
+import { streamJsonStringField } from './json-stream';
+
+export interface GeminiOptions {
+  apiKey: string;
+  /** e.g. gemini-3.5-flash-lite (fast on the free tier; bigger free models stalled in testing). */
+  model: string;
+  timeoutMs?: number;
+  /** USD per million tokens when billed (0 on the free tier). */
+  prices?: { input: number; output: number };
+  baseUrl?: string;
+  log?: { debug(obj: object, msg: string): void };
+}
+
+const REFUSAL_REASONS = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'IMAGE_SAFETY', 'RECITATION']);
+
+export function createGeminiClient(o: GeminiOptions): AiClient {
+  // v1beta: where the current models and the "-latest" aliases live (the SDK defaults to v1 here).
+  const ai = new GoogleGenAI({ apiKey: o.apiKey, httpOptions: { apiVersion: 'v1beta', ...(o.baseUrl && { baseUrl: o.baseUrl }) } });
+  const prices = o.prices ?? { input: 0, output: 0 };
+
+  function usageOf(last: GenerateContentResponse | null, ms: number): AiUsage {
+    const u = last?.usageMetadata;
+    const tokensIn = u?.promptTokenCount ?? 0;
+    const tokensOut = (u?.candidatesTokenCount ?? 0) + (u?.thoughtsTokenCount ?? 0);
+    return {
+      model: last?.modelVersion ?? o.model,
+      tokensIn,
+      tokensOut,
+      cacheReadTokens: u?.cachedContentTokenCount ?? 0,
+      cacheWriteTokens: 0,
+      costUsd: Math.round(((tokensIn * prices.input + tokensOut * prices.output) / 1_000_000) * 1e6) / 1e6,
+      ms: Math.round(ms),
+      fellBack: false,
+    };
+  }
+
+  /** One streamed request; `onText` gets every text delta. Checks block/finish reasons before returning. */
+  async function run(call: TextCall, json: Record<string, unknown> | null, onText: (t: string) => void): Promise<{ text: string; usage: AiUsage }> {
+    const t0 = performance.now();
+    const timeoutMs = call.timeoutMs ?? o.timeoutMs ?? 120_000;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), timeoutMs);
+    const onOuterAbort = () => abort.abort();
+    call.signal?.addEventListener('abort', onOuterAbort);
+    let text = '';
+    let last: GenerateContentResponse | null = null;
+    try {
+      const stream = await ai.models.generateContentStream({
+        model: o.model,
+        contents: [{ role: 'user', parts: [{ text: call.user }] }],
+        config: {
+          systemInstruction: call.system,
+          maxOutputTokens: call.maxTokens,
+          abortSignal: abort.signal,
+          ...(json && { responseMimeType: 'application/json', responseJsonSchema: json }),
+        },
+      });
+      for await (const chunk of stream) {
+        last = chunk;
+        const piece = chunk.text;
+        if (piece) {
+          text += piece;
+          onText(piece);
+        }
+      }
+    } catch (e) {
+      if (abort.signal.aborted) throw new AiTimeoutError(`${call.purpose} timed out after ${timeoutMs} ms`);
+      const msg = (e as Error).message ?? String(e);
+      if (/API key|permission|401|403/i.test(msg)) throw new AiNotConfiguredError();
+      if (/400|invalid/i.test(msg)) throw new AiOutputError(`${call.purpose} was rejected: ${msg.slice(0, 200)}`);
+      throw new AiUnavailableError(`${call.purpose} failed: ${msg.slice(0, 200)}`);
+    } finally {
+      clearTimeout(timer);
+      call.signal?.removeEventListener('abort', onOuterAbort);
+    }
+    const usage = usageOf(last, performance.now() - t0);
+    const block = last?.promptFeedback?.blockReason;
+    const finish = last?.candidates?.[0]?.finishReason;
+    if (block || (finish && REFUSAL_REASONS.has(String(finish)))) throw new AiRefusalError(String(block ?? finish).toLowerCase(), usage);
+    if (finish === 'MAX_TOKENS') throw new AiOutputError(`${call.purpose} hit maxOutputTokens (${call.maxTokens})`, usage);
+    o.log?.debug({ purpose: call.purpose, ...usage }, 'gemini: call done');
+    return { text, usage };
+  }
+
+  return {
+    model: o.model,
+    structured<T>(call: StructuredCall<T>): StructuredRun<T> {
+      const field = channel<string>();
+      const extractor = call.streamField ? streamJsonStringField(call.streamField, field.push) : null;
+      const done = (async () => {
+        try {
+          const { text, usage } = await run(call, outputJsonSchema(call.schema), t => extractor?.(t));
+          let json: unknown;
+          try {
+            json = JSON.parse(text);
+          } catch {
+            throw new AiOutputError(`${call.purpose} returned invalid JSON`, usage);
+          }
+          const parsed = call.schema.safeParse(json);
+          if (!parsed.success) throw new AiOutputError(`${call.purpose} output did not match the schema: ${parsed.error.issues[0]?.message ?? ''}`, usage);
+          return { value: parsed.data, usage };
+        } finally {
+          field.end();
+        }
+      })();
+      done.catch(() => {});
+      return { fieldChunks: field.iterable, done };
+    },
+    streamText(call: TextCall): TextRun {
+      const chunks = channel<string>();
+      const done = (async () => {
+        try {
+          return await run(call, null, chunks.push);
+        } finally {
+          chunks.end();
+        }
+      })();
+      done.catch(() => {});
+      return { chunks: chunks.iterable, done };
+    },
+  };
+}

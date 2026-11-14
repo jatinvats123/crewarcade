@@ -25,6 +25,7 @@ describe('config', () => {
       nexconn: false,
       supabaseStorage: false,
       anthropic: false,
+      gemini: false,
       fakeAgents: false,
       sarvam: false,
       tokenEncryption: false,
