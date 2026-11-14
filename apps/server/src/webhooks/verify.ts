@@ -10,7 +10,8 @@ type HeaderValue = string | string[] | undefined;
 const one = (v: HeaderValue): string | undefined => (Array.isArray(v) ? v[0] : v);
 
 export function verifyWebhook(headers: Record<string, HeaderValue>, opts: { appKey: string; appSecret: string; maxSkewMs: number; now: number }): VerifyResult {
-  const appKey = one(headers.appkey);
+  // The webhook docs say "AppKey"; accept the API-style "App-Key" too (header names arrive lowercased).
+  const appKey = one(headers.appkey) ?? one(headers['app-key']);
   const nonce = one(headers.nonce);
   const timestamp = one(headers.timestamp);
   const signature = one(headers.signature);

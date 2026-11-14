@@ -33,7 +33,12 @@ export function registerWebhookRoutes(app: FastifyInstance, ctx: Ctx): void {
 
     const v = verifyWebhook(req.headers, { appKey, appSecret, maxSkewMs: ctx.config.WEBHOOK_MAX_SKEW_MS, now: ctx.now() });
     if (!v.ok) {
-      ctx.log.warn({ reason: v.reason, ip: req.ip }, 'webhook: rejected');
+      // Header NAMES only (never values) and the timestamp's shape, to diagnose signing mismatches.
+      const ts = req.headers.timestamp;
+      ctx.log.warn(
+        { reason: v.reason, ip: req.ip, headerNames: Object.keys(req.headers).sort(), timestampShape: typeof ts === 'string' ? `${ts.length} chars, digits=${/^\d+$/.test(ts)}` : typeof ts },
+        'webhook: rejected',
+      );
       return reply.code(401).send({ error: 'invalid_signature' });
     }
     const parsed = WebhookEnvelope.safeParse(req.body);

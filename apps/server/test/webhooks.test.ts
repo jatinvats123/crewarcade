@@ -48,6 +48,11 @@ describe('signature verification', () => {
     const s = signed();
     expect(verifyWebhook({ ...s, signature: s.signature.toUpperCase() }, opts())).toEqual({ ok: true });
   });
+  it('accepts the App-Key spelling too (live Nexconn calls arrived without "AppKey")', () => {
+    const { appkey, ...rest } = signed();
+    expect(verifyWebhook({ ...rest, 'app-key': appkey }, opts())).toEqual({ ok: true });
+  });
+
   it('rejects missing headers, a foreign AppKey, a bad signature and stale timestamps', () => {
     const s = signed();
     expect(verifyWebhook({ ...s, appkey: undefined as unknown as string }, opts())).toEqual({ ok: false, reason: 'missing_headers' });
@@ -55,9 +60,6 @@ describe('signature verification', () => {
     expect(verifyWebhook({ ...s, signature: 'f'.repeat(40) }, opts())).toEqual({ ok: false, reason: 'signature' });
     expect(verifyWebhook(signed(h.now.t - 11 * 60_000), opts())).toEqual({ ok: false, reason: 'stale' });
     expect(verifyWebhook({ ...s, timestamp: 'abc' }, opts())).toEqual({ ok: false, reason: 'missing_headers' });
-    // "App-Key" (the API-call spelling) is not what webhooks send.
-    const { appkey, ...rest } = s;
-    expect(verifyWebhook({ ...rest, 'app-key': appkey }, opts()).ok).toBe(false);
   });
   it('the route answers 401 to unsigned or forged requests and stores nothing', async () => {
     const before = (await h.db.select().from(webhookEvents)).length;
