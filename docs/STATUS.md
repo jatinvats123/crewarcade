@@ -175,6 +175,33 @@ Opus's minimum cacheable size, so expect `cache_read` ≈ 0 for Pixel until the 
 3. On Render: `JOBS_DATABASE_URL` = the Supabase **session** pooler URL (port 5432) for pg-boss, and
    optionally `FAKE_AGENTS=1` as a demo fallback.
 
+## Phase 3: in progress (branch `phase-3`)
+
+Owner decisions (2026-11-14): Build-card progress for Forge AND real multi-chunk streaming for
+Pixel's intro/explain; `AI_PROVIDER` stays switchable with a stronger build model for Forge than
+flash-lite (metrics labelled with the model); production refuses to start without Supabase Storage
+(local disk = development only); run the `E2E_CHAT=1` e2e live and give a 5-step phone check before
+merging. Approved deviations: Gemini for now, sandbox postMessage check by `event.source`, draft
+teaser until Phase 4, E2E_CHAT-gated full flow, no Live Build Theater, minimal Glitch DM view,
+original FAKE template game.
+
+Progress:
+- **Streams debugged live** (`apps/server/scripts/stream-repro.ts`, `pnpm --filter @crewarcade/server
+  stream:repro`): server chunking with `messageId` is correct; the bug is client-side (history keeps
+  only chunk 1; full text via `requestStreamMessage()` or `RC_Ext_StreamMsgSummary`). Findings in
+  `docs/NEXCONN.md` → "Live stream findings". **Next:** switch `streamToGroup` default back to
+  `'chunked'` with a debug log per chunk (seq, bytes, response), and in `NexconnProvider` call
+  `requestStreamMessage()` for every stream without full text (live and history) and apply
+  `RC_Ext_StreamMsgSummary` metadata; then verify Pixel intro + explain live.
+- **Shared schemas (uncommitted, web not updated yet):** `BuildCardContent` now `{gameId, slug,
+  title, version, reason, change?}` with live `BuildCardMeta` (`steps`, `sizeKb`, `buildMs`,
+  `attempts`, `notes`, `checkPass`, `problems`, `error`); `ScoreCardContent` gains slug, title,
+  version, names, beatScore; new `packages/shared/src/play.ts` (GameHostMessage, play URL, scores,
+  leaderboard, game page, remix). `CardMessage.tsx` and CardsDemo still use the old build fields, so
+  typecheck fails until they are updated.
+- Not started: config (Forge build model, prod requires Supabase), storage, Forge worker, /play route,
+  Player, scores, /g page, tests, real builds.
+
 ## Next: Phase 3
 
 A Forge worker for the queued `forge-build` jobs (handoff → started/done, `CA:BuildCard`), streamed

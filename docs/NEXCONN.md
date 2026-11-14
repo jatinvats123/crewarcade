@@ -196,6 +196,25 @@ agent. 30 voters in one JSON value stay far below 4,096 chars (tested).
   `onStreamMessageRequestDelta({ messageId, chunkInfo: { content, messageContent } })`
   (`messageContent` = everything so far), `onStreamMessageRequestComplete({ messageId, code })`.
 
+#### Live stream findings (repro `pnpm --filter @crewarcade/server stream:repro`, 2026-11-14)
+
+- Continuation chunks must carry **`messageId`** inside `content`. With the legacy **`messageUID`**
+  every continuation became a NEW message (each response returned a new messageId): do not use it.
+- With `messageId`, Nexconn assembles the stream correctly: when the last chunk (`complete: true`)
+  lands, every online client gets `onMessageMetadataUpdated` with
+  `RC_Ext_StreamMsgSummary = {"complete":true,"summary":"<full text>"}` (also with 0 ms between chunks).
+- **Web SDK 26.2.1 never fires `onMessageReceived` for a server-sent `RC:StreamMsg`** (a control
+  `RC:TxtMsg` from the same sender in the same run did fire). Handlers were registered before connect.
+- **History** (`createMessagesQuery`, `getMessagesByIds`) returns the stream with `content` = the
+  FIRST chunk only, `isCompleted: false` and empty `metadata`, even after completion. This is the
+  "only part one" symptom: the stream was fine, the client read the wrong field.
+- `requestStreamMessage()` on a history copy works: init → one delta with the full text
+  (`chunkInfo.messageContent`) → complete (code 0).
+- Client rule that follows: for every `RC:StreamMsg` (live or history) call `requestStreamMessage()`
+  unless we already have its full text; also apply `RC_Ext_StreamMsgSummary` from metadata updates
+  (keyed by messageId, the client finds the channel itself). Since live chunks are not pushed, the
+  first sight of a live reply is the summary update or the catch-up fetch.
+
 ### Open channels (Live Build Theater)
 
 `POST /v4/open-channel/create` · 100 req/s
