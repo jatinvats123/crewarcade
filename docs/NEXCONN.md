@@ -88,8 +88,7 @@ Clients never call this; our server does, then stores the token encrypted
   "owner": "u…",
   "userIds": ["agentpixel", "agentforge", "agentglitch"],
   "groupProfile": { "introduction": "≤512", "announcement": "≤1024", "portraitUrl": "≤128 chars" },
-  "permissions": { "joinPerm": 0, "removePerm": 0, "memInvitePerm": 0, "invitePerm": 0, "profilePerm": 0, "memProfilePerm": 0 },
-  "groupExtProfile": { "ext_gameId": "g…" }
+  "permissions": { "joinPerm": 0, "removePerm": 0, "memInvitePerm": 0, "invitePerm": 0, "profilePerm": 0, "memProfilePerm": 0 }
 }
 ```
 
@@ -427,3 +426,7 @@ WEBM…). Server only (`SARVAM_API_KEY`).
     treat it as a status message because it is registered with `isStatusMessage: true`. (Phase 2)
 15. **Card types:** the Phase 0 sheet planned one `CA:Card` envelope; Phase 2 uses one registered type
     per card (see SPEC §5 decision). All ≤ 32 chars, none start with `RC:`/`NC:`. (Phase 2)
+16. **groupExtProfile keys must exist first:** the create-group page documents `groupExtProfile` (`ext_` keys,
+    ≤ 10 pairs) but does not say the keys must be registered for the app. Live, sending
+    `ext_crewId` fails with **25415 "The extended profile key does not exist"** (codes page). We no longer
+    send it; the database maps channel → crew/game. (First live run, 2026-11-14)

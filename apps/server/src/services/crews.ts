@@ -74,7 +74,7 @@ export async function createCrew(ctx: Ctx, owner: UserRow, input: { name: string
     userIds: AGENT_ID_LIST.map(nexconnUserId),
     groupProfile: { introduction: 'A CrewArcade crew: friends + Pixel, Forge and Glitch.' },
     permissions: CREW_GROUP_PERMISSIONS,
-    groupExtProfile: { ext_crewId: crew.id },
+    // No groupExtProfile: ext_ keys must be registered for the app first or create fails (25415).
   });
   await insertCrewWithMembers(ctx.db, crew, [{ userId: owner.id, role: 'owner' }, ...AGENT_ID_LIST.map(id => ({ userId: id, role: 'member' as const }))]);
   ctx.log.info({ crewId: crew.id, channelId: crew.groupChannelId }, 'crew created');

@@ -162,8 +162,9 @@ describe('crews, invites and roles', () => {
       owner: owner.id,
       userIds: ['agentpixel', 'agentforge', 'agentglitch'],
       permissions: CREW_GROUP_PERMISSIONS,
-      groupExtProfile: { ext_crewId: crewId },
     });
+    // Live Nexconn rejects unregistered ext_ keys (code 25415), so none are sent; the DB maps channel -> crew.
+    expect(create.body).not.toHaveProperty('groupExtProfile');
     const welcome = calls.find(c => c.path === '/v4/group-channel/message/send')!;
     expect(welcome.body).toMatchObject({ fromUserId: 'agentpixel', toChannelIds: [channelId], messageType: 'RC:TxtMsg', shouldPersist: 1 });
     expect(JSON.parse(welcome.body.content as string)).toEqual({ content: WELCOME_TEXT });

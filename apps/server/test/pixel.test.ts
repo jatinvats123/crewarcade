@@ -167,8 +167,8 @@ describe('pitch -> streamed intro -> plan card', () => {
       channelId: gameRoom,
       name: `🎮 ${plan.content.title}`,
       owner: asha.id,
-      groupExtProfile: { ext_crewId: crewId, ext_gameId: plan.content.gameId },
     });
+    expect(create.body).not.toHaveProperty('groupExtProfile'); // unregistered ext_ keys fail live (25415)
     expect((create.body.userIds as string[]).sort()).toEqual([riya.id, 'agentforge', 'agentglitch', 'agentpixel'].sort());
 
     const link = sends(calls, CARD_MESSAGE_TYPES.roomLink)[0]!;

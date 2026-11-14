@@ -38,7 +38,7 @@ export async function createGameRoom(ctx: Ctx, crew: CrewRow, game: Pick<GameRow
     userIds: others.slice(0, 30),
     groupProfile: { introduction: `Game room for ${game.title.slice(0, 40)}: plan, builds, playtests.` },
     permissions: CREW_GROUP_PERMISSIONS,
-    groupExtProfile: { ext_crewId: crew.id, ext_gameId: game.id },
+    // No groupExtProfile: ext_ keys must be registered for the app first or create fails (25415).
   });
   for (let i = 30; i < others.length; i += 100) await joinGroup(nexconn, { channelId, userIds: others.slice(i, i + 100) });
   ctx.log.info({ crewId: crew.id, gameId: game.id, channelId, members: others.length + 1 }, 'game room created');
