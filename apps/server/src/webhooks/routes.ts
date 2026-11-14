@@ -36,7 +36,12 @@ export function registerWebhookRoutes(app: FastifyInstance, ctx: Ctx): void {
       // Header NAMES only (never values) and the timestamp's shape, to diagnose signing mismatches.
       const ts = req.headers.timestamp;
       ctx.log.warn(
-        { reason: v.reason, ip: req.ip, headerNames: Object.keys(req.headers).sort(), timestampShape: typeof ts === 'string' ? `${ts.length} chars, digits=${/^\d+$/.test(ts)}` : typeof ts },
+        {
+          reason: v.reason,
+          ip: req.ip,
+          headerNames: Object.keys(req.headers).sort(),
+          timestampShape: typeof ts === 'string' ? `${ts.length} chars, digits=${/^\d+$/.test(ts)}` : typeof ts,
+        },
         'webhook: rejected',
       );
       // An UNSIGNED request (e.g. the console checking the URL on save) gets a 200 so the URL is
