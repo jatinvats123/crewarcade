@@ -568,7 +568,11 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
           ...(mentionUserIds.length > 0 && { mentionedInfo: { type: sdk.MentionedType.USERS, userIdList: mentionUserIds } }),
         });
         params.needReceipt = true;
-        settle(channelId, localId, await new sdk.GroupChannel(channelId).sendMessage(params));
+        const res = await new sdk.GroupChannel(channelId).sendMessage(params);
+        settle(channelId, localId, res);
+        // Backup trigger for the agents (the webhook is the primary one; the server dedupes by messageId).
+        if (res.isOk && res.data?.messageId)
+          void api.relay({ channelId, messageId: res.data.messageId, text, mentionedUserIds: mentionUserIds }).catch(() => {});
       };
       resend.current.set(localId, send);
       void send().catch(() => store.dispatch({ type: 'message/failed', channelId, localId }));

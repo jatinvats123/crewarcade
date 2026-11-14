@@ -73,6 +73,8 @@ export const api = {
   room: (channelId: string) => request('GET', `/api/rooms/${encodeURIComponent(channelId)}`, z.object({ room: RoomInfo })).then(r => r.room),
   roomAgents: (channelId: string) =>
     request('GET', `/api/rooms/${encodeURIComponent(channelId)}/agents`, z.object({ states: z.array(AgentStateMessage) })).then(r => r.states),
+  relay: (body: { channelId: string; messageId: string; text: string; mentionedUserIds: string[] }) =>
+    request('POST', '/api/chat/relay', z.object({ routed: z.boolean() }), body),
   ledger: (gameId: string) => request('GET', `/api/games/${encodeURIComponent(gameId)}/ledger`, LedgerResponse),
   agentActivity: (crewId: string, agent: 'pixel' | 'forge' | 'glitch') =>
     request('GET', `/api/crews/${encodeURIComponent(crewId)}/agents/${agent}/activity`, z.object({ agent: z.string(), entries: z.array(LedgerEntry) })).then(

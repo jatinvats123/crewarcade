@@ -394,3 +394,23 @@ describe('failures', () => {
     expect(sends(calls, CARD_MESSAGE_TYPES.plan)).toHaveLength(1);
   });
 });
+
+describe('client relay (backup when webhooks do not arrive)', () => {
+  it('routes a sent message like the webhook would; members only; never twice with the webhook', async () => {
+    const n = h.calls.length;
+    const relay = (cookie: string, messageId: string, text = '@pixel a koala surfing on clouds') =>
+      post('/api/chat/relay', cookie, { channelId, messageId, text, mentionedUserIds: ['agentpixel'] });
+    expect((await relay(sam.cookie, 'RELAY-0')).statusCode).toBe(200); // Sam joined the crew earlier
+    const r = await relay(asha.cookie, 'RELAY-1');
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ routed: true });
+    // The webhook for the same message arrives later: no second job.
+    await h.webhook('message:send', [textEvent(asha.id, channelId, '@pixel a koala surfing on clouds', ['agentpixel'], 'RELAY-1')]);
+    await h.settle();
+    const plans = sends(since(n), CARD_MESSAGE_TYPES.plan);
+    expect(plans).toHaveLength(2); // RELAY-0 and RELAY-1, once each
+    const outsider = await signUp(h, 'Zed', '10.1.0.9');
+    expect((await relay(outsider.cookie, 'RELAY-2')).statusCode).toBe(404);
+    expect((await post('/api/chat/relay', asha.cookie, { channelId, messageId: 'RELAY-3', text: '' })).statusCode).toBe(400);
+  });
+});

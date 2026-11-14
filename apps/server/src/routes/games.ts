@@ -6,7 +6,9 @@
 //   GET  /api/rooms/:channelId/agents                     live agent states in that room
 //   GET  /api/games/:id/ledger                            the game's Decision Ledger (members only)
 //   GET  /api/crews/:id/agents/:agent/activity            an agent's last 5 ledger actions in a crew
-import { AGENTS, ChangeRequestBody, VoteBody, type LedgerResponse, type RoomInfo } from '@crewarcade/shared';
+import { AGENTS, BUILTIN_MESSAGE_TYPES, ChangeRequestBody, LIMITS, nexconnUserId, VoteBody, type LedgerResponse, type RoomInfo } from '@crewarcade/shared';
+import { routeIncoming } from '../agents/runtime';
+import { logMessage } from '../repo/webhooks';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AgentServices } from '../agents/runtime-deps';
@@ -21,6 +23,15 @@ const MessageParam = z.object({ messageId: z.string().min(1).max(64) });
 const ChannelParam = z.object({ channelId: z.string().regex(/^[A-Za-z0-9]{1,64}$/) });
 const IdParam = z.object({ id: z.string().min(1).max(64) });
 const ActivityParams = z.object({ id: z.string().min(1).max(64), agent: z.enum(['pixel', 'forge', 'glitch']) });
+const RelayBody = z.object({
+  channelId: z.string().regex(/^[A-Za-z0-9]{1,64}$/),
+  messageId: z.string().min(1).max(128),
+  text: z
+    .string()
+    .min(1)
+    .max(LIMITS.chatTextChars * 2),
+  mentionedUserIds: z.array(z.string().max(64)).max(30).default([]),
+});
 
 function agentsOf(ctx: Ctx): Ctx & { agents: AgentServices } {
   if (!ctx.agents) throw new HttpError(503, 'agents_unavailable', 'The agents are not running on this server');
@@ -52,6 +63,40 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx): void {
     const { messageId } = MessageParam.parse(req.params);
     const { text } = ChangeRequestBody.parse(req.body);
     return { messageId, metadata: await requestChange(agentsOf(ctx), user, messageId, text) };
+  });
+
+  // Backup trigger for the agents: the app reports a text message it just sent, and the server
+  // routes it exactly as the message:send webhook would (only as the signed-in user, only in rooms
+  // they belong to). Job ids come from the messageId, so webhook + relay never run a job twice.
+  const relayLimit = fixedWindowLimiter({ limit: 30, windowMs: 60_000, now: ctx.now });
+  app.post('/api/chat/relay', async req => {
+    const user = await requireUser(ctx, req);
+    rateLimit(relayLimit, `user:${user.id}`);
+    const body = RelayBody.parse(req.body);
+    await memberRoom(user.id, body.channelId);
+    const content = JSON.stringify({
+      content: body.text,
+      ...(body.mentionedUserIds.length > 0 && { mentionedInfo: { type: 2, userIdList: body.mentionedUserIds } }),
+    });
+    await logMessage(ctx.db, {
+      nexconnMessageId: body.messageId,
+      channelId: body.channelId,
+      channelType: 3,
+      fromUserId: user.id,
+      messageType: BUILTIN_MESSAGE_TYPES.text,
+      text: body.text.slice(0, 2000),
+      createdAt: new Date(ctx.now()),
+    });
+    const key = ctx.agents
+      ? await routeIncoming(ctx as Ctx & { agents: AgentServices }, {
+          messageId: body.messageId,
+          channelId: body.channelId,
+          userId: nexconnUserId(user.id),
+          messageType: BUILTIN_MESSAGE_TYPES.text,
+          content,
+        })
+      : null;
+    return { routed: key !== null };
   });
 
   async function memberRoom(userId: string, channelId: string) {
