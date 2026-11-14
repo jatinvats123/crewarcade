@@ -97,6 +97,26 @@ the two-user Pixel e2e and the real cost numbers are still open (see "Needed fro
 - `pnpm eval:fast`: **21/21 planted bugs caught, 0 false FAILs** (4.0 min; engine untouched).
 - Checked in a browser at 375 px: plan card header, votes, Approve, handoff (fixed a squeezed title).
 
+### First live run on the owner's Nexconn dev app (2026-11-14)
+
+Local stack (Postgres 17 in Docker, server with `FAKE_AGENTS=1` and pg-boss, `next start`), the owner's
+dev App Key. Webhooks cannot reach a laptop without a tunnel, so the `message:send` webhook for each
+real chat message was delivered to the local server by a signed script; everything else was real.
+
+- **Works live:** token issue, crew creation (group + agents), Pixel's welcome, Web SDK connect and
+  history, sending messages, `CA:AgentState` status messages (strip and panel update live), Plan cards
+  with metadata, votes (`metadata/set` → live update), Approve → game room group created, room link,
+  approved plan copy + handoff, Forge state, Story/ledger.
+- **Fixed during the run:** an empty `COOKIE_SECURE=` from `.env.example` stopped the server;
+  `groupExtProfile` made group creation fail with 25415 (NEXCONN.md discrepancy 16); the card action
+  row cut off Approve in the chat column.
+- **Open: streamed replies are not shown live.** The server streams every intro and Nexconn accepts
+  every chunk, but the Web SDK delivered nothing live (no message, no stream events), and the stream
+  only appeared in history about 3 minutes later. The client now adopts stream events for unknown
+  messages and re-fetches a room's latest messages when an agent message arrives; neither surfaced the
+  intro live yet. NEXCONN.md discrepancy 17 has the evidence; next step is a minimal stream test and a
+  question to Nexconn support.
+
 ### Cost per plan (not measured yet)
 
 `pnpm --filter @crewarcade/server measure:pixel` runs 5 pitches (English, Hindi, Hinglish and a
@@ -131,9 +151,8 @@ Opus's minimum cacheable size, so expect `cache_read` ≈ 0 for Pixel until the 
 
 ### Known issues / open questions (Phase 2)
 
-- **Nothing has talked to real Nexconn or Claude.** Highest-risk unverified pieces: the Web stream flow
-  (`requestStreamMessage` + deltas), status messages sent through the server API, metadata echo to
-  the operator, and structured outputs accepting our generated schema (`outputJsonSchema`).
+- **Real Claude has not run yet** (no key); structured outputs accepting our generated schema
+  (`outputJsonSchema`) is unverified. Live Nexconn: see "First live run" above (streams are open).
 - The intro streams only after Opus finishes thinking, so with real Claude the "thinking" chip may
   show for 10–30 s before words appear. If that feels slow, try Pixel at `low` effort after measuring
   plan quality.

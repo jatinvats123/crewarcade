@@ -430,3 +430,10 @@ WEBM…). Server only (`SARVAM_API_KEY`).
     ≤ 10 pairs) but does not say the keys must be registered for the app. Live, sending
     `ext_crewId` fails with **25415 "The extended profile key does not exist"** (codes page). We no longer
     send it; the database maps channel → crew/game. (First live run, 2026-11-14)
+17. **Streamed replies in groups (open):** on the first live run, server-sent `RC:StreamMsg` replies
+    (chunk 1 with `type`/`user`, continuation chunks with `messageId`, last chunk `complete: true`, all
+    answered `code: 0`) reached the Web SDK 26.2.1 client neither through `onMessageReceived` nor
+    `onStreamMessageRequest*`, and appeared in history only about 3 minutes later, as if Nexconn closed
+    the stream on a timeout instead of our `complete` chunk. Normal messages and status messages from
+    the same sender arrived instantly. To ask Nexconn support; the web client already re-fetches when
+    an agent message arrives. (2026-11-14)
