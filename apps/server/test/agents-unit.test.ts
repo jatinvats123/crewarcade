@@ -65,6 +65,7 @@ describe('stream chunking', () => {
       channelId: 'crew1',
       sender,
       now: () => clock.t,
+      mode: 'chunked',
     });
     const bodies = calls.map(c => c.body.content as { content: string; seq: number; complete: boolean; type?: string; messageId?: string; user?: object });
     expect(bodies.map(b => b.seq)).toEqual(bodies.map((_, i) => i + 1));
@@ -84,12 +85,26 @@ describe('stream chunking', () => {
   it('keeps every chunk <= 1 KB and the whole stream under 128 KB', async () => {
     const { client, calls } = fakeNexconn();
     const big = 'चाय-'.repeat(20_000); // ~200 KB of multi-byte text
-    const res = await streamToGroup(client, from(big.match(/.{1,500}/gsu)!), { channelId: 'crew1', sender, now: () => 0 });
+    const res = await streamToGroup(client, from(big.match(/.{1,500}/gsu)!), { channelId: 'crew1', sender, now: () => 0, mode: 'chunked' });
     const contents = calls.map(c => (c.body.content as { content: string }).content);
     for (const c of contents) expect(byteLength(c)).toBeLessThanOrEqual(1024);
     expect(contents.reduce((n, c) => n + byteLength(c), 0)).toBeLessThan(LIMITS.streamTotalBytes);
     expect(res.text.endsWith('…') || res.text.endsWith('… ')).toBe(true);
     expect((calls.at(-1)!.body.content as { complete: boolean }).complete).toBe(true);
+  });
+
+  it('by default sends the whole reply as ONE complete chunk (Nexconn keeps only chunk 1, live 2026-11-14)', async () => {
+    const { client, calls } = fakeNexconn();
+    const res = await streamToGroup(client, from(['Ooh, I ', 'love this! ', 'Planning *Chai Dash*…']), { channelId: 'crew1', sender });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.body.content).toMatchObject({
+      seq: 1,
+      complete: true,
+      type: 'markdown',
+      content: 'Ooh, I love this! Planning *Chai Dash*…',
+      user: { id: 'agentpixel' },
+    });
+    expect(res).toMatchObject({ messageId: 'S-1', chunks: 1, fellBack: false });
   });
 
   it('an empty reply still sends one complete chunk', async () => {
@@ -102,7 +117,12 @@ describe('stream chunking', () => {
   it('on failure, sends the full reply once as a normal text message', async () => {
     const { client, calls } = fakeNexconn((path, body) => path.endsWith('/stream/send') && (body.content as { seq: number }).seq === 2);
     const clock = { t: 0, step: 400 };
-    const res = await streamToGroup(client, from(['Hello ', 'crew, ', 'here is ', 'the plan.'], clock), { channelId: 'crew1', sender, now: () => clock.t });
+    const res = await streamToGroup(client, from(['Hello ', 'crew, ', 'here is ', 'the plan.'], clock), {
+      channelId: 'crew1',
+      sender,
+      now: () => clock.t,
+      mode: 'chunked',
+    });
     expect(res.fellBack).toBe(true);
     const text = calls.filter(c => c.path === '/v4/group-channel/message/send');
     expect(text).toHaveLength(1);

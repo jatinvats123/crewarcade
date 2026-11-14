@@ -19,6 +19,13 @@ export interface StreamSender {
 export interface StreamOptions {
   channelId: string;
   sender: StreamSender;
+  /**
+   * 'single' (default): wait for the whole reply, then send it as one complete stream chunk.
+   * 'chunked': send ~300 ms batches as the docs describe. Live check 2026-11-14: Nexconn kept only
+   * the FIRST chunk of a multi-chunk stream (history showed "part one," of "part one, part two") and
+   * Web clients got no live deltas, so 'chunked' stays off until Nexconn confirms the behaviour.
+   */
+  mode?: 'single' | 'chunked';
   batchMs?: number;
   maxChunkBytes?: number;
   maxTotalBytes?: number;
@@ -111,6 +118,17 @@ export async function streamToGroup(nexconn: NexconnClient, chunks: AsyncIterabl
       await send(b, false);
     }
   };
+
+  if ((o.mode ?? 'single') === 'single') {
+    for await (const piece of chunks) all += piece;
+    const text = byteLength(all) > maxTotal ? `${takeBytes(all, maxTotal)[0]}…` : all;
+    try {
+      await send(text.trim() ? text : '…', true);
+      return { messageId, text: sentText, chunks: seq, fellBack: false };
+    } catch (e) {
+      failed = e;
+    }
+  }
 
   for await (const piece of chunks) {
     all += piece;
