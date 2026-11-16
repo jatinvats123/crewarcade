@@ -99,7 +99,16 @@ const connected = await page.evaluate(
     NCEngine.addMessageHandler(
       'repro',
       new MessageHandler({
-        onMessageReceived: ({ messages }: { messages: Array<{ messageId: string; messageType: string; content: { content?: string; isCompleted?: boolean }; requestStreamMessage?: () => Promise<{ isOk: boolean; code: number }> }> }) => {
+        onMessageReceived: ({
+          messages,
+        }: {
+          messages: Array<{
+            messageId: string;
+            messageType: string;
+            content: { content?: string; isCompleted?: boolean };
+            requestStreamMessage?: () => Promise<{ isOk: boolean; code: number }>;
+          }>;
+        }) => {
           for (const m of messages) {
             console.log(`received ${m.messageType} id=${m.messageId} content=${JSON.stringify(m.content.content)} isCompleted=${m.content.isCompleted}`);
             if (m.messageType === 'RC:StreamMsg' && m.requestStreamMessage)
@@ -109,7 +118,8 @@ const connected = await page.evaluate(
         onStreamMessageRequestInit: ({ messageId }: { messageId: string }) => console.log(`stream init id=${messageId}`),
         onStreamMessageRequestDelta: ({ messageId, chunkInfo }: { messageId: string; chunkInfo: { content: string; messageContent: string } }) =>
           console.log(`stream delta id=${messageId} chunk=${JSON.stringify(chunkInfo.content)} sofar=${JSON.stringify(chunkInfo.messageContent)}`),
-        onStreamMessageRequestComplete: ({ messageId, code }: { messageId: string; code: number }) => console.log(`stream complete id=${messageId} code=${code}`),
+        onStreamMessageRequestComplete: ({ messageId, code }: { messageId: string; code: number }) =>
+          console.log(`stream complete id=${messageId} code=${code}`),
         onMessageMetadataUpdated: ({ messageId, metadata }: { messageId: string; metadata: unknown }) =>
           console.log(`metadata updated id=${messageId} ${JSON.stringify(metadata)}`),
       }),
@@ -152,7 +162,14 @@ async function stream(label: string, idField: 'messageId' | 'messageUID', pauseM
 // Control: an ordinary text message from the same sender must reach onMessageReceived.
 await nexconn.post(
   '/v4/group-channel/message/send',
-  { fromUserId: sender, toChannelIds: [channelId], messageType: 'RC:TxtMsg', content: JSON.stringify({ content: 'control text' }), isEchoToSender: 0, shouldPersist: 1 },
+  {
+    fromUserId: sender,
+    toChannelIds: [channelId],
+    messageType: 'RC:TxtMsg',
+    content: JSON.stringify({ content: 'control text' }),
+    isEchoToSender: 0,
+    shouldPersist: 1,
+  },
   AnyResult,
   { bucket: 'groupMessage' },
 );
@@ -170,10 +187,17 @@ await sleep(6000);
 console.log(`\n${t()} ===== history (as a client loads it later)`);
 const history = await page.evaluate(async channelId => {
   const { BaseChannel, GroupChannel } = (window as never as { NC: Record<string, never> }).NC as never as {
-    BaseChannel: { createMessagesQuery(o: object): { loadNextPage(): Promise<{ isOk: boolean; code: number; data?: { data: Array<Record<string, unknown>> } }> } };
+    BaseChannel: {
+      createMessagesQuery(o: object): { loadNextPage(): Promise<{ isOk: boolean; code: number; data?: { data: Array<Record<string, unknown>> } }> };
+    };
     GroupChannel: new (id: string) => { identifier: unknown };
   };
-  const q = BaseChannel.createMessagesQuery({ channelIdentifier: new GroupChannel(channelId).identifier, startTime: Date.now() + 10_000, pageSize: 20, isAscending: false });
+  const q = BaseChannel.createMessagesQuery({
+    channelIdentifier: new GroupChannel(channelId).identifier,
+    startTime: Date.now() + 10_000,
+    pageSize: 20,
+    isAscending: false,
+  });
   const r = await q.loadNextPage();
   if (!r.isOk || !r.data) return `history failed ${r.code}`;
   return r.data.data.map(m => ({
@@ -197,8 +221,22 @@ const pulled = await page.evaluate(
   async ({ channelId, ids }) => {
     const { BaseChannel, GroupChannel } = (window as never as { NC: Record<string, never> }).NC as never as {
       BaseChannel: {
-        createMessagesQuery(o: object): { loadNextPage(): Promise<{ isOk: boolean; data?: { data: Array<{ messageId: string; messageType: string; requestStreamMessage(): Promise<{ isOk: boolean; code: number }>; toObject(): Record<string, unknown> }> } }> };
-        getMessagesByIds(o: object): Promise<{ isOk: boolean; code: number; data?: Record<string, { content: unknown; metadata?: unknown; toObject(): Record<string, unknown> }> }>;
+        createMessagesQuery(o: object): {
+          loadNextPage(): Promise<{
+            isOk: boolean;
+            data?: {
+              data: Array<{
+                messageId: string;
+                messageType: string;
+                requestStreamMessage(): Promise<{ isOk: boolean; code: number }>;
+                toObject(): Record<string, unknown>;
+              }>;
+            };
+          }>;
+        };
+        getMessagesByIds(
+          o: object,
+        ): Promise<{ isOk: boolean; code: number; data?: Record<string, { content: unknown; metadata?: unknown; toObject(): Record<string, unknown> }> }>;
       };
       GroupChannel: new (id: string) => { identifier: unknown };
     };

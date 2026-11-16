@@ -46,13 +46,22 @@ const BaseSchema = z.object({
     .optional()
     .or(z.literal('').transform(() => undefined)),
   SUPABASE_SERVICE_ROLE_KEY: optionalSecret,
+  /** Private Storage bucket for game HTML (served only through GET /play). */
+  SUPABASE_GAMES_BUCKET: z.string().min(3).max(63).default('games'),
+  /** Development only: where game HTML is kept when Supabase Storage is not configured. Production
+   *  refuses this (Render's disk is wiped on every deploy). */
+  GAMES_LOCAL_DIR: z.string().min(1).default('.data/games'),
 
   ANTHROPIC_API_KEY: optionalSecret,
   ANTHROPIC_MODEL: z.string().default('claude-opus-5-5'),
+  /** Model for Forge's game building (the heaviest call). */
+  ANTHROPIC_BUILD_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().default('claude-opus-5-5')),
   /** Which AI runs the agents: anthropic (Claude) or gemini (Google AI Studio key; free tier). */
   AI_PROVIDER: z.preprocess(v => (v === '' ? undefined : v), z.enum(['anthropic', 'gemini']).default('anthropic')),
   GEMINI_API_KEY: optionalSecret,
   GEMINI_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().default('gemini-3.5-flash-lite')),
+  /** Forge builds whole games: a stronger model than the cheap chat/classification one. */
+  GEMINI_BUILD_MODEL: z.preprocess(v => (v === '' ? undefined : v), z.string().default('gemini-3.5-flash')),
 
   SARVAM_API_KEY: optionalSecret,
 
@@ -88,12 +97,27 @@ const BaseSchema = z.object({
   FAKE_AGENTS: bool(false),
   /** Per-call timeout for Claude requests. */
   AI_TIMEOUT_MS: z.coerce.number().int().min(5000).default(120_000),
+  /** Forge plays each build for a few seconds in headless Chromium before posting it (catches dead games). */
+  FORGE_SMOKE: bool(true),
+  /** Per-call timeout for a Forge build (a whole game in one structured call). */
+  BUILD_TIMEOUT_MS: z.coerce.number().int().min(10_000).default(240_000),
+
+  /** Lifetime of a signed play URL for unpublished versions (crew members only). */
+  PLAY_TOKEN_TTL_SEC: z.coerce.number().int().min(60).max(86_400).default(1800),
+  /** Score plausibility: highest accepted score, and the shortest accepted run. */
+  SCORE_MAX: z.coerce.number().int().min(1).default(1_000_000),
+  SCORE_MIN_TIME_MS: z.coerce.number().int().min(0).default(1000),
 });
 
 export const ConfigSchema = BaseSchema.superRefine((c, ctx) => {
   if (c.NODE_ENV !== 'production') return;
-  for (const key of ['NEXCONN_APP_KEY', 'NEXCONN_APP_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'TOKEN_ENCRYPTION_KEY', 'SESSION_SECRET'] as const) {
+  for (const key of ['NEXCONN_APP_KEY', 'NEXCONN_APP_SECRET', 'TOKEN_ENCRYPTION_KEY', 'SESSION_SECRET'] as const) {
     if (!c[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'is required in production' });
+  }
+  // Game HTML must live in Supabase Storage: the local-disk store is for development only, because
+  // Render's disk is wiped on every deploy.
+  for (const key of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'] as const) {
+    if (!c[key]) ctx.addIssue({ code: 'custom', path: [key], message: 'is required in production (Supabase Storage keeps the games; local disk is dev-only)' });
   }
   // The fake agents need no key; real ones do.
   if (!c.FAKE_AGENTS && c.AI_PROVIDER === 'anthropic' && !c.ANTHROPIC_API_KEY)

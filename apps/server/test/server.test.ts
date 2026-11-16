@@ -49,6 +49,29 @@ describe('config', () => {
     expect(loadConfig({ ...prod, FAKE_AGENTS: '1' }).FAKE_AGENTS).toBe(true);
   });
 
+  it('production refuses to start without Supabase Storage (local game disk is dev-only)', () => {
+    const prod = {
+      NODE_ENV: 'production',
+      DATABASE_URL: DB,
+      NEXCONN_APP_KEY: 'k',
+      NEXCONN_APP_SECRET: 's',
+      TOKEN_ENCRYPTION_KEY: Buffer.alloc(32).toString('base64'),
+      SESSION_SECRET: 'x'.repeat(40),
+      FAKE_AGENTS: '1',
+    };
+    expect(() => loadConfig(prod)).toThrow(/SUPABASE_URL is required in production \(Supabase Storage/);
+    expect(() => loadConfig({ ...prod, SUPABASE_URL: 'https://x.supabase.co' })).toThrow(/SUPABASE_SERVICE_ROLE_KEY/);
+    expect(loadConfig({ ...prod, SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'r' }).SUPABASE_GAMES_BUCKET).toBe('games');
+    // Development keeps working without it.
+    expect(loadConfig({ DATABASE_URL: DB }).GAMES_LOCAL_DIR).toBe('.data/games');
+  });
+
+  it('uses a stronger build model for Forge than the cheap chat model, per provider', () => {
+    const c = loadConfig({ DATABASE_URL: DB });
+    expect(c).toMatchObject({ GEMINI_MODEL: 'gemini-3.5-flash-lite', GEMINI_BUILD_MODEL: 'gemini-3.5-flash', ANTHROPIC_BUILD_MODEL: 'claude-opus-5-5' });
+    expect(loadConfig({ DATABASE_URL: DB, GEMINI_BUILD_MODEL: 'gemini-3.1-pro-preview' }).GEMINI_BUILD_MODEL).toBe('gemini-3.1-pro-preview');
+  });
+
   it('fails fast listing every missing value', () => {
     expect(() => loadConfig({})).toThrow(ConfigError);
     try {
@@ -129,6 +152,7 @@ describe('data model', () => {
       [
         'bugs',
         'cards',
+        'challengeDms',
         'connections',
         'crewMembers',
         'crews',

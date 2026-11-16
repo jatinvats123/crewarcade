@@ -208,6 +208,8 @@ export async function approvePlan(ctx: PlanCtx, user: UserRow, messageId: string
     version: 1,
     channelId: roomChannelId,
     handoffMessageId: handoffId,
+    reason: game.remixOfGameId ? 'remix' : 'build',
+    requestedBy: user.id,
   });
   await record(ctx, {
     action: 'build.queued',

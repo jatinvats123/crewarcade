@@ -8,8 +8,10 @@ import { registerAuthRoutes } from './routes/auth';
 import type { AgentServices } from './agents/runtime-deps';
 import { registerCrewRoutes } from './routes/crews';
 import { registerGameRoutes } from './routes/games';
+import { registerPlayRoutes } from './routes/play';
 import { installApiPlumbing } from './routes/http';
 import { registerWebhookRoutes } from './webhooks/routes';
+import { createGameStorage, type ObjectStorage } from './storage';
 
 export interface AppDeps {
   config: Config;
@@ -19,6 +21,8 @@ export interface AppDeps {
   db?: Db;
   nexconn?: NexconnClient | null;
   agents?: AgentServices | null;
+  /** Game storage; defaults to createGameStorage(config) (local disk outside production). */
+  storage?: ObjectStorage;
   /** Pino logger options override (tests pass false). */
   logger?: boolean | object;
   version?: string;
@@ -73,6 +77,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       nexconn: deps.nexconn ?? null,
       agents: deps.agents ?? null,
       log: app.log,
+      storage: deps.storage ?? createGameStorage(config),
       session: { secret: sessionSecret(config), secure: cookieSecure(config), ...(deps.now && { now: deps.now }) },
       now: deps.now ?? Date.now,
       runInBackground:
@@ -87,6 +92,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     registerAuthRoutes(app, ctx);
     registerCrewRoutes(app, ctx);
     registerGameRoutes(app, ctx);
+    registerPlayRoutes(app, ctx);
     registerWebhookRoutes(app, ctx);
     deps.onReady?.(ctx);
   }

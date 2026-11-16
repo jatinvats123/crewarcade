@@ -14,7 +14,7 @@ import { streamJsonStringField } from './json-stream';
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 /** Which agent step a call belongs to (logs, ledger, the fake client's canned outputs). */
-export type AiPurpose = 'pixel.plan' | 'pixel.revise' | 'pixel.explain' | 'pixel.reply' | 'forge.build' | 'glitch.scenario';
+export type AiPurpose = 'pixel.plan' | 'pixel.revise' | 'pixel.delta' | 'pixel.explain' | 'pixel.reply' | 'forge.build' | 'glitch.scenario';
 
 export interface AiUsage {
   model: string;

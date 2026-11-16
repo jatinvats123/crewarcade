@@ -5,6 +5,7 @@ import type { SessionOptions } from './auth/session';
 import type { Config } from './config';
 import type { Db } from './db/types';
 import type { NexconnClient } from './nexconn/client';
+import type { ObjectStorage } from './storage';
 
 export interface Ctx {
   config: Config;
@@ -12,6 +13,8 @@ export interface Ctx {
   /** null when Nexconn keys are not configured: chat routes answer 503. */
   nexconn: NexconnClient | null;
   log: FastifyBaseLogger;
+  /** Private `games` bucket (Supabase in production, local disk in development, memory in tests). */
+  storage: ObjectStorage;
   session: SessionOptions;
   now: () => number;
   /** AI client, job queue and live agent states. null: agents are not running (card actions answer 503). */

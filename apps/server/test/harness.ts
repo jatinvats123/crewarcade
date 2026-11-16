@@ -6,6 +6,8 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { createAgentServices } from '../src/agents';
+import { runBuildJob } from '../src/agents/forge-runtime';
+import { createMemoryStorage } from '../src/storage';
 import { createMemoryQueue } from '../src/agents/queue';
 import { handleAgentJob } from '../src/agents/runtime';
 import type { AgentServices } from '../src/agents/runtime-deps';
@@ -35,6 +37,7 @@ export interface Harness {
   db: Db;
   pg: PGlite;
   calls: NexconnCall[];
+  storage: ReturnType<typeof createMemoryStorage>;
   /** Make the next call to `path` fail with this business code. */
   failNext: (path: string, code: number) => void;
   /** Await background work (webhook processing). */
@@ -50,7 +53,9 @@ export interface Harness {
   ctx: () => Ctx;
 }
 
-export async function createHarness(opts: { nexconn?: boolean; agents?: boolean; ai?: AiClient | null; env?: Record<string, string> } = {}): Promise<Harness> {
+export async function createHarness(
+  opts: { nexconn?: boolean; agents?: boolean; builds?: boolean; ai?: AiClient | null; env?: Record<string, string> } = {},
+): Promise<Harness> {
   const pg = new PGlite();
   const db = drizzle(pg, { schema, casing: 'snake_case' }) as unknown as Db;
   await migrate(drizzle(pg, { schema, casing: 'snake_case' }), { migrationsFolder: path.resolve(import.meta.dirname, '..', 'drizzle') });
@@ -73,6 +78,8 @@ export async function createHarness(opts: { nexconn?: boolean; agents?: boolean;
       res = { code: 0, result: { userId: body.userId, accessToken: `token-for-${String(body.userId)}-${calls.length}` } };
     if (p === '/v4/group-channel/message/send')
       res = { code: 0, result: { messageIds: (body.toChannelIds as string[]).map(c => ({ channelId: c, messageId: `MSG-${++msg}` })) } };
+    if (p === '/v4/direct-channel/message/send')
+      res = { code: 0, result: { messageIds: (body.toUserIds as string[]).map(u => ({ userId: u, messageId: `DM-${++msg}` })) } };
     if (p === '/v4/group-channel/join') res = { code: 0, result: { channelId: body.channelId, memberCount: 5 } };
     if (p === '/v4/group-channel/message/stream/send') {
       const content = body.content as { seq: number };
@@ -101,6 +108,7 @@ export async function createHarness(opts: { nexconn?: boolean; agents?: boolean;
     SESSION_SECRET: 'x'.repeat(40),
     ...opts.env,
   });
+  const storage = createMemoryStorage();
   const tasks: Promise<void>[] = [];
   const ctxRef: { current: Ctx | null } = { current: null };
   const silent = { info: () => {}, warn: () => {}, error: () => {} };
@@ -124,6 +132,7 @@ export async function createHarness(opts: { nexconn?: boolean; agents?: boolean;
     nexconn,
     agents,
     logger: false,
+    storage,
     now: () => now.t,
     runInBackground: (_name, task) => void tasks.push(task()),
     onReady: c => (ctxRef.current = c),
@@ -131,6 +140,7 @@ export async function createHarness(opts: { nexconn?: boolean; agents?: boolean;
   if (agents && ctxRef.current) {
     const c = ctxRef.current;
     await queue.start(job => handleAgentJob({ ...c, agents }, job));
+    if (opts.builds) await queue.startBuilds(job => runBuildJob({ ...c, agents }, job));
   }
   let eventNo = 0;
   return {
@@ -138,6 +148,7 @@ export async function createHarness(opts: { nexconn?: boolean; agents?: boolean;
     db,
     pg,
     calls,
+    storage,
     failNext: (p, code) => void failures.set(p, code),
     flush: async () => {
       await Promise.all(tasks.splice(0));

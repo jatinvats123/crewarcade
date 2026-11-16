@@ -10,6 +10,10 @@ import type { AgentStates } from './states';
 export interface AgentServices {
   /** null when neither ANTHROPIC_API_KEY nor FAKE_AGENTS is set. */
   ai: AiClient | null;
+  /** Forge's client: a stronger model than `ai` (GEMINI_BUILD_MODEL / ANTHROPIC_BUILD_MODEL). */
+  buildAi: AiClient | null;
+  /** Forge's smoke playtest (headless Chromium); undefined = skipped (FORGE_SMOKE=0, unit tests). */
+  smoke?: (html: string) => Promise<string[]>;
   queue: JobQueue;
   states: AgentStates;
 }
@@ -17,6 +21,11 @@ export interface AgentServices {
 export function requireAi(ctx: { agents: AgentServices }): AiClient {
   if (!ctx.agents.ai) throw new AiNotConfiguredError();
   return ctx.agents.ai;
+}
+
+export function requireBuildAi(ctx: { agents: AgentServices }): AiClient {
+  if (!ctx.agents.buildAi) throw new AiNotConfiguredError();
+  return ctx.agents.buildAi;
 }
 
 export class BudgetExceededError extends Error {

@@ -29,24 +29,41 @@ export const AgentJobData = z.object({
 });
 export type AgentJobData = z.infer<typeof AgentJobData>;
 
-/** Forge's build queue (Phase 3 runs it). Jobs wait here until then. */
+/** Forge's build queue: one job per version (or per retry of a failed version). */
 export const BuildJobData = z.object({
   key: z.string(),
   gameId: z.string(),
   version: z.number().int().min(1),
   channelId: z.string(),
   handoffMessageId: z.string(),
+  /** First build, a change request, a remix's v1, or a retry after a failed build. */
+  reason: z.enum(['build', 'change', 'remix', 'retry']).default('build'),
+  /** DB user id of the human whose action led here (usage is charged to them). */
+  requestedBy: z.string().optional(),
 });
 export type BuildJobData = z.infer<typeof BuildJobData>;
 
-export const QUEUES = { agent: 'agent', build: 'forge-build' } as const;
+/** Glitch's playtest queue. Phase 4 runs it; until then jobs wait (FAKE_AGENTS simulates a run). */
+export const PlaytestJobData = z.object({
+  key: z.string(),
+  gameId: z.string(),
+  version: z.number().int().min(1),
+  channelId: z.string(),
+  handoffMessageId: z.string(),
+});
+export type PlaytestJobData = z.infer<typeof PlaytestJobData>;
+
+export const QUEUES = { agent: 'agent', build: 'forge-build', playtest: 'glitch-playtest' } as const;
 
 export interface JobQueue {
   /** false when a job with the same key was already enqueued. */
   enqueueAgent(job: AgentJobData): Promise<boolean>;
-  enqueueBuild(job: BuildJobData): Promise<boolean>;
+  enqueueBuild(job: z.input<typeof BuildJobData>): Promise<boolean>;
+  enqueuePlaytest(job: PlaytestJobData): Promise<boolean>;
   /** Starts processing agent jobs with this handler. */
   start(handler: (job: AgentJobData) => Promise<void>): Promise<void>;
+  /** Starts processing build jobs (one per room at a time). */
+  startBuilds(handler: (job: BuildJobData) => Promise<void>): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -74,7 +91,8 @@ export function createPgBossQueue(
     (started ??= (async () => {
       await boss.start();
       await boss.createQueue(QUEUES.agent, { retryLimit: 1, retryDelay: 5, expireInSeconds: 5 * 60 });
-      await boss.createQueue(QUEUES.build, { retryLimit: 2, retryDelay: 10, expireInSeconds: 15 * 60 });
+      await boss.createQueue(QUEUES.build, { retryLimit: 1, retryDelay: 10, expireInSeconds: 15 * 60 });
+      await boss.createQueue(QUEUES.playtest, { retryLimit: 1, retryDelay: 10, expireInSeconds: 10 * 60 });
     })());
 
   return {
@@ -87,6 +105,27 @@ export function createPgBossQueue(
       await ready();
       const id = await boss.send(QUEUES.build, BuildJobData.parse(job), { id: jobUuid(job.key), group: { id: job.channelId } });
       return id !== null;
+    },
+    async enqueuePlaytest(job) {
+      await ready();
+      const id = await boss.send(QUEUES.playtest, PlaytestJobData.parse(job), { id: jobUuid(`playtest:${job.key}`), group: { id: job.channelId } });
+      return id !== null;
+    },
+    async startBuilds(handler) {
+      await ready();
+      await boss.work<BuildJobData>(
+        QUEUES.build,
+        {
+          localConcurrency: Math.max(1, Math.min(2, opts.concurrency)),
+          groupConcurrency: 1,
+          batchSize: 1,
+          ...(opts.pollingIntervalSeconds && { pollingIntervalSeconds: opts.pollingIntervalSeconds }),
+        },
+        async jobs => {
+          for (const j of jobs) await handler(BuildJobData.parse(j.data));
+        },
+      );
+      opts.log.info({}, 'build worker started (pg-boss)');
     },
     async start(handler) {
       await ready();
@@ -114,17 +153,25 @@ export function createPgBossQueue(
  * In-memory queue with the same rules (idempotency, concurrency, one job per room). Used by tests
  * and when no job database is available. Not durable: jobs are lost on restart.
  */
-export function createMemoryQueue(opts: { concurrency: number; log?: QueueLog }): JobQueue & { idle: () => Promise<void>; builds: BuildJobData[] } {
+export function createMemoryQueue(opts: {
+  concurrency: number;
+  log?: QueueLog;
+}): JobQueue & { idle: () => Promise<void>; builds: BuildJobData[]; playtests: PlaytestJobData[] } {
   const seen = new Set<string>();
-  const pending: AgentJobData[] = [];
+  type Item = { kind: 'agent'; job: AgentJobData } | { kind: 'build'; job: BuildJobData };
+  const pending: Item[] = [];
   const busyRooms = new Set<string>();
   const builds: BuildJobData[] = [];
+  const playtests: PlaytestJobData[] = [];
   let running = 0;
   let handler: ((job: AgentJobData) => Promise<void>) | null = null;
+  let buildHandler: ((job: BuildJobData) => Promise<void>) | null = null;
+  const handlerFor = (it: Item) => (it.kind === 'agent' ? handler : buildHandler);
   let waiters: Array<() => void> = [];
 
   const settleIdle = () => {
-    if (running === 0 && pending.length === 0) {
+    // Jobs without a registered handler (builds when no build worker runs) just wait.
+    if (running === 0 && pending.every(it => !handlerFor(it))) {
       const w = waiters;
       waiters = [];
       for (const f of w) f();
@@ -132,22 +179,23 @@ export function createMemoryQueue(opts: { concurrency: number; log?: QueueLog })
   };
 
   const pump = () => {
-    if (!handler) return;
     while (running < opts.concurrency) {
-      const i = pending.findIndex(j => !busyRooms.has(j.channelId));
+      // One agent job and one build job per room at a time (as pg-boss groups per queue).
+      const i = pending.findIndex(it => !!handlerFor(it) && !busyRooms.has(`${it.kind}|${it.job.channelId}`));
       if (i === -1) break;
-      const job = pending.splice(i, 1)[0]!;
-      busyRooms.add(job.channelId);
+      const it = pending.splice(i, 1)[0]!;
+      const lock = `${it.kind}|${it.job.channelId}`;
+      busyRooms.add(lock);
       running++;
-      const h = handler;
+      const run = it.kind === 'agent' ? () => handler!(it.job) : () => buildHandler!(it.job);
       void (async () => {
         try {
-          await h(job);
+          await run();
         } catch (err) {
-          opts.log?.error({ err, key: job.key }, 'agent job failed');
+          opts.log?.error({ err, key: it.job.key }, `${it.kind} job failed`);
         } finally {
           running--;
-          busyRooms.delete(job.channelId);
+          busyRooms.delete(lock);
           pump();
           settleIdle();
         }
@@ -157,11 +205,12 @@ export function createMemoryQueue(opts: { concurrency: number; log?: QueueLog })
 
   return {
     builds,
+    playtests,
     async enqueueAgent(job) {
       const parsed = AgentJobData.parse(job);
       if (seen.has(parsed.key)) return false;
       seen.add(parsed.key);
-      pending.push(parsed);
+      pending.push({ kind: 'agent', job: parsed });
       pump();
       return true;
     },
@@ -169,15 +218,30 @@ export function createMemoryQueue(opts: { concurrency: number; log?: QueueLog })
       const key = `build:${job.key}`;
       if (seen.has(key)) return false;
       seen.add(key);
-      builds.push(BuildJobData.parse(job));
+      const parsed = BuildJobData.parse(job);
+      builds.push(parsed);
+      pending.push({ kind: 'build', job: parsed });
+      pump();
+      return true;
+    },
+    async enqueuePlaytest(job) {
+      const key = `playtest:${job.key}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      playtests.push(PlaytestJobData.parse(job));
       return true;
     },
     async start(h) {
       handler = h;
       pump();
     },
+    async startBuilds(h) {
+      buildHandler = h;
+      pump();
+    },
     async stop() {
       handler = null;
+      buildHandler = null;
     },
     idle: () =>
       new Promise<void>(resolve => {

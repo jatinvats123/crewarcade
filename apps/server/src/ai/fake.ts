@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import type { PlanCardContent } from '@crewarcade/shared';
+import { fakeBuildOutput } from './fake-game';
 import { channel, type AiClient, type AiUsage, type StructuredCall, type StructuredRun, type TextCall, type TextRun } from './claude';
 
 export interface FakeOptions {
@@ -102,7 +103,7 @@ function fakeExplain(hint: { question: string; plan: PlanCardContent; language: 
 const ZERO = (ms: number): AiUsage => ({ model: 'fake', tokensIn: 0, tokensOut: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0, ms, fellBack: false });
 
 /** Engine fixtures (test data) for Forge and Glitch fakes in later phases. */
-async function fixture(file: 'index.html' | 'scenario.json'): Promise<string> {
+async function fixture(file: 'scenario.json'): Promise<string> {
   const require = createRequire(import.meta.url);
   const root = path.dirname(require.resolve('@crewarcade/engine/package.json'));
   return readFile(path.join(root, 'fixtures', 'games', 'comet-dash', 'v1', file), 'utf8');
@@ -143,10 +144,30 @@ export function createFakeAiClient(o: FakeOptions = {}): AiClient {
               await wait(1500);
               raw = { steps: JSON.parse(await fixture('scenario.json')) as unknown };
               break;
-            case 'forge.build':
-              await wait(4000);
-              raw = { html: await fixture('index.html'), notes: ['Fake build from the comet-dash fixture (test data).'] };
+            case 'forge.build': {
+              const h = (call.hint ?? {}) as Parameters<typeof fakeBuildOutput>[0];
+              const out = fakeBuildOutput(h);
+              await wait(1500);
+              if (call.streamField === 'outline')
+                for (const line of out.outline.split('\n')) {
+                  field.push(`${line}\n`);
+                  await wait(1200);
+                }
+              await wait(1500);
+              raw = out;
               break;
+            }
+            case 'pixel.delta': {
+              await wait(1500);
+              const h = (call.hint ?? {}) as { change?: string; hindi?: boolean };
+              const change = (h.change ?? 'small tweaks').slice(0, 200);
+              raw = {
+                intro: h.hindi ? `ठीक है! अगला वर्ज़न: ${change}` : `On it! Next version: ${change}`,
+                summary: change.length >= 3 ? change : 'Small tweaks from the crew',
+                acceptance: /fast|speed|tez|तेज/i.test(change) ? ['state().speed at the start is higher than in the previous version'] : [],
+              };
+              break;
+            }
             default:
               throw new Error(`fake client has no structured output for ${call.purpose}`);
           }

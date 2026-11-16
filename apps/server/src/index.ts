@@ -3,6 +3,8 @@
 // playtest worker (later phases).
 import type { FastifyBaseLogger } from 'fastify';
 import { createAgentServices, createAi, createQueue, startAgentWorker } from './agents';
+import { createGameStorage } from './storage';
+import { createSmoke } from './agents/smoke';
 import { buildApp } from './app';
 import { ConfigError, integrations, loadConfig } from './config';
 import type { Ctx } from './context';
@@ -35,9 +37,14 @@ const lateLog = {
 };
 const ctxRef: { current: Ctx | null } = { current: null };
 const ai = createAi(config, lateLog);
+const buildAi = createAi(config, lateLog, 'build');
 const queue = createQueue(config, lateLog);
-const agents = createAgentServices({ config, nexconn, ai, queue, ctxRef, log: lateLog });
-const server = await buildApp({ config, pingDb: database.ping, db: database.db, nexconn, agents, onReady: c => (ctxRef.current = c) });
+const smoke = config.FORGE_SMOKE ? createSmoke() : null;
+const agents = createAgentServices({ config, nexconn, ai, buildAi, ...(smoke && { smoke: smoke.run }), queue, ctxRef, log: lateLog });
+const storage = createGameStorage(config);
+const server = await buildApp({ config, pingDb: database.ping, db: database.db, nexconn, agents, storage, onReady: c => (ctxRef.current = c) });
+await storage.ensureBucket().catch(e => server.log.error({ err: e }, 'could not check the games bucket'));
+server.log.info({ storage: storage.kind, bucket: storage.bucket }, 'game storage ready');
 logRef.current = server.log;
 if (!ai) server.log.warn('ANTHROPIC_API_KEY not set and FAKE_AGENTS off: agents answer with an error message');
 if (config.FAKE_AGENTS) server.log.warn('FAKE_AGENTS=1: agents use canned outputs (no Claude calls)');
@@ -57,6 +64,7 @@ const shutdown = async (signal: string) => {
   server.log.info({ signal }, 'shutting down');
   agents.states.stopAll();
   await queue.stop().catch(() => {});
+  await smoke?.close();
   await server.close().catch(() => {});
   await database.close().catch(() => {});
   process.exit(0);

@@ -8,6 +8,7 @@ import { latestPlanForGame } from '../repo/games';
 import { postText } from '../services/chat';
 import { record } from '../services/ledger';
 import { resolveRoom, type Room } from '../services/rooms';
+import { hasBuild, runBuildChange } from './forge-runtime';
 import { runExplain, runPlan, runRemix, runRevise } from './pixel';
 import { detectLanguage } from './plan';
 import { CANNED } from './prompts';
@@ -86,6 +87,12 @@ export async function handleAgentJob(ctx: AgentCtx, job: AgentJobData): Promise<
   if (!room) return;
   const t0 = performance.now();
   try {
+    // In a game room with a build, "make it faster" (to Pixel or Forge, or the Build card's Change)
+    // becomes the next version: a short Pixel spec delta, then a Forge build.
+    if (job.intent === 'change' && job.agent !== 'glitch' && room.kind === 'game' && (await hasBuild(ctx, room.game.id))) {
+      await runBuildChange(ctx, job, room);
+      return;
+    }
     const usesAi = job.agent === 'pixel' && job.intent !== 'chat';
     if (usesAi) await checkBudget(ctx);
     if (job.agent !== 'pixel' || job.intent === 'chat') await reply(ctx, job, room);

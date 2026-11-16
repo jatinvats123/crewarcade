@@ -25,6 +25,7 @@ describe('migrations + seed on Postgres', () => {
     expect(res.rows.map(r => r.table_name)).toEqual([
       'bugs',
       'cards',
+      'challenge_dms',
       'connections',
       'crew_members',
       'crews',

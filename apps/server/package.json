@@ -16,7 +16,8 @@
     "db:seed": "tsx --env-file-if-exists=.env src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "measure:pixel": "tsx --env-file-if-exists=.env scripts/measure-pixel.ts",
-    "stream:repro": "tsx --env-file-if-exists=.env scripts/stream-repro.ts"
+    "stream:repro": "tsx --env-file-if-exists=.env scripts/stream-repro.ts",
+    "real:builds": "tsx --env-file-if-exists=.env scripts/real-builds.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.8.0",

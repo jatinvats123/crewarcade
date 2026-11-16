@@ -1,10 +1,10 @@
 // Cards, rooms, games and the Decision Ledger.
 //   POST /api/cards/:messageId/vote      {vote: yes|no}   any human crew member
 //   POST /api/cards/:messageId/approve                    owner or approver
-//   POST /api/cards/:messageId/change    {text}           any human crew member
+//   POST /api/cards/:messageId/change    {text}           any human crew member (plan: revise; build: next version)
 //   GET  /api/rooms/:channelId                            which crew/game a channel is (members only)
 //   GET  /api/rooms/:channelId/agents                     live agent states in that room
-//   GET  /api/games/:id/ledger                            the game's Decision Ledger (members only)
+//   GET  /api/games/:id/ledger                            the game's Decision Ledger (members; public once published)
 //   GET  /api/crews/:id/agents/:agent/activity            an agent's last 5 ledger actions in a crew
 import { AGENTS, BUILTIN_MESSAGE_TYPES, ChangeRequestBody, LIMITS, nexconnUserId, VoteBody, type LedgerResponse, type RoomInfo } from '@crewarcade/shared';
 import { routeIncoming } from '../agents/runtime';
@@ -14,10 +14,11 @@ import { z } from 'zod';
 import type { AgentServices } from '../agents/runtime-deps';
 import type { Ctx } from '../context';
 import { getCrew, getRole } from '../repo/crews';
-import { getGame, listLedgerForActor, listLedgerForGame, toGameSummary, toLedgerEntry } from '../repo/games';
+import { getCard, getGame, listLedgerForActor, listLedgerForGame, toGameSummary, toLedgerEntry } from '../repo/games';
+import { requestBuildChange } from '../services/builds';
 import { approvePlan, requestChange, votePlan } from '../services/plans';
 import { resolveRoom } from '../services/rooms';
-import { fixedWindowLimiter, HttpError, rateLimit, requireUser } from './http';
+import { fixedWindowLimiter, HttpError, optionalUser, rateLimit, requireUser } from './http';
 
 const MessageParam = z.object({ messageId: z.string().min(1).max(64) });
 const ChannelParam = z.object({ channelId: z.string().regex(/^[A-Za-z0-9]{1,64}$/) });
@@ -62,6 +63,12 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx): void {
     rateLimit(actionLimit, `user:${user.id}`);
     const { messageId } = MessageParam.parse(req.params);
     const { text } = ChangeRequestBody.parse(req.body);
+    // [Change] on a Build card asks for the next version; on a plan card it revises the plan.
+    const card = await getCard(ctx.db, messageId);
+    if (card?.cardType === 'build') {
+      await requestBuildChange(agentsOf(ctx), user, messageId, text);
+      return { messageId, metadata: {} };
+    }
     return { messageId, metadata: await requestChange(agentsOf(ctx), user, messageId, text) };
   });
 
@@ -121,11 +128,13 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx): void {
     return { states: ctx.agents?.states.snapshot(channelId) ?? [] };
   });
 
+  // Members always; anyone once the game is published (the public "How it was made" story).
   app.get('/api/games/:id/ledger', async req => {
-    const user = await requireUser(ctx, req);
+    const user = await optionalUser(ctx, req);
     const { id } = IdParam.parse(req.params);
     const game = await getGame(ctx.db, id);
-    if (!game || !(await getRole(ctx.db, game.crewId, user.id))) throw new HttpError(404, 'not_found', 'Game not found');
+    const member = !!game && !!user && !!(await getRole(ctx.db, game.crewId, user.id));
+    if (!game || (!member && !game.publishedVersion)) throw new HttpError(404, 'not_found', 'Game not found');
     const entries = (await listLedgerForGame(ctx.db, id)).map(toLedgerEntry);
     const totals = entries.reduce(
       (t, e) => ({

@@ -127,6 +127,10 @@ export const gameVersions = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    /** The AI model that wrote this version (every build metric is labelled with it). */
+    model: text(),
+    /** Build details: {orientation, emoji, colors, attempts, reason, change, requestedBy}. */
+    meta: jsonb().$type<Record<string, unknown>>().notNull().default({}),
   },
   t => [
     uniqueIndex('game_versions_game_version_uq').on(t.gameId, t.version),
@@ -173,7 +177,29 @@ export const scores = pgTable(
     timeMs: integer().notNull(),
     createdAt: createdAt(),
   },
-  t => [index('scores_game_score_idx').on(t.gameId, t.score.desc()), index('scores_user_idx').on(t.userId)],
+  t => [
+    index('scores_game_score_idx').on(t.gameId, t.score.desc()),
+    index('scores_user_idx').on(t.userId),
+    index('scores_user_game_time_idx').on(t.userId, t.gameId, t.createdAt),
+  ],
+);
+
+/** Throttle for Glitch's "you were beaten" DMs: one row per (winner, beaten player). */
+export const challengeDms = pgTable(
+  'challenge_dms',
+  {
+    winnerId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    beatenId: text()
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    gameId: text()
+      .notNull()
+      .references(() => games.id, { onDelete: 'cascade' }),
+    sentAt: ts().notNull(),
+  },
+  t => [primaryKey({ columns: [t.winnerId, t.beatenId] })],
 );
 
 /** Maps a Nexconn card message to the domain object it shows. */
@@ -310,6 +336,7 @@ export const schema = {
   gameVersions,
   bugs,
   scores,
+  challengeDms,
   cards,
   ledger,
   messagesLog,

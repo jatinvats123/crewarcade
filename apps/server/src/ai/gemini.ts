@@ -32,7 +32,15 @@ export interface GeminiOptions {
   prices?: { input: number; output: number };
   baseUrl?: string;
   log?: { debug(obj: object, msg: string): void };
+  /** Extra tries on "busy" answers (503 UNAVAILABLE / 429 RESOURCE_EXHAUSTED) before any text arrived. */
+  retries?: number;
+  /** Backoff before retry n (1-based); default 2 s, 6 s (+ jitter). */
+  retryDelayMs?: (n: number) => number;
+  sleep?: (ms: number) => Promise<void>;
 }
+
+/** A temporary "the model is busy" answer, worth retrying (the free tier sees these at peaks). */
+export const isBusyError = (msg: string): boolean => /\b(503|429)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(msg);
 
 const REFUSAL_REASONS = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'IMAGE_SAFETY', 'RECITATION']);
 
@@ -57,8 +65,29 @@ export function createGeminiClient(o: GeminiOptions): AiClient {
     };
   }
 
-  /** One streamed request; `onText` gets every text delta. Checks block/finish reasons before returning. */
+  const sleep = o.sleep ?? ((ms: number) => new Promise<void>(r => setTimeout(r, ms)));
+  const delay = o.retryDelayMs ?? ((n: number) => (n === 1 ? 2000 : 6000) + Math.floor(Math.random() * 500));
+
+  /** Retries busy answers, but only while nothing has been streamed (a reply never repeats). */
   async function run(call: TextCall, json: Record<string, unknown> | null, onText: (t: string) => void): Promise<{ text: string; usage: AiUsage }> {
+    const tries = 1 + (o.retries ?? 2);
+    let emitted = false;
+    for (let n = 1; ; n++) {
+      try {
+        return await runOnce(call, json, t => {
+          emitted = true;
+          onText(t);
+        });
+      } catch (e) {
+        if (!(e instanceof AiUnavailableError) || emitted || n >= tries || !isBusyError(e.message)) throw e;
+        o.log?.debug({ purpose: call.purpose, attempt: n }, 'gemini: model busy, retrying');
+        await sleep(delay(n));
+      }
+    }
+  }
+
+  /** One streamed request; `onText` gets every text delta. Checks block/finish reasons before returning. */
+  async function runOnce(call: TextCall, json: Record<string, unknown> | null, onText: (t: string) => void): Promise<{ text: string; usage: AiUsage }> {
     const t0 = performance.now();
     const timeoutMs = call.timeoutMs ?? o.timeoutMs ?? 120_000;
     const abort = new AbortController();
