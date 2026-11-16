@@ -1,7 +1,7 @@
 // Normalization of SDK messages, timeline grouping, linkify and @mentions.
 import { describe, expect, it } from 'vitest';
 import { dayLabel, groupTimeline, localDay } from '@/lib/chat/grouping';
-import { formatDuration, normalizeMessage, previewText, type SdkMessageLike } from '@/lib/chat/normalize';
+import { formatDuration, normalizeMessage, previewText, streamSummary, type SdkMessageLike } from '@/lib/chat/normalize';
 import { insertMention, mentionCandidates, mentionQuery, resolveMentions, tokenize, type MentionTarget } from '@/lib/chat/text';
 import type { ChatMessage } from '@/lib/chat/types';
 
@@ -46,7 +46,15 @@ describe('normalizeMessage', () => {
       kind: 'notice',
       notice: { kind: 'member_joined', text: 'Riya joined the crew' },
     });
-    expect(normalizeMessage(sdk({ messageType: 'CA:ScoreCard', content: '{"v":1,"gameId":"g1","playerId":"u1","score":12,"rank":1}' }), 'uMe')).toMatchObject({
+    expect(
+      normalizeMessage(
+        sdk({
+          messageType: 'CA:ScoreCard',
+          content: '{"v":1,"gameId":"g1","slug":"chai-dash","title":"Chai Dash","version":1,"playerId":"u1","playerName":"Riya","score":12,"rank":1}',
+        }),
+        'uMe',
+      ),
+    ).toMatchObject({
       kind: 'card',
       card: { kind: 'score', content: { score: 12 } },
     });
@@ -134,5 +142,28 @@ describe('text: links and mentions', () => {
     expect(mentionCandidates('', targets).map(t => t.userId)).toEqual(['agentpixel', 'uSam', 'uSamK']);
     expect(mentionCandidates('k', targets).map(t => t.userId)).toEqual(['uSamK']);
     expect(mentionCandidates('des', targets).map(t => t.userId)).toEqual(['agentpixel']);
+  });
+});
+
+describe('stream summaries (Nexconn RC_Ext_StreamMsgSummary)', () => {
+  it('reads the final text from metadata, as an object or a Map', () => {
+    const v = JSON.stringify({ complete: true, summary: 'A part one, A part two.' });
+    expect(streamSummary({ RC_Ext_StreamMsgSummary: v })).toEqual({ text: 'A part one, A part two.', complete: true });
+    expect(streamSummary(new Map([['RC_Ext_StreamMsgSummary', v]]))).toEqual({ text: 'A part one, A part two.', complete: true });
+    expect(streamSummary({ status: 'ready' })).toBeNull();
+    expect(streamSummary({ RC_Ext_StreamMsgSummary: 'not json' })).toBeNull();
+    expect(streamSummary(null)).toBeNull();
+  });
+
+  it('prefers the summary over the stored first chunk', () => {
+    const m = normalizeMessage(
+      sdk({
+        messageType: 'RC:StreamMsg',
+        content: { content: 'A part one, ', isCompleted: false },
+        metadata: { RC_Ext_StreamMsgSummary: JSON.stringify({ complete: true, summary: 'A part one, A part two.' }) },
+      }),
+      'uMe',
+    );
+    expect(m).toMatchObject({ kind: 'stream', text: 'A part one, A part two.', streamComplete: true });
   });
 });

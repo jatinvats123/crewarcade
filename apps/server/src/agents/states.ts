@@ -24,6 +24,8 @@ export interface AgentStates {
     state: AgentState,
     opts?: { detail?: string; gameId?: string; progress?: { done: number; total: number } },
   ): Promise<void>;
+  /** Tells clients the messageId of a stream reply being written (kept until the next set()). */
+  announceStream(channelId: string, agent: AgentKey, streamId: string): Promise<void>;
   /** Current non-idle states of a room. */
   snapshot(channelId: string): AgentStateMessage[];
   stopAll(): void;
@@ -66,6 +68,13 @@ export function createAgentStates(d: AgentStatesDeps): AgentStates {
             if (s) void safeSend(channelId, s);
           }, d.heartbeatMs ?? HEARTBEAT_MS),
         );
+      await safeSend(channelId, msg);
+    },
+    async announceStream(channelId, agent, streamId) {
+      const k = key(channelId, agent);
+      const prev = current.get(k);
+      const msg = AgentStateMessage.parse({ ...(prev ?? { v: 1, agentId: agent, state: 'thinking', detail: '', startedAt: d.now() }), streamId });
+      if (prev) current.set(k, msg);
       await safeSend(channelId, msg);
     },
     snapshot(channelId) {

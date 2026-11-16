@@ -20,12 +20,16 @@ export interface StreamOptions {
   channelId: string;
   sender: StreamSender;
   /**
-   * 'single' (default): wait for the whole reply, then send it as one complete stream chunk.
-   * 'chunked': send ~300 ms batches as the docs describe. Live check 2026-11-14: Nexconn kept only
-   * the FIRST chunk of a multi-chunk stream (history showed "part one," of "part one, part two") and
-   * Web clients got no live deltas, so 'chunked' stays off until Nexconn confirms the behaviour.
+   * 'chunked' (default): ~300 ms batches as the docs describe. Verified live 2026-11-14
+   * (scripts/stream-repro.ts): Nexconn assembles the chunks (RC_Ext_StreamMsgSummary carries the full
+   * text); stored history keeps only chunk 1, so clients pull the rest with requestStreamMessage().
+   * 'single': wait for the whole reply and send one complete chunk.
    */
   mode?: 'single' | 'chunked';
+  /** Called once with the messageId of the first chunk (clients are told to pull the stream). */
+  onStart?: (messageId: string) => void;
+  /** Debug log of every chunk request and response. */
+  log?: { debug(o: object, m: string): void };
   batchMs?: number;
   maxChunkBytes?: number;
   maxTotalBytes?: number;
@@ -95,9 +99,14 @@ export async function streamToGroup(nexconn: NexconnClient, chunks: AsyncIterabl
       isEchoToSender: 0,
       shouldPersist: 1,
     });
+    o.log?.debug(
+      { channelId: o.channelId, seq, complete, bytes: byteLength(content), messageId: first ? null : messageId, response: res },
+      'nexconn: stream chunk sent',
+    );
     if (first) {
       if (!res.messageId) throw new Error('stream/send returned no messageId for the first chunk');
       messageId = res.messageId;
+      o.onStart?.(messageId);
     }
     sentBytes += byteLength(content);
     sentText += content;
@@ -119,7 +128,7 @@ export async function streamToGroup(nexconn: NexconnClient, chunks: AsyncIterabl
     }
   };
 
-  if ((o.mode ?? 'single') === 'single') {
+  if ((o.mode ?? 'chunked') === 'single') {
     for await (const piece of chunks) all += piece;
     const text = byteLength(all) > maxTotal ? `${takeBytes(all, maxTotal)[0]}…` : all;
     try {

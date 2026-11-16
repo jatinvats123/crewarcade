@@ -93,9 +93,27 @@ describe('stream chunking', () => {
     expect((calls.at(-1)!.body.content as { complete: boolean }).complete).toBe(true);
   });
 
-  it('by default sends the whole reply as ONE complete chunk (Nexconn keeps only chunk 1, live 2026-11-14)', async () => {
+  it('streams in chunks by default and reports the first messageId once', async () => {
     const { client, calls } = fakeNexconn();
-    const res = await streamToGroup(client, from(['Ooh, I ', 'love this! ', 'Planning *Chai Dash*…']), { channelId: 'crew1', sender });
+    const clock = { t: 0, step: 400 };
+    const started: string[] = [];
+    const debug: object[] = [];
+    await streamToGroup(client, from(['Hello ', 'crew, ', 'here is ', 'the plan.'], clock), {
+      channelId: 'crew1',
+      sender,
+      now: () => clock.t,
+      onStart: id => started.push(id),
+      log: { debug: o => debug.push(o) },
+    });
+    expect(calls.length).toBeGreaterThan(1);
+    expect(started).toEqual(['S-1']);
+    expect(debug).toHaveLength(calls.length);
+    expect(debug[1]).toMatchObject({ seq: 2, messageId: 'S-1' });
+  });
+
+  it("'single' sends the whole reply as ONE complete chunk", async () => {
+    const { client, calls } = fakeNexconn();
+    const res = await streamToGroup(client, from(['Ooh, I ', 'love this! ', 'Planning *Chai Dash*…']), { channelId: 'crew1', sender, mode: 'single' });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.body.content).toMatchObject({
       seq: 1,
@@ -109,7 +127,7 @@ describe('stream chunking', () => {
 
   it('an empty reply still sends one complete chunk', async () => {
     const { client, calls } = fakeNexconn();
-    await streamToGroup(client, from([]), { channelId: 'crew1', sender });
+    await streamToGroup(client, from([]), { channelId: 'crew1', sender, mode: 'single' });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.body.content).toMatchObject({ seq: 1, complete: true, content: '…' });
   });

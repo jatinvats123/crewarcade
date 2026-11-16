@@ -56,11 +56,19 @@ export async function postText(ctx: PostCtx, channelId: string, agent: AgentKey,
 }
 
 /** Streams an agent reply (RC:StreamMsg, markdown). Falls back to one text message on failure. */
-export async function streamReply(ctx: PostCtx, channelId: string, agent: AgentKey, chunks: AsyncIterable<string>): Promise<StreamResult> {
+export async function streamReply(
+  ctx: PostCtx,
+  channelId: string,
+  agent: AgentKey,
+  chunks: AsyncIterable<string>,
+  onStart?: (messageId: string) => void,
+): Promise<StreamResult> {
   const res = await streamToGroup(requireNexconn(ctx), chunks, {
     channelId,
     sender: { id: agentNexconnId(agent), name: AGENTS[agent].displayName, portrait: agentPortrait(ctx, agent) },
     now: ctx.now,
+    log: ctx.log,
+    ...(onStart && { onStart }),
   });
   await logAgentText(ctx, channelId, res.messageId, agent, res.fellBack ? BUILTIN_MESSAGE_TYPES.text : BUILTIN_MESSAGE_TYPES.stream, res.text.trim());
   if (res.fellBack) ctx.log.warn({ channelId, agent, chunks: res.chunks }, 'stream failed; sent the reply as a text message');

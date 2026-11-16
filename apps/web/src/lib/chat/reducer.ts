@@ -239,7 +239,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         const prev = messages[i]!;
         messages[i] =
           action.type === 'stream/delta'
-            ? { ...prev, kind: 'stream', text: action.text.length >= (prev.text?.length ?? 0) ? action.text : prev.text, streamComplete: false }
+            ? { ...prev, kind: 'stream', text: action.text.length >= (prev.text?.length ?? 0) ? action.text : prev.text, streamComplete: !!prev.streamComplete }
             : { ...prev, streamComplete: true };
         return { ...c, messages, preview: c.preview?.messageId === action.messageId ? messages[i]! : c.preview };
       });

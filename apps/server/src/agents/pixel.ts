@@ -94,7 +94,7 @@ async function generatePlan(
       yield piece;
     }
   }
-  const streamed = streamReply(ctx, channelId, 'pixel', intro());
+  const streamed = streamReply(ctx, channelId, 'pixel', intro(), id => void ctx.agents.states.announceStream(channelId, 'pixel', id));
   try {
     const { value, usage } = await run.done;
     const s = await streamed;
@@ -342,7 +342,7 @@ export async function runExplain(ctx: AgentCtx, job: AgentJobData, room: Room): 
     maxTokens: 4000,
     hint: { question: job.text, plan, language },
   });
-  const streamed = streamReply(ctx, job.channelId, 'pixel', limitLines(run.chunks, 8));
+  const streamed = streamReply(ctx, job.channelId, 'pixel', limitLines(run.chunks, 8), id => void ctx.agents.states.announceStream(job.channelId, 'pixel', id));
   const { usage } = await run.done.catch(async e => {
     await streamed.catch(() => null);
     throw e;

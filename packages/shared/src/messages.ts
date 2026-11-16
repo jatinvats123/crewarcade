@@ -16,6 +16,10 @@ export const AgentStateMessage = z.object({
   gameId: z.string().max(64).optional(),
   /** e.g. testing 12/18. */
   progress: z.object({ done: z.number().int().min(0), total: z.number().int().min(1) }).optional(),
+  /** messageId of a stream reply this agent is writing right now. Web clients are not pushed
+   *  server-sent RC:StreamMsg messages (live 2026-11-14), so they fetch it by id and pull it with
+   *  requestStreamMessage(). */
+  streamId: z.string().max(64).optional(),
 });
 export type AgentStateMessage = z.infer<typeof AgentStateMessage>;
 

@@ -41,6 +41,20 @@ export function parseStreamContent(content: unknown): { text: string; complete: 
   return { text: c.content, complete: c.isCompleted === true || c.complete === true };
 }
 
+/** Nexconn's final text of a stream, published as message metadata when the last chunk lands. */
+export const STREAM_SUMMARY_KEY = 'RC_Ext_StreamMsgSummary';
+export function streamSummary(metadata: Record<string, unknown> | Map<string, unknown> | null | undefined): { text: string; complete: boolean } | null {
+  if (!metadata) return null;
+  const raw = metadata instanceof Map ? metadata.get(STREAM_SUMMARY_KEY) : metadata[STREAM_SUMMARY_KEY];
+  if (typeof raw !== 'string') return null;
+  try {
+    const o = JSON.parse(raw) as { summary?: unknown; complete?: unknown };
+    return typeof o.summary === 'string' ? { text: o.summary, complete: o.complete === true } : null;
+  } catch {
+    return null;
+  }
+}
+
 const metaRecord = (m: SdkMessageLike['metadata']): Record<string, string> => {
   if (!m) return {};
   const entries = m instanceof Map ? [...m.entries()] : Object.entries(m);
@@ -82,7 +96,10 @@ export function normalizeMessage(m: SdkMessageLike, myUserId: string, extra: Par
       return n.success ? { ...base, kind: 'notice', notice: { kind: n.data.kind, text: n.data.text } } : base;
     }
     case BUILTIN_MESSAGE_TYPES.stream: {
+      // Stored copies hold only the first chunk (live 2026-11-14); prefer the summary when present.
       const st = parseStreamContent(m.content);
+      const sum = streamSummary(m.metadata ?? null);
+      if (sum && sum.text.length >= (st?.text.length ?? 0)) return { ...base, kind: 'stream', text: sum.text, streamComplete: sum.complete };
       return st ? { ...base, kind: 'stream', text: st.text, streamComplete: st.complete } : base;
     }
     default:

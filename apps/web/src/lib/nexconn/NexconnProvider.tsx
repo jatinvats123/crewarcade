@@ -21,7 +21,7 @@ import type * as NexconnSdk from '@nexconn/chat';
 import type { BaseChannel, Message } from '@nexconn/chat';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiRequestError } from '../api';
-import { normalizeMessage, parseStreamContent, type SdkMessageLike } from '../chat/normalize';
+import { normalizeMessage, parseStreamContent, streamSummary, type SdkMessageLike } from '../chat/normalize';
 import { createChatStore, createPresenceStore, type ChatStore, type PresenceStore } from '../chat/store';
 import type { ChatMessage } from '../chat/types';
 import { useSession } from '../session';
@@ -61,6 +61,9 @@ interface NexconnValue {
 }
 
 const NexconnContext = createContext<NexconnValue | null>(null);
+
+/** Direct channels are keyed by the other user's id; ours are only DMs from agents (Glitch's challenges). */
+export const isDirectWithAgent = (channelId: string): boolean => /^agent(pixel|forge|glitch)$/.test(channelId);
 
 // Module-level: NCEngine.initialize must run exactly once per page lifetime (also under React
 // Strict Mode, which mounts effects twice in development).
@@ -161,35 +164,42 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
   /** Streams we already followed, by messageId. */
   const streamsRequested = useRef(new Set<string>());
   /**
-   * An agent's streamed reply. While it is being written, ask the SDK for its chunks (they arrive on
-   * onStreamMessageRequestDelta). Verified live (2026-11-14): a short stream can arrive already
-   * complete with EMPTY content, so then we also request it and re-fetch the stored message by id
-   * until its final text is there.
+   * An agent's streamed reply. Live (2026-11-14, scripts/stream-repro.ts): Nexconn stores only the
+   * FIRST chunk in history (isCompleted stays false) and never pushes server-sent streams through
+   * onMessageReceived, so for every stream we don't fully have we call requestStreamMessage(); the
+   * text then arrives on onStreamMessageRequestDelta (also for streams that already finished).
    */
   const followStream = useCallback(
     (m: Message) => {
       if (m.messageType !== BUILTIN_MESSAGE_TYPES.stream || !m.messageId || streamsRequested.current.has(m.messageId)) return;
-      const st = parseStreamContent(m.content);
-      if (!st || (st.complete && st.text)) return;
+      if (!parseStreamContent(m.content)) return;
+      const have = store.getState().channels[m.channelIdentifier.channelId]?.messages.find(x => x.messageId === m.messageId);
+      if (have?.streamComplete) return;
       streamsRequested.current.add(m.messageId);
       void m.requestStreamMessage().then(r => {
-        if (!r.isOk) console.warn('[nexconn] requestStreamMessage failed', r.code);
+        if (!r.isOk) {
+          console.warn('[nexconn] requestStreamMessage failed', r.code);
+          streamsRequested.current.delete(m.messageId);
+        }
       });
-      if (st.text) return;
-      const { messageId, channelIdentifier } = m;
-      const refetch = async (attempt: number) => {
-        const sdk = sdkRef.current;
-        const current = store.getState().channels[channelIdentifier.channelId]?.messages.find(x => x.messageId === messageId);
-        if (!sdk || (current?.text && current.streamComplete)) return;
-        const r = await sdk.BaseChannel.getMessagesByIds({ channelIdentifier, messageIds: [messageId] });
-        const fresh = r.isOk ? r.data?.[messageId] : undefined;
-        const parsed = fresh ? parseStreamContent(fresh.content) : null;
-        if (fresh && parsed?.text) store.dispatch({ type: 'message/received', message: normalize(fresh), active: true });
-        else if (attempt < 4) setTimeout(() => void refetch(attempt + 1), 1500 * attempt);
-      };
-      setTimeout(() => void refetch(1), 800);
     },
-    [store, normalize],
+    [store],
+  );
+  /** CA:AgentState named a stream being written: fetch it by id and pull its chunks. */
+  const pullStream = useCallback(
+    async (channelId: string, messageId: string, attempt = 1) => {
+      const sdk = sdkRef.current;
+      if (!sdk || streamsRequested.current.has(messageId) || channelOfMessage(messageId)) return;
+      const r = await sdk.BaseChannel.getMessagesByIds({ channelIdentifier: new sdk.GroupChannel(channelId).identifier, messageIds: [messageId] });
+      const found = r.isOk ? r.data?.[messageId] : undefined;
+      if (!found) {
+        if (attempt < 5) setTimeout(() => void pullStream(channelId, messageId, attempt + 1), 600 * attempt);
+        return;
+      }
+      if (!channelOfMessage(messageId)) store.dispatch({ type: 'message/received', message: normalize(found), active: isActive(channelId) });
+      followStream(found);
+    },
+    [store, normalize, channelOfMessage, followStream],
   );
 
   // ---- read receipts: debounced, for messages of the active channel that asked for one
@@ -199,6 +209,12 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       if (!sdk || !isActive(channelId)) return;
       const c = store.getState().channels[channelId];
       const ids = (c?.messages ?? []).filter(m => m.direction === 'in' && m.needReceipt && !m.receiptSent && m.messageId).map(m => m.messageId!);
+      if (isDirectWithAgent(channelId)) {
+        // Agent DMs (Glitch's challenges): clear the badge; no read receipts.
+        void new sdk.DirectChannel(channelId).clearUnreadCount().catch(() => {});
+        store.dispatch({ type: 'unread/set', channelId, count: 0 });
+        return;
+      }
       const channel = new sdk.GroupChannel(channelId);
       void channel.clearUnreadCount().catch(() => {});
       store.dispatch({ type: 'unread/set', channelId, count: 0 });
@@ -262,7 +278,10 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       }
       if (m.messageType === MESSAGE_TYPES.agentState) {
         const s = AgentStateMessage.safeParse(asObject(m.content));
-        if (s.success) store.dispatch({ type: 'agent/state', channelId, state: s.data, receivedAt: Date.now() });
+        if (s.success) {
+          store.dispatch({ type: 'agent/state', channelId, state: s.data, receivedAt: Date.now() });
+          if (s.data.streamId) void pullStream(channelId, s.data.streamId);
+        }
         return;
       }
       if (m.messageType === MESSAGE_TYPES.reaction) return; // Live Theater (Phase 3)
@@ -274,7 +293,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       if (!store.getState().channels[channelId]?.loaded) for (const l of unknownListeners.current) l(channelId);
       if (active) markRead(channelId);
     },
-    [store, normalize, markRead, followStream, catchUp],
+    [store, normalize, markRead, followStream, catchUp, pullStream],
   );
 
   const refreshChannelList = useCallback(async () => {
@@ -368,8 +387,18 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
               reason: info.extra?.trim() || 'This message was not delivered.',
             }),
           // Card votes/approvals (metadata/set on the server) update the card in place.
-          onMessageMetadataUpdated: ({ messageId, channelIdentifier, metadata }) =>
-            store.dispatch({ type: 'message/metadata', channelId: channelIdentifier.channelId, messageId, metadata }),
+          // A finished stream's full text arrives as RC_Ext_StreamMsgSummary metadata.
+          onMessageMetadataUpdated: ({ messageId, channelIdentifier, metadata }) => {
+            const sum = streamSummary(metadata as Record<string, unknown> | Map<string, unknown>);
+            if (sum) {
+              if (channelOfMessage(messageId)) {
+                store.dispatch({ type: 'stream/delta', messageId, text: sum.text });
+                if (sum.complete) store.dispatch({ type: 'stream/complete', messageId });
+              } else noteOrphanStream(messageId, { text: sum.text, complete: sum.complete });
+              return;
+            }
+            store.dispatch({ type: 'message/metadata', channelId: channelIdentifier.channelId, messageId, metadata });
+          },
           // Live (2026-11-14): agent streams reach group members only through these events, keyed by
           // messageId with no channel. Unknown ids are adopted: the text is kept and the message is
           // looked up in the open room (then the other loaded rooms) so it appears and keeps growing.
@@ -473,7 +502,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       let q = queries.current.get(channelId);
       if (!q) {
         q = sdk.BaseChannel.createMessagesQuery({
-          channelIdentifier: new sdk.GroupChannel(channelId).identifier,
+          channelIdentifier: (isDirectWithAgent(channelId) ? new sdk.DirectChannel(channelId) : new sdk.GroupChannel(channelId)).identifier,
           startTime: Date.now() + 10_000,
           pageSize: 30,
           isAscending: false,
@@ -491,7 +520,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       for (const m of page) followStream(m);
       // Read counts for my own messages on this page.
       const mine = page.filter(m => m.senderUserId === myIdRef.current && m.needReceipt).map(m => m.messageId);
-      if (mine.length) {
+      if (mine.length && !isDirectWithAgent(channelId)) {
         const info = await new sdk.GroupChannel(channelId).getMessageReadReceiptInfo(mine);
         if (info.isOk && info.data)
           store.dispatch({
