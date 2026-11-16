@@ -210,10 +210,20 @@ agent. 30 voters in one JSON value stay far below 4,096 chars (tested).
   "only part one" symptom: the stream was fine, the client read the wrong field.
 - `requestStreamMessage()` on a history copy works: init → one delta with the full text
   (`chunkInfo.messageContent`) → complete (code 0).
+- **What we do (Phase 3):** the server streams in ~300 ms chunks again (`mode: 'chunked'`, a debug log
+  per chunk) and, right after chunk 1, re-sends the agent's `CA:AgentState` with `streamId` = the new
+  messageId; the client fetches that message by id (`getMessagesByIds`) and calls
+  `requestStreamMessage()`, so the reply grows live. `RC_Ext_StreamMsgSummary` fills in the final text.
 - Client rule that follows: for every `RC:StreamMsg` (live or history) call `requestStreamMessage()`
   unless we already have its full text; also apply `RC_Ext_StreamMsgSummary` from metadata updates
   (keyed by messageId, the client finds the channel itself). Since live chunks are not pushed, the
   first sight of a live reply is the summary update or the catch-up fetch.
+
+### Direct messages from agents (Glitch's score challenges, Phase 3)
+
+`POST /v4/direct-channel/message/send` (`toUserIds`, `RC:TxtMsg` from `agentglitch`). The Web SDK keys
+a direct channel by the other user's id, so these arrive as channel `agentglitch`; history uses
+`new DirectChannel('agentglitch')`. The app shows them read-only at `/messages/glitch`.
 
 ### Open channels (Live Build Theater)
 

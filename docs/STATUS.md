@@ -9,7 +9,7 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
 | 0     | Foundation                  | **Done** (branch `phase-0`)                                          |
 | 1     | Identity, crews, chat       | **Built** (branch `phase-1`); live Nexconn check pending keys        |
 | 2     | Pixel, cards, approval      | **Built** (branch `phase-2`); live Nexconn + Claude run pending keys |
-| 3     | Forge, builds, Live Theater | —                                                                    |
+| 3     | Forge, builds, play, scores | **Built** (branch `phase-3`); live E2E_CHAT run pending              |
 | 4     | Glitch, playtest, publish   | —                                                                    |
 | 5     | Bugs, voice, languages      | —                                                                    |
 | 6     | Arcade and growth           | —                                                                    |
@@ -175,37 +175,88 @@ Opus's minimum cacheable size, so expect `cache_read` ≈ 0 for Pixel until the 
 3. On Render: `JOBS_DATABASE_URL` = the Supabase **session** pooler URL (port 5432) for pg-boss, and
    optionally `FAKE_AGENTS=1` as a demo fallback.
 
-## Phase 3: in progress (branch `phase-3`)
+## Phase 3: built, live E2E_CHAT run pending (branch `phase-3`)
 
-Owner decisions (2026-11-14): Build-card progress for Forge AND real multi-chunk streaming for
-Pixel's intro/explain; `AI_PROVIDER` stays switchable with a stronger build model for Forge than
-flash-lite (metrics labelled with the model); production refuses to start without Supabase Storage
-(local disk = development only); run the `E2E_CHAT=1` e2e live and give a 5-step phone check before
-merging. Approved deviations: Gemini for now, sandbox postMessage check by `event.source`, draft
-teaser until Phase 4, E2E_CHAT-gated full flow, no Live Build Theater, minimal Glitch DM view,
-original FAKE template game.
+Forge builds games from approved plans, players play them in a sandboxed full-screen player, scores
+reach leaderboards, and games get a public page with a link-preview image. Owner decisions
+(2026-11-14): Build-card progress AND real multi-chunk streaming; `AI_PROVIDER` switchable with a
+stronger Forge model; production refuses to start without Supabase Storage; run the `E2E_CHAT=1` e2e
+live and give a 5-step phone check before merging.
 
-Progress:
-- **Streams debugged live** (`apps/server/scripts/stream-repro.ts`, `pnpm --filter @crewarcade/server
-  stream:repro`): server chunking with `messageId` is correct; the bug is client-side (history keeps
-  only chunk 1; full text via `requestStreamMessage()` or `RC_Ext_StreamMsgSummary`). Findings in
-  `docs/NEXCONN.md` → "Live stream findings". **Next:** switch `streamToGroup` default back to
-  `'chunked'` with a debug log per chunk (seq, bytes, response), and in `NexconnProvider` call
-  `requestStreamMessage()` for every stream without full text (live and history) and apply
-  `RC_Ext_StreamMsgSummary` metadata; then verify Pixel intro + explain live.
-- **Shared schemas (uncommitted, web not updated yet):** `BuildCardContent` now `{gameId, slug,
-  title, version, reason, change?}` with live `BuildCardMeta` (`steps`, `sizeKb`, `buildMs`,
-  `attempts`, `notes`, `checkPass`, `problems`, `error`); `ScoreCardContent` gains slug, title,
-  version, names, beatScore; new `packages/shared/src/play.ts` (GameHostMessage, play URL, scores,
-  leaderboard, game page, remix). `CardMessage.tsx` and CardsDemo still use the old build fields, so
-  typecheck fails until they are updated.
-- Not started: config (Forge build model, prod requires Supabase), storage, Forge worker, /play route,
-  Player, scores, /g page, tests, real builds.
+### Done
 
-## Next: Phase 3
+- **Streams fixed** (`pnpm --filter @crewarcade/server stream:repro`): `messageId` is right (the legacy
+  `messageUID` makes every chunk a new message); stored history keeps only chunk 1 and Web clients are
+  not pushed server streams. Now: chunked sends with a debug log per chunk, `CA:AgentState.streamId`
+  after chunk 1, the client fetches that message and calls `requestStreamMessage()` (also for history
+  streams) and applies `RC_Ext_StreamMsgSummary`. Not yet watched live in the app.
+- **AI config:** Forge uses `GEMINI_BUILD_MODEL` (`gemini-3.5-flash`) / `ANTHROPIC_BUILD_MODEL`; Pixel the
+  cheap model; every build metric carries the model. Gemini retries 503/429 before any text streamed.
+- **Storage:** Supabase (private `games` bucket) in production (config fails without it), local disk in
+  development, memory in tests.
+- **Forge:** build worker; code inserted into the starter / previous version / remixed game; static
+  check + Game-object rules + 6 s smoke playtest (`FORGE_SMOKE=1`); ≤ 2 retries with numbered problems;
+  live Build-card steps + agent progress; HTML in storage; `game_versions` with size, time, tokens,
+  cost, model; handoff to Glitch + queued playtest (FAKE: simulated PASS); failed card + Try again;
+  change requests → v+1; remix v1 from the original's published code.
+- **Serving:** `/play/:slug/v/:n` with the strict CSP, nosniff, no-referrer, immutable cache; drafts need
+  a 30-minute signed token (members only).
+- **Scores:** plausibility (cap, min time, 1 per 3 s), leaderboard, ScoreCard, Glitch challenge DM
+  (1 per pair per hour). Migration `0001_phase3_builds_scores`.
+- **Web:** sandboxed full-screen player, Build/Score cards, leaderboard tab + sheet, ▶ Play in rooms,
+  `?play=latest` deep link, Glitch DM view, public `/g/[slug]` + Open Graph image.
+- **Engine fix:** the starter read `localStorage` unguarded, which throws in the player's sandbox (no
+  game would have started). Guarded, with a test.
 
-A Forge worker for the queued `forge-build` jobs (handoff → started/done, `CA:BuildCard`), streamed
-build progress, static-check retries, Storage, Live Build Theater.
+### Verified locally (2026-11-16)
+
+- lint ✓, typecheck ✓, builds ✓; `pnpm test` 333 passing; `pnpm e2e` 32 passed, 6 skipped (E2E_CHAT
+  specs); `pnpm eval:fast` 21/21, 0 false FAILs.
+- Link previews: correct og/twitter tags, 1200×630 PNG ~100–110 KB. Indic titles are not drawn on the
+  card (satori cannot shape them); the phone shows the real title as preview text.
+
+### Build metrics (3 real builds, `pnpm --filter @crewarcade/server real:builds`)
+
+Plans `gemini-3.5-flash-lite`; builds `gemini-3.5-flash` (API reports `gemini-3.6-flash`). Free tier.
+
+| Game | Attempts | Build time | Tokens in / out | Smoke | Full playtest |
+| --- | --- | --- | --- | --- | --- |
+| Chai Scooter Dash | 1 | 57 s | 3.5 K / 6.6 K | PASS | PASS |
+| Ice Delivery | 2 | 85 s | 10.7 K / 18.9 K | PASS | Space key does nothing |
+| दिवाली पटाखा बिल्ली (Hindi) | 2 | 61 s | 9.7 K / 15.0 K | PASS | PASS |
+
+Average 68 s, retry rate 67 %, $0 per build. Both retries: redeclared engine globals (prompt now lists
+them; not re-measured).
+
+### Phone check (5 steps)
+
+1. Pitch `@pixel a chai cup on a scooter dodging potholes`: the intro types out live, then the plan.
+   Approve, open the 🎮 room.
+2. Forge's Build card ticks its lines and turns Ready in ~1–1.5 min.
+3. ▶ Play: full screen, touch buttons work, a run ends with a "New best" toast. Repeat on desktop with
+   arrow keys.
+4. 🏆 shows your score and a Glitch ScoreCard; when a friend beats you, Glitch DMs you a Play again link.
+5. ✏️ Change → "make it faster": v2 appears, v1 still plays. Paste `/g/<slug>` into WhatsApp: the
+   preview card appears.
+
+### Known issues
+
+- Live E2E_CHAT run not done (Docker Desktop / local Postgres did not start). `e2e/forge.spec.ts` ready.
+- Nothing can be published until Phase 4; public play and remix were tested with a published flag set
+  in the database.
+- The Phase 4 playtester should load games in a sandboxed iframe like the player.
+- Per-user daily build limit not enforced yet; Live Build Theater not built.
+
+### Needed from the owner
+
+1. Start Docker Desktop (or give a Postgres URL) for the live `E2E_CHAT=1` run.
+2. Render: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AI_PROVIDER=gemini`, `GEMINI_API_KEY`.
+   Vercel: `NEXT_PUBLIC_SITE_URL` = the https URL.
+
+## Next: Phase 4
+
+Glitch: sandboxed playtest worker for the queued `glitch-playtest` jobs, PASS/FAIL cards with GIFs,
+auto-fix loop, publish request + Allow/Block, screenshots for the OG image.
 
 ## Phase 1: built, waiting for Nexconn keys to verify live (branch `phase-1`)
 

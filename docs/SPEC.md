@@ -168,10 +168,13 @@ Superseded or ignored plans stay in the chat; a new pitch starts a new plan.
 
 ### 4.7 Play, score, leaderboard
 
-The player embeds the game in an iframe (`sandbox="allow-scripts"`, no same-origin), listens for the
-score hook (`crewarcade:start` / `crewarcade:score`), and posts scores to the server, which checks
-plausibility (time, max rate) before writing `scores`. Leaderboard card in the game room; leaderboard
-on the Arcade page; weekly "top of the crew" message.
+The player embeds the game in a full-screen iframe (`sandbox="allow-scripts allow-pointer-lock"`, no
+same-origin), listens for the score hook (`crewarcade:start` / `crewarcade:score`), and posts scores
+to `POST /api/scores`, which checks plausibility (`SCORE_MAX`, `SCORE_MIN_TIME_MS`, 1 score / 3 s per
+user and game) before writing `scores`. Leaderboard: top 20 + my best + my rank (game room panel and
+`/g/<slug>`). A new #1 or beating a crew member's best posts a `CA:ScoreCard` in the game room and
+Glitch DMs each beaten crew member a [Play again] link (max 1 per pair per hour, `challenge_dms`).
+Weekly "top of the crew" message: later.
 
 ### 4.8 Bug report → repro → hotfix
 
@@ -269,7 +272,7 @@ IDs are non-sequential alphanumeric nanoids (`newId()`), timestamps `timestamptz
 Ledger actions: `plan.created`, `plan.revised`, `plan.vote`, `plan.change_requested`, `plan.approved`,
 `plan.refused`, `plan.failed`, `room.created`, `build.queued`, `agent.replied`, `agent.explained`,
 `crew.memory_updated` (Phase 2), `handoff`, `build.started`,
-`build.check_failed`, `build.ready`, `test.passed`, `test.failed`, `bug.reported`, `bug.reproduced`,
+`build.check_failed`, `build.ready`, `build.failed`, `score.top`, `score.challenge`, `game.remix_started` (Phase 3), `test.passed`, `test.failed`, `bug.reported`, `bug.reproduced`,
 `hotfix.ready`, `publish.requested`, `publish.approved`, `publish.blocked`, `shield.blocked`,
 `moderation.masked` (format `area.verb`, enforced by a CHECK constraint).
 
@@ -304,7 +307,7 @@ Agents cannot approve or publish anything, ever; approvals are human-only by con
 2. **Agents treat all chat as data.** Human text goes inside delimited untrusted blocks; outputs are
    schema-validated (zod); agents have no tools that publish, approve, change roles or reach the network.
 3. **Game sandbox:** generated HTML passes `checkHtml()` (no network, no external assets), is served
-   from our server with a strict CSP (`default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:`), and runs in an iframe with `sandbox="allow-scripts"` (no same-origin, no top navigation, no popups). Only `crewarcade:*` postMessages are accepted.
+   from our server (`GET /play/:slug/v/:n`) with a strict CSP (`default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors <web origin>`), `nosniff`, `no-referrer`, immutable caching; unpublished versions need a 30-minute signed token only crew members can get. It runs in an iframe with `sandbox="allow-scripts allow-pointer-lock"` (never same-origin: no storage, no top navigation, no popups, no forms). Only the two `crewarcade:*` score-hook shapes from that iframe's window are accepted (its origin is the opaque `"null"`). Games must not use storage APIs (Forge's check rejects them; the engine guards its best-score read).
 4. **Publish gate:** nothing appears in the Arcade without a human Allow from an owner/approver;
    every gate decision is in the ledger.
 5. **Original games only:** Pixel rewrites "make Flappy Bird" into an original game with its own name,
