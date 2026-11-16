@@ -93,3 +93,44 @@ describe('clip()', () => {
     expect(res.checkLabel).toMatch(/^BUG 1/);
   });
 });
+
+describe('the starter inside the CrewArcade player sandbox', () => {
+  // The web player embeds games with sandbox="allow-scripts" and no allow-same-origin: storage
+  // APIs throw there. The engine must still boot, play and post the score hook to the parent.
+  it('boots, plays and reports scores in an iframe with sandbox="allow-scripts" (opaque origin)', async () => {
+    const page = await browser.newPage();
+    try {
+      const html = starterHtml();
+      await page.setContent(
+        `<!doctype html><body style="margin:0"><iframe id="g" sandbox="allow-scripts allow-pointer-lock" style="width:480px;height:640px;border:0"></iframe></body>`,
+      );
+      await page.evaluate(src => {
+        (window as unknown as { got: unknown[] }).got = [];
+        window.addEventListener('message', e => (window as unknown as { got: unknown[] }).got.push({ origin: e.origin, data: e.data }));
+        (document.getElementById('g') as HTMLIFrameElement).srcdoc = src;
+      }, html);
+      await expect.poll(() => page.frames().length).toBeGreaterThan(1);
+      const frame = page.frames()[1]!;
+      await frame.waitForFunction(() => typeof (window as unknown as { __crew?: unknown }).__crew === 'object', undefined, { timeout: 10_000 });
+      const storageThrows = await frame.evaluate(() => {
+        try {
+          void window.localStorage.length;
+          return false;
+        } catch {
+          return true;
+        }
+      });
+      expect(storageThrows).toBe(true); // proves this really is the sandboxed case
+      const crew = () => (window as unknown as { __crew: { start(): { scene: string }; state(): { scene: string } } }).__crew;
+      expect(await frame.evaluate(`(${crew.toString()})().start().scene`)).toBe('playing');
+      await frame.evaluate(`(${crew.toString()})(); window.gameOver && window.gameOver()`);
+      await expect
+        .poll(() =>
+          page.evaluate(() => (window as unknown as { got: Array<{ origin: string; data: { type?: string } }> }).got.map(m => `${m.origin}|${m.data.type}`)),
+        )
+        .toContain('null|crewarcade:start');
+    } finally {
+      await page.close();
+    }
+  });
+});

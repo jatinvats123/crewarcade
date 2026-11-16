@@ -164,7 +164,9 @@ function notifyHost(msg) { try { window.parent.postMessage(msg, '*'); } catch (e
 // ---- scenes, score, HUD
 let scene = 'title', score = 0, runTime = 0, overAt = 0, newBest = false, clock = 0, frame = 0;
 const BEST_KEY = 'crewarcade-best:' + location.pathname;
-let best = +(localStorage.getItem(BEST_KEY) || 0);
+// The player runs games in a sandboxed iframe (no same-origin), where touching localStorage throws:
+// keep the best score in memory then.
+let best = 0; try { best = +(localStorage.getItem(BEST_KEY) || 0) || 0; } catch (e) {}
 const hud = { bump: 1 }, ui = { a: 1 };
 function addScore(n = 1) { if (scene !== 'playing') return; score += n; hud.bump = 1.35; tween(hud, { bump: 1 }, 0.25, 'outBack'); }
 function startRun() { parts.length = pops.length = tweens.length = 0; hud.bump = 1;
