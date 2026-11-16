@@ -4,10 +4,13 @@
 // tabs, Agent Status Strip, timeline (with cards and streamed agent replies), typing line, composer.
 import { AGENTS, type CrewMember } from '@crewarcade/shared';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AgentStatusStrip } from '@/components/agents/AgentStatusStrip';
 import { CardEnvProvider, type CardEnv } from '@/components/cards/context';
 import { agentKeyOf } from '@/components/identity/MemberAvatar';
+import { Leaderboard } from '@/components/play/Leaderboard';
+import { usePlayer } from '@/components/player/PlayerProvider';
 import { StoryTimeline } from '@/components/story/StoryTimeline';
 import { EmptyState, ErrorState, IconButton, Sheet, Skeleton, useToast } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -39,6 +42,18 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
   const game = roomChannelId ? (detail?.games.find(g => g.roomChannelId === roomChannelId) ?? null) : null;
   const rooms = (detail?.games ?? []).filter(g => g.roomChannelId);
   const [storyOpen, setStoryOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const player = usePlayer();
+  const searchParams = useSearchParams();
+  const playParam = searchParams.get('play');
+  // Deep link from Glitch's challenge DM / a share: ?play=latest (or ?play=<version>) opens the player.
+  const deepLinked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!game || !playParam || deepLinked.current === `${game.id}:${playParam}`) return;
+    deepLinked.current = `${game.id}:${playParam}`;
+    const v = playParam === 'latest' ? 'latest' : Number(playParam);
+    if (v === 'latest' || (Number.isInteger(v) && v > 0)) player.open({ gameId: game.id, version: v, title: game.title });
+  }, [game, playParam, player]);
   const [storyKey, setStoryKey] = useState(0);
   const presence = usePresence(nx.presence);
   const [missing, setMissing] = useState(false);
@@ -134,10 +149,16 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
       myId,
       canApprove: detail?.role === 'owner' || detail?.role === 'approver',
       roomHref: (c: string) => roomHref(crewId, c, crewChannelId ?? ''),
-      actions: { vote: api.vote, approve: api.approve, requestChange: api.requestChange },
+      actions: {
+        vote: api.vote,
+        approve: api.approve,
+        requestChange: api.requestChange,
+        retryBuild: api.retryBuild,
+        play: (gameId, version, title) => player.open({ gameId, version, ...(title && { title }) }),
+      },
       setMeta: (channelId, messageId, metadata, replace) => nx.store.dispatch({ type: 'message/metadata', channelId, messageId, metadata, replace }),
     }),
-    [crewId, myId, detail?.role, crewChannelId, nx.store],
+    [crewId, myId, detail?.role, crewChannelId, nx.store, player],
   );
   const targets: MentionTarget[] = useMemo(
     () =>
@@ -208,8 +229,18 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
             <Skeleton className="h-5 w-40" />
           )}
         </button>
+        {game && game.status !== 'planning' && (
+          <IconButton
+            label={`Play ${game.title}`}
+            variant="filled"
+            icon={<span aria-hidden>▶</span>}
+            onClick={() => player.open({ gameId: game.id, version: 'latest', title: game.title })}
+            data-testid="room-play"
+          />
+        )}
         {game && (
-          <span className="lg:hidden">
+          <span className="flex lg:hidden">
+            <IconButton label="Leaderboard" icon={<span aria-hidden>🏆</span>} onClick={() => setBoardOpen(true)} />
             <IconButton label="Story: how this game was made" icon={<span aria-hidden>📜</span>} onClick={() => setStoryOpen(true)} />
           </span>
         )}
@@ -284,6 +315,11 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
       )}
 
       {detail && user && <CrewInfoSheet open={infoOpen} onClose={() => setInfoOpen(false)} crew={detail} myDbId={user.id} presence={presence} />}
+      {game && (
+        <Sheet open={boardOpen} onClose={() => setBoardOpen(false)} title={`🏆 ${game.title}`}>
+          <Leaderboard gameId={game.id} myUserId={user?.id ?? null} />
+        </Sheet>
+      )}
       {game && (
         <Sheet open={storyOpen} onClose={() => setStoryOpen(false)} title={`Story of ${game.title}`}>
           <StoryTimeline gameId={game.id} refreshKey={storyKey} />

@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgentStatusStrip } from '@/components/agents/AgentStatusStrip';
 import { CardMessage } from '@/components/cards/CardMessage';
 import { CardEnvProvider, type CardEnv } from '@/components/cards/context';
+import { usePlayer } from '@/components/player/PlayerProvider';
 import { Markdown } from '@/components/chat/Markdown';
 import { Button } from '@/components/ui';
 import { emptyChannel, type ChannelState, type ChatMessage } from '@/lib/chat/types';
@@ -59,6 +60,11 @@ const base = (key: string, card: AnyCard, meta: Record<string, unknown> = {}): C
   receiptSent: false,
 });
 
+const forge = (key: string, content: Extract<AnyCard, { kind: 'build' }>['content'], meta: Record<string, unknown>): ChatMessage => ({
+  ...base(key, { kind: 'build', content }, meta),
+  senderId: 'agentforge',
+});
+
 const STREAM = 'Ooh, I love this! Planning *Sample Scooter Run*…\n\n- three lanes\n- **potholes** and biscuits\n- gets faster every 15 s';
 
 export function CardsDemo() {
@@ -81,7 +87,71 @@ export function CardsDemo() {
       { status: 'waiting' },
     ),
     base('DEMO-LINK', { kind: 'roomLink', content: { v: 1, channelId: 'gameDemoRoom0001', gameId: 'gDemo', title: '🎮 Sample Scooter Run', kind: 'game' } }),
+    forge(
+      'DEMO-BUILDING',
+      { v: 1, gameId: 'gDemo', slug: 'sample-scooter-run', title: 'Sample Scooter Run', version: 2, reason: 'change', change: 'Make it faster' },
+      {
+        status: 'building',
+        steps: [
+          { t: 'Reading the plan', s: 'done' },
+          { t: 'Player movement', s: 'done' },
+          { t: 'Potholes + speed ramp', s: 'doing' },
+          { t: 'Running checks', s: 'todo' },
+          { t: 'Saving v2', s: 'todo' },
+        ],
+      },
+    ),
+    forge(
+      'DEMO-BUILD',
+      { v: 1, gameId: 'gDemo', slug: 'sample-scooter-run', title: 'Sample Scooter Run', version: 1, reason: 'build' },
+      {
+        status: 'ready',
+        steps: ['Reading the plan', 'Player movement', 'Potholes + speed ramp', 'Score + juice', 'Running checks', 'Saving v1'].map(t => ({ t, s: 'done' })),
+        sizeKb: 18.4,
+        buildMs: 64_000,
+        attempts: 1,
+        notes: ['Steer with ← → or the on-screen buttons.', 'Dodge potholes, grab biscuits for +10.', 'The road speeds up every 15 s.'],
+        checkPass: 'true',
+      },
+    ),
+    forge(
+      'DEMO-FAILED',
+      { v: 1, gameId: 'gDemo', slug: 'sample-scooter-run', title: 'Sample Scooter Run', version: 3, reason: 'build' },
+      {
+        status: 'failed',
+        steps: [
+          { t: 'Reading the plan', s: 'done' },
+          { t: 'Player movement', s: 'done' },
+          { t: 'Running checks', s: 'failed' },
+        ],
+        attempts: 3,
+        checkPass: 'false',
+        problems: ['Network/external asset (fetch()) at line 412: fetch(', 'Game.state() is missing.'],
+        error: "I couldn't get v3 past the checks after 3 tries. The problems are on the build card; tap Try again and I'll take another run at it.",
+      },
+    ),
+    {
+      ...base('DEMO-SCORE', {
+        kind: 'score',
+        content: {
+          v: 1,
+          gameId: 'gDemo',
+          slug: 'sample-scooter-run',
+          title: 'Sample Scooter Run',
+          version: 1,
+          playerId: 'u1',
+          playerName: 'Riya',
+          score: 1240,
+          rank: 1,
+          beatPlayerId: 'u2',
+          beatPlayerName: 'Rohan',
+          beatScore: 990,
+        },
+      }),
+      senderId: 'agentglitch',
+    },
   ]);
+  const player = usePlayer();
   const msgsRef = useRef(msgs);
   useEffect(() => {
     msgsRef.current = msgs;
@@ -110,9 +180,16 @@ export function CardsDemo() {
         },
         approve: id => answer(id, { status: 'approved', approvedBy: 'You', roomChannelId: 'gameDemoRoom0001' }),
         requestChange: id => answer(id, { status: 'changes_requested' }),
+        retryBuild: async id => {
+          setMsgs(list =>
+            list.map(m => (m.messageId === id ? { ...m, meta: metaToStrings({ status: 'building', steps: [{ t: 'Reading the plan', s: 'doing' }] }) } : m)),
+          );
+          return { queued: true };
+        },
+        play: (gameId, version, title) => player.open({ gameId, version, ...(title && { title }) }),
       },
     };
-  }, []);
+  }, [player]);
 
   // Streamed reply that types itself out; replay restarts it.
   const [n, setN] = useState(0);

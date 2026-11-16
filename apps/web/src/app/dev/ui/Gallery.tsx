@@ -4,6 +4,7 @@ import { AGENT_STATES } from '@crewarcade/shared';
 import { useState, type ReactNode } from 'react';
 import { Logo, LogoMark } from '@/components/brand/Logo';
 import { ThemeToggle } from '@/components/brand/ThemeToggle';
+import { PlayerProvider } from '@/components/player/PlayerProvider';
 import { CardsDemo } from './CardsDemo';
 import {
   AiBadge,
@@ -114,7 +115,9 @@ export function Gallery() {
         </Section>
 
         <Section title="Cards, stream, agent strip">
-          <CardsDemo />
+          <PlayerProvider>
+            <CardsDemo />
+          </PlayerProvider>
         </Section>
 
         <Section title="Chip (filters)">

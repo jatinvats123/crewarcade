@@ -13,6 +13,14 @@ import {
   InvitePreview,
   NexconnTokenResponse,
   Profile,
+  PlayUrlResponse,
+  ScoreResponse,
+  LeaderboardResponse,
+  GameVersionsResponse,
+  GamePageResponse,
+  RemixResponse,
+  type ScoreBody,
+  type RemixBody,
   type CreateCrewBody,
   type GuestSignupBody,
   type ProfilePatch,
@@ -46,7 +54,12 @@ async function request<S extends z.ZodType>(method: 'GET' | 'POST' | 'PATCH', pa
   const json: unknown = res.status === 204 ? {} : await res.json().catch(() => null);
   if (!res.ok) {
     const err = z.object({ error: z.string(), message: z.string() }).safeParse(json);
-    throw new ApiRequestError(res.status, err.success ? err.data.error : 'http_error', err.success ? err.data.message : `Request failed (${res.status})`);
+    const reason = z.object({ reason: z.string() }).safeParse(json);
+    throw new ApiRequestError(
+      res.status,
+      err.success ? err.data.error : 'http_error',
+      err.success ? err.data.message : reason.success ? reason.data.reason : `Request failed (${res.status})`,
+    );
   }
   return schema.parse(json);
 }
@@ -76,6 +89,22 @@ export const api = {
   relay: (body: { channelId: string; messageId: string; text: string; mentionedUserIds: string[] }) =>
     request('POST', '/api/chat/relay', z.object({ routed: z.boolean() }), body),
   ledger: (gameId: string) => request('GET', `/api/games/${encodeURIComponent(gameId)}/ledger`, LedgerResponse),
+  retryBuild: (messageId: string) => request('POST', `/api/cards/${encodeURIComponent(messageId)}/retry`, z.object({ queued: z.boolean() }), {}),
+  playUrl: (gameId: string, version: number | 'latest') => request('GET', `/api/games/${encodeURIComponent(gameId)}/versions/${version}/play`, PlayUrlResponse),
+  versions: (gameId: string) => request('GET', `/api/games/${encodeURIComponent(gameId)}/versions`, GameVersionsResponse).then(r => r.versions),
+  leaderboard: (gameId: string) => request('GET', `/api/games/${encodeURIComponent(gameId)}/leaderboard`, LeaderboardResponse),
+  /** 422 (implausible) and 429 (too fast) come back as a ScoreResponse with accepted: false. */
+  submitScore: async (body: ScoreBody): Promise<ScoreResponse> => {
+    try {
+      return await request('POST', '/api/scores', ScoreResponse, body);
+    } catch (e) {
+      if (e instanceof ApiRequestError && (e.status === 422 || e.status === 429))
+        return { accepted: false, reason: e.message, best: null, rank: null, newBest: false };
+      throw e;
+    }
+  },
+  publicGame: (slug: string) => request('GET', `/api/public/games/${encodeURIComponent(slug)}`, GamePageResponse),
+  remix: (slug: string, body: RemixBody) => request('POST', `/api/games/${encodeURIComponent(slug)}/remix`, RemixResponse, body),
   agentActivity: (crewId: string, agent: 'pixel' | 'forge' | 'glitch') =>
     request('GET', `/api/crews/${encodeURIComponent(crewId)}/agents/${agent}/activity`, z.object({ agent: z.string(), entries: z.array(LedgerEntry) })).then(
       r => r.entries,

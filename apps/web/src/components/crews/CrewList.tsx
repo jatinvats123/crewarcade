@@ -8,7 +8,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Logo } from '@/components/brand/Logo';
 import { MemberAvatar } from '@/components/identity/MemberAvatar';
-import { Button, EmptyState, ErrorState, IconButton, Skeleton } from '@/components/ui';
+import { Avatar, Button, EmptyState, ErrorState, IconButton, Skeleton } from '@/components/ui';
 import { BUSY_STATES } from '@/lib/agents';
 import { api } from '@/lib/api';
 import { clockTime, dayLabel, localDay } from '@/lib/chat/grouping';
@@ -46,6 +46,11 @@ export function CrewList() {
     }
   };
 
+  // Glitch's DMs (score challenges) appear once there is one.
+  const glitch = channels['agentglitch'];
+  const glitchLast = glitch?.messages[glitch.messages.length - 1] ?? glitch?.preview ?? null;
+  const glitchPreview = glitchLast ? previewText(glitchLast) : 'Score challenges';
+  const glitchUnread = pathname === '/messages/glitch' ? 0 : (glitch?.unread ?? 0);
   const sorted = [...(crews ?? [])].sort((a, b) => lastTime(channels[b.groupChannelId], b) - lastTime(channels[a.groupChannelId], a));
 
   return (
@@ -105,6 +110,26 @@ export function CrewList() {
           </div>
         ) : (
           <ul className="flex flex-col gap-0.5">
+            {glitch && (
+              <li>
+                <Link
+                  href="/messages/glitch"
+                  aria-current={pathname === '/messages/glitch' ? 'page' : undefined}
+                  className={`flex min-h-16 items-center gap-3 rounded-2xl px-3 py-2 ${pathname === '/messages/glitch' ? 'bg-surface-2' : 'hover:bg-surface'}`}
+                >
+                  <Avatar kind="agent" agent="glitch" size="md" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold">Glitch · challenges</span>
+                    <span className="block truncate text-sm text-dim">{glitchPreview}</span>
+                  </span>
+                  {glitchUnread > 0 && (
+                    <span className="rounded-full bg-brand px-2 py-0.5 text-xs font-bold text-brand-ink" aria-label={`${glitchUnread} unread`}>
+                      {glitchUnread}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            )}
             {sorted.map(c => (
               <li key={c.id}>
                 <CrewRow crew={c} channel={channels[c.groupChannelId]} active={pathname === `/crews/${c.id}`} />

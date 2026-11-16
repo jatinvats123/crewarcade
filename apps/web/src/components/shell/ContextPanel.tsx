@@ -1,10 +1,11 @@
 'use client';
 
 // Desktop right column: the room's agents with live states and, in a game room, the game and its
-// Story (the Decision Ledger timeline). Phones and tablets open the Story as a sheet from the header.
+// Story (the Decision Ledger timeline) and leaderboard. Phones and tablets open the Story as a sheet from the header.
 import { AGENTS, type AgentKey } from '@crewarcade/shared';
 import { useEffect, useState } from 'react';
 import { chipDetail } from '@/components/agents/AgentStatusStrip';
+import { Leaderboard } from '@/components/play/Leaderboard';
 import { StoryTimeline } from '@/components/story/StoryTimeline';
 import { Avatar, Badge, StateChip } from '@/components/ui';
 import { ACCENT_TEXT } from '@/lib/agents';
@@ -12,6 +13,7 @@ import { roomAgentStates } from '@/lib/chat/reducer';
 import { useChannelState } from '@/lib/chat/store';
 import { useNexconn } from '@/lib/nexconn/NexconnProvider';
 import { useActiveRoom } from '@/lib/room';
+import { useSession } from '@/lib/session';
 
 const STATUS: Record<string, string> = {
   planning: 'Planning',
@@ -28,7 +30,8 @@ export function ContextPanel() {
   const channel = useChannelState(store, room?.channelId ?? null);
   const states = new Map(roomAgentStates(channel).map(s => [s.agentId, s]));
   const [now, setNow] = useState(() => Date.now());
-  const [tab, setTab] = useState<'story' | 'agents'>('story');
+  const [tab, setTab] = useState<'story' | 'board' | 'agents'>('story');
+  const { user } = useSession();
   const cards = channel?.messages.filter(m => m.kind === 'card').length ?? 0;
 
   useEffect(() => {
@@ -73,7 +76,7 @@ export function ContextPanel() {
           {STATUS[room.game.status] ?? room.game.status}
         </Badge>
         <div role="tablist" aria-label="Game panel" className="mt-3 flex gap-1">
-          {(['story', 'agents'] as const).map(t => (
+          {(['story', 'board', 'agents'] as const).map(t => (
             <button
               key={t}
               role="tab"
@@ -82,13 +85,19 @@ export function ContextPanel() {
               onClick={() => setTab(t)}
               className={`min-h-11 rounded-full px-4 text-sm font-semibold ${tab === t ? 'bg-brand/15 text-brand' : 'text-dim hover:text-text'}`}
             >
-              {t === 'story' ? '📜 Story' : '🤖 Agents'}
+              {t === 'story' ? '📜 Story' : t === 'board' ? '🏆 Board' : '🤖 Agents'}
             </button>
           ))}
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-5" role="tabpanel">
-        {tab === 'story' ? <StoryTimeline gameId={room.game.id} refreshKey={cards} /> : agents}
+        {tab === 'story' ? (
+          <StoryTimeline gameId={room.game.id} refreshKey={cards} />
+        ) : tab === 'board' ? (
+          <Leaderboard gameId={room.game.id} myUserId={user?.id ?? null} refreshKey={cards} />
+        ) : (
+          agents
+        )}
       </div>
     </div>
   );

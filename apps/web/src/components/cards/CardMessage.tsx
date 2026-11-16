@@ -1,14 +1,15 @@
 'use client';
 
 // One renderer per card type, all on the common CardShell (agent avatar + name + AI badge, title,
-// body, action row, status chip). Cards from Phase 3+ (build, test, publish, bug, score) render
-// their content now; their buttons arrive with the flows that serve them.
+// body, action row, status chip). Build and score cards are live (Phase 3); test, publish and bug
+// cards render their content and get their buttons with the flows that serve them.
 import { AGENTS, parseCardMeta, type AnyCard } from '@crewarcade/shared';
 import Link from 'next/link';
 import { agentKeyOf } from '@/components/identity/MemberAvatar';
-import { Avatar, Badge, CardShell } from '@/components/ui';
+import { Avatar, Badge, Button, CardShell } from '@/components/ui';
 import type { ChatMessage } from '@/lib/chat/types';
 import { useCardEnv } from './context';
+import { BuildCard } from './BuildCard';
 import { PlanCard } from './PlanCard';
 
 export function CardMessage({ m }: { m: ChatMessage }) {
@@ -86,39 +87,8 @@ function CardBody({ m, card }: { m: ChatMessage; card: AnyCard }) {
       );
     }
 
-    case 'build': {
-      const c = card.content;
-      const meta = parseCardMeta('build', m.meta);
-      return (
-        <CardShell
-          agent="forge"
-          className="w-full"
-          title={`🔨 Build v${c.version}`}
-          meta={`${c.sizeKb.toFixed(1)} KB · ${Math.round(c.buildMs / 1000)} s`}
-          badges={
-            <Badge tone={meta.status === 'ready' ? 'success' : meta.status === 'failed' ? 'danger' : 'forge'}>
-              {meta.status === 'ready' ? 'Ready' : meta.status === 'failed' ? 'Failed' : 'Building'}
-            </Badge>
-          }
-          actions={
-            meta.status === 'ready' ? (
-              <a href={c.playUrl} className="inline-flex min-h-11 items-center justify-center rounded-2xl bg-brand px-4 font-semibold text-brand-ink">
-                ▶ Play
-              </a>
-            ) : undefined
-          }
-        >
-          <p>Static check: {c.checks.pass ? 'PASS ✅' : `FAIL ❌ (${c.checks.problems.length} problems)`}</p>
-          {c.notes.length > 0 && (
-            <ul className="mt-1 list-disc pl-5 text-dim">
-              {c.notes.map((n, i) => (
-                <li key={i}>{n}</li>
-              ))}
-            </ul>
-          )}
-        </CardShell>
-      );
-    }
+    case 'build':
+      return <BuildCard m={m} build={card.content} />;
 
     case 'test': {
       const c = card.content;
@@ -185,11 +155,27 @@ function CardBody({ m, card }: { m: ChatMessage; card: AnyCard }) {
       );
     }
 
-    case 'score':
+    case 'score': {
+      const c = card.content;
       return (
-        <CardShell agent={agent} className="w-full" title={`🏆 New score: ${card.content.score}`} meta={`Rank #${card.content.rank}`}>
-          <p className="text-dim">Can anyone beat it?</p>
+        <CardShell
+          agent={agent ?? 'glitch'}
+          className="w-full"
+          title={
+            c.beatPlayerName
+              ? `🔥 ${c.playerName} beat ${c.beatPlayerName}: ${c.score.toLocaleString()}!`
+              : `🏆 ${c.playerName} took #${c.rank}: ${c.score.toLocaleString()}`
+          }
+          meta={`${c.title} · v${c.version}${c.beatScore !== undefined ? ` · beat ${c.beatScore.toLocaleString()}` : ''}`}
+          actions={
+            <Button size="sm" onClick={() => env.actions.play(c.gameId, 'latest', c.title)}>
+              ▶ Play
+            </Button>
+          }
+        >
+          <p className="text-dim">{c.rank === 1 ? 'New #1 on the leaderboard. Can anyone beat it?' : `Now #${c.rank}. Can anyone beat it?`}</p>
         </CardShell>
       );
+    }
   }
 }

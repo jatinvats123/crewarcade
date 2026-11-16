@@ -11,6 +11,10 @@ export interface CardActions {
   vote: (messageId: string, vote: 'yes' | 'no') => Promise<CardActionResponse>;
   approve: (messageId: string) => Promise<CardActionResponse>;
   requestChange: (messageId: string, text: string) => Promise<CardActionResponse>;
+  /** [Try again] on a failed Build card. */
+  retryBuild: (messageId: string) => Promise<unknown>;
+  /** Opens the full-screen player. */
+  play: (gameId: string, version: number | 'latest', title?: string) => void;
 }
 
 export interface CardEnv {
