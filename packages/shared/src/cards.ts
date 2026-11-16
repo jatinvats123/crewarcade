@@ -70,15 +70,13 @@ export type HandoffCardContent = z.infer<typeof HandoffCardContent>;
 export const BuildCardContent = z.object({
   v: v1,
   gameId: id,
+  slug: z.string().min(3).max(30),
+  title: z.string().min(1).max(60),
   version,
-  playUrl: url,
-  sizeKb: z
-    .number()
-    .min(0)
-    .max(LIMITS.gameBytes / 1024),
-  buildMs: z.number().int().min(0),
-  notes: z.array(line).max(6),
-  checks: z.object({ pass: z.boolean(), problems: z.array(z.string().max(300)).max(10) }),
+  /** Why this build exists: first build, a change request, a remix, or a retry after a failure. */
+  reason: z.enum(['build', 'change', 'remix', 'retry']).default('build'),
+  /** Short summary of the change request (change builds only). */
+  change: z.string().max(300).optional(),
 });
 export type BuildCardContent = z.infer<typeof BuildCardContent>;
 
@@ -113,10 +111,17 @@ export type BugCardContent = z.infer<typeof BugCardContent>;
 export const ScoreCardContent = z.object({
   v: v1,
   gameId: id,
+  slug: z.string().min(3).max(30),
+  title: z.string().min(1).max(60),
+  version,
   playerId: id,
+  playerName: z.string().min(1).max(64),
   score: z.number().int(),
   rank: z.number().int().min(1),
+  /** The crew member whose best was beaten (absent for a plain new #1). */
   beatPlayerId: id.optional(),
+  beatPlayerName: z.string().min(1).max(64).optional(),
+  beatScore: z.number().int().optional(),
 });
 export type ScoreCardContent = z.infer<typeof ScoreCardContent>;
 
@@ -158,7 +163,45 @@ export const PlanCardMeta = z.object({
 export type PlanCardMeta = z.infer<typeof PlanCardMeta>;
 
 export const HandoffCardMeta = z.object({ status: z.enum(['waiting', 'started', 'done']).catch('waiting') });
-export const BuildCardMeta = z.object({ status: z.enum(['building', 'ready', 'failed']).catch('building') });
+const jsonArray = <V extends z.ZodType>(item: V, max: number) =>
+  z
+    .string()
+    .transform((s, ctx) => {
+      try {
+        return JSON.parse(s) as unknown;
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'not JSON' });
+        return z.NEVER;
+      }
+    })
+    .pipe(z.array(item).max(max))
+    .catch([]);
+const num = z.coerce.number().min(0).optional().catch(undefined);
+
+export const BUILD_STEP_STATES = ['todo', 'doing', 'done', 'failed'] as const;
+export const BuildStep = z.object({ t: z.string().min(1).max(80), s: z.enum(BUILD_STEP_STATES) });
+export type BuildStep = z.infer<typeof BuildStep>;
+/** Build card live state. Forge rewrites the whole set on every step, so a retry is idempotent. */
+export const BuildCardMeta = z.object({
+  status: z.enum(['building', 'ready', 'failed']).catch('building'),
+  /** JSON [{t, s}]: the progress lines ("Reading the plan", "Running checks", ...). */
+  steps: jsonArray(BuildStep, 10).default([]),
+  sizeKb: num,
+  buildMs: num,
+  /** Static-check attempts used (1-3). */
+  attempts: num,
+  /** JSON string[]: Forge's notes (3-6 bullets). */
+  notes: jsonArray(z.string().max(300), 6).default([]),
+  checkPass: z
+    .enum(['true', 'false'])
+    .transform(v => v === 'true')
+    .optional()
+    .catch(undefined),
+  /** JSON string[]: the static-check problems of the last attempt (failed builds). */
+  problems: jsonArray(z.string().max(300), 10).default([]),
+  /** Friendly failure line (failed builds). */
+  error: z.string().max(300).optional(),
+});
 export const TestCardMeta = z.object({ status: z.enum(['running', 'done']).catch('running') });
 export const PublishCardMeta = z.object({
   status: z.enum(['waiting', 'approved', 'rejected']).catch('waiting'),
@@ -256,7 +299,7 @@ export function cardPreview(card: AnyCard): string {
     case 'handoff':
       return `🤝 Handoff: ${card.content.task}`;
     case 'build':
-      return `🔨 Build v${card.content.version}`;
+      return `🔨 ${card.content.title} v${card.content.version}`;
     case 'test':
       return `🧪 Playtest v${card.content.version}: ${card.content.pass ? 'PASS' : 'FAIL'}`;
     case 'publish':
@@ -264,7 +307,9 @@ export function cardPreview(card: AnyCard): string {
     case 'bug':
       return `🐞 Bug: ${card.content.description.slice(0, 60)}`;
     case 'score':
-      return `🏆 New score: ${card.content.score}`;
+      return card.content.beatPlayerName
+        ? `🔥 ${card.content.playerName} beat ${card.content.beatPlayerName}: ${card.content.score}!`
+        : `🏆 ${card.content.playerName} took #${card.content.rank}: ${card.content.score}`;
     case 'roomLink':
       return `🎮 ${card.content.title}`;
   }

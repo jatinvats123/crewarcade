@@ -133,17 +133,28 @@ describe('cards', () => {
       build: {
         v: 1,
         gameId: 'g1',
+        slug: 'chai-dash',
+        title: 'Chai Dash',
         version: 1,
-        playUrl: 'https://x.test/p',
-        sizeKb: 42.5,
-        buildMs: 30000,
-        notes: ['title screen'],
-        checks: { pass: true, problems: [] },
+        reason: 'build',
       },
       test: { v: 1, gameId: 'g1', version: 1, pass: false, passed: 3, total: 4, fps: 58, failures: [{ label: 'A2', detail: 'lane stuck' }], regressions: [] },
       publish: { v: 1, gameId: 'g1', version: 1, arcadeUrl: 'https://x.test/g/chai-dash' },
       bug: { v: 1, bugId: 'b1', gameId: 'g1', reporterId: 'u1', description: 'x'.repeat(1000) },
-      score: { v: 1, gameId: 'g1', playerId: 'u1', score: 120, rank: 1, beatPlayerId: 'u2' },
+      score: {
+        v: 1,
+        gameId: 'g1',
+        slug: 'chai-dash',
+        title: 'Chai Dash',
+        version: 1,
+        playerId: 'u1',
+        playerName: 'Riya',
+        score: 120,
+        rank: 1,
+        beatPlayerId: 'u2',
+        beatPlayerName: 'Rohan',
+        beatScore: 90,
+      },
       roomLink: { v: 1, channelId: 'game1', gameId: 'g1', title: '🎮 Chai Dash', kind: 'game' },
     };
     for (const [kind, sample] of Object.entries(samples) as Array<[CardKind, unknown]>) {
@@ -202,5 +213,40 @@ describe('webhook schemas', () => {
     expect(WebhookEnvelope.safeParse({ type: 'message:send', id: 'e1', time: 1 }).success).toBe(false);
     expect(PreMessagingResponse.safeParse({ pass: 0, extra: 'blocked' }).success).toBe(true);
     expect(PreMessagingResponse.safeParse({ pass: 3 }).success).toBe(false);
+  });
+});
+
+describe('game host messages (score hook)', () => {
+  it('accepts exactly the two engine messages and nothing else', async () => {
+    const { parseGameHostMessage } = await import('../src/play');
+    expect(parseGameHostMessage({ type: 'crewarcade:start' })).toEqual({ type: 'crewarcade:start' });
+    expect(parseGameHostMessage({ type: 'crewarcade:score', score: 120, best: 300, time: 41.5 })).toEqual({
+      type: 'crewarcade:score',
+      score: 120,
+      best: 300,
+      time: 41.5,
+    });
+    for (const bad of [
+      null,
+      'crewarcade:start',
+      { type: 'crewarcade:score', score: -1, best: 0, time: 1 },
+      { type: 'crewarcade:score', score: 1.5, best: 0, time: 1 },
+      { type: 'crewarcade:score', score: 1, best: 0, time: Infinity },
+      { type: 'crewarcade:score', score: 1, best: 0 },
+      { type: 'crewarcade:score', score: 1, best: 0, time: 1, extra: 'x' },
+      { type: 'crewarcade:start', score: 1 },
+      { type: 'crewarcade:navigate', url: 'https://evil.test' },
+    ])
+      expect(parseGameHostMessage(bad)).toBeNull();
+  });
+
+  it('score and remix bodies are validated', async () => {
+    const { ScoreBody, RemixBody } = await import('../src/play');
+    expect(ScoreBody.safeParse({ gameId: 'g1', version: 1, score: 10, timeMs: 5000 }).success).toBe(true);
+    expect(ScoreBody.safeParse({ gameId: 'g1', version: 0, score: 10, timeMs: 5000 }).success).toBe(false);
+    expect(ScoreBody.safeParse({ gameId: 'g1', version: 1, score: -5, timeMs: 5000 }).success).toBe(false);
+    expect(RemixBody.safeParse({ newCrewName: 'Remixers' }).success).toBe(true);
+    expect(RemixBody.safeParse({}).success).toBe(false);
+    expect(RemixBody.safeParse({ crewId: 'c1', newCrewName: 'x' }).success).toBe(false);
   });
 });
