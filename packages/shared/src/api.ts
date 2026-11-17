@@ -181,6 +181,9 @@ export const ChangeRequestBody = z.object({
     .pipe(z.string().min(3, 'Say what to change').max(LIMITS.pitchChars)),
 });
 export type ChangeRequestBody = z.input<typeof ChangeRequestBody>;
+/** Allow / Block on a publish request card (owner or approver only, checked on the server). */
+export const PublishDecisionBody = z.object({ decision: z.enum(['allow', 'block']) });
+export type PublishDecisionBody = z.infer<typeof PublishDecisionBody>;
 /** The card's metadata after the action (what every client will also receive live). */
 export const CardActionResponse = z.object({ messageId: z.string(), metadata: z.record(z.string(), z.string()) });
 export type CardActionResponse = z.infer<typeof CardActionResponse>;

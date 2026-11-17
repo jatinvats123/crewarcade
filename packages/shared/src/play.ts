@@ -128,6 +128,8 @@ export const GamePageResponse = z.object({
   /** Two theme colours from the plan's look and feel (hex), for the title card. */
   colors: z.tuple([z.string(), z.string()]),
   publishedVersion: z.number().int().nullable(),
+  /** Glitch's mid-game screenshot of the published version (link previews), if any. */
+  screenshotUrl: z.string().url().nullable().default(null),
   /** Play URL of the published version (null for drafts). */
   playUrl: z.string().url().nullable(),
   orientation: z.enum(['landscape', 'portrait', 'any']),

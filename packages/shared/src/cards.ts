@@ -74,7 +74,7 @@ export const BuildCardContent = z.object({
   title: z.string().min(1).max(60),
   version,
   /** Why this build exists: first build, a change request, a remix, or a retry after a failure. */
-  reason: z.enum(['build', 'change', 'remix', 'retry']).default('build'),
+  reason: z.enum(['build', 'change', 'remix', 'retry', 'fix']).default('build'),
   /** Short summary of the change request (change builds only). */
   change: z.string().max(300).optional(),
 });
@@ -92,10 +92,29 @@ export const TestCardContent = z.object({
   screenshotUrl: url.optional(),
   failures: z.array(z.object({ label: z.string().max(200), detail: z.string().max(300) })).max(10),
   regressions: z.array(z.object({ label: z.string().max(200), detail: z.string().max(300) })).max(10),
+  /** One row per acceptance item (Phase 4): its id, the item text and whether its check passed. */
+  items: z
+    .array(z.object({ id: z.string().max(8), text: z.string().max(300), pass: z.boolean(), detail: z.string().max(200).optional() }))
+    .max(30)
+    .default([]),
+  /** Automatic fix round that produced this version (0 = Forge's first try). */
+  round: z.number().int().min(0).max(9).default(0),
+  /** Real seconds the playtest took. */
+  seconds: z.number().min(0).optional(),
 });
 export type TestCardContent = z.infer<typeof TestCardContent>;
 
-export const PublishCardContent = z.object({ v: v1, gameId: id, version, arcadeUrl: url });
+export const PublishCardContent = z.object({
+  v: v1,
+  gameId: id,
+  version,
+  /** The public game page (/g/<slug>): live once an approver taps Allow. */
+  arcadeUrl: url,
+  title: z.string().min(1).max(60).optional(),
+  slug: z.string().min(3).max(30).optional(),
+  gifUrl: url.optional(),
+  screenshotUrl: url.optional(),
+});
 export type PublishCardContent = z.infer<typeof PublishCardContent>;
 
 export const BugCardContent = z.object({
@@ -202,7 +221,12 @@ export const BuildCardMeta = z.object({
   /** Friendly failure line (failed builds). */
   error: z.string().max(300).optional(),
 });
-export const TestCardMeta = z.object({ status: z.enum(['running', 'done']).catch('running') });
+export const TestCardMeta = z.object({
+  status: z.enum(['running', 'done']).catch('running'),
+  /** What follows a FAIL: Forge fixing automatically, a member asked for a fix, or the crew decides ([Try again]). */
+  next: z.enum(['none', 'autofix', 'asked', 'ask_crew', 'publish']).catch('none'),
+  fixBy: z.string().max(64).optional(),
+});
 export const PublishCardMeta = z.object({
   status: z.enum(['waiting', 'approved', 'rejected']).catch('waiting'),
   decidedBy: z.string().max(64).optional(),

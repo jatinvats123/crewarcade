@@ -152,7 +152,7 @@ export const LIMITS = {
 export const CREW_ROLES = ['owner', 'approver', 'member'] as const;
 export type CrewRole = (typeof CREW_ROLES)[number];
 
-export const GAME_STATUSES = ['planning', 'building', 'testing', 'awaiting_approval', 'published', 'failed'] as const;
+export const GAME_STATUSES = ['planning', 'building', 'testing', 'awaiting_approval', 'published', 'failed', 'blocked'] as const;
 export type GameStatus = (typeof GAME_STATUSES)[number];
 
 export const BUG_STATUSES = ['open', 'reproduced', 'not_reproduced', 'fixed'] as const;
