@@ -240,13 +240,17 @@ repro, and it goes public only through Allow. Plus voice pitches (Sarvam) and ta
 - In FAKE mode Glitch's repro is generic: a working game "doesn't reproduce" and Glitch asks a question.
 - The translated source language isn't shown (the SDK result gives only the target).
 
-### Render plan (2026-11-17)
+### Render plan (2026-11-17): free, no card
 
-`render.yaml` deploys `crewarcade-server` on **`plan: standard`** (2 GB, needed for headless
-Chromium), paid from the owner's $50 Render hackathon credit (valid until 2027-10-01). Render may still
-ask for a card on file. Low-cost fallback (tested): `plan: free`, `PLAYTESTS=false`,
-`FORGE_SMOKE=false`, migrations in `dockerCommand` (free has no pre-deploy step). Then builds are
-playable, Glitch says playtests are off, and nothing can be published.
+The owner doesn't want a card on file, and Render asks for one for any paid instance (even with the
+$50 hackathon credit). So `render.yaml` deploys `crewarcade-server` on **`plan: free`** (512 MB,
+0.1 CPU, sleeps after 15 min idle, about 1 min to wake, 750 h/month). Migrations run in
+`dockerCommand` (free has no pre-deploy step). `PLAYTESTS=false` and `FORGE_SMOKE=false`, because
+Chromium needs about 2 GB. Builds are playable, Glitch says playtests are off (tested), bug reports
+are saved but not replayed, and **nothing can be published**.
+
+Checked and rejected: Hugging Face Docker Spaces need the paid PRO plan and block outbound
+Postgres ports. Full product: `plan: standard`, both flags `true`, `preDeployCommand: node dist/migrate.js`.
 
 ### Needed from the owner
 
