@@ -309,8 +309,8 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
             nx.sendImage(channelId, file);
             setScrollSignal(s => s + 1);
           }}
-          onSendVoice={(file, d) => {
-            nx.sendVoice(channelId, file, d);
+          onSendVoice={(file, d, mentions) => {
+            nx.sendVoice(channelId, file, d, mentions);
             setScrollSignal(s => s + 1);
           }}
         />

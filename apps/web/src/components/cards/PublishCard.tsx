@@ -42,13 +42,23 @@ export function PublishCard({ m, pub }: { m: ChatMessage; pub: PublishCardConten
   };
   const live = meta.status === 'approved';
   const deciding = meta.status === 'waiting' && env.canApprove;
+  const hotfix = pub.hotfix;
+  const heading = live
+    ? hotfix
+      ? `🎉 Hotfix v${pub.version} is live`
+      : `🎉 ${title} is live`
+    : meta.status === 'rejected'
+      ? `🚫 v${pub.version} blocked`
+      : hotfix
+        ? `🩹 Hotfix v${pub.version}: publish?`
+        : `🚀 Publish ${title} v${pub.version}?`;
 
   return (
     <CardShell
       agent="glitch"
       className="w-full"
-      title={live ? `🎉 ${title} is live` : meta.status === 'rejected' ? `🚫 v${pub.version} blocked` : `🚀 Publish ${title} v${pub.version}?`}
-      meta={live ? `v${pub.version} · public on the Arcade` : 'Passed its playtest'}
+      title={heading}
+      meta={live ? `v${pub.version} · public on the Arcade` : hotfix ? `Fixes “${hotfix.bug}” · passes every old repro` : 'Passed its playtest'}
       badges={
         <Badge tone={live ? 'success' : meta.status === 'rejected' ? 'danger' : 'gold'}>
           {meta.status === 'waiting' ? 'Waiting for an approver' : `${live ? 'Allowed' : 'Blocked'} by ${meta.decidedBy ?? 'an approver'}`}
@@ -86,7 +96,28 @@ export function PublishCard({ m, pub }: { m: ChatMessage; pub: PublishCardConten
         </>
       }
     >
-      {pub.gifUrl && !live && (
+      {hotfix && (
+        <div className="mb-2" data-testid="hotfix-info">
+          {hotfix.fixGifUrl && !live && (
+            <figure>
+              {/* eslint-disable-next-line @next/next/no-img-element -- side-by-side GIF from our clips bucket */}
+              <img
+                src={hotfix.fixGifUrl}
+                alt={`v${hotfix.fromVersion} fails the repro, v${pub.version} passes`}
+                className="w-full rounded-2xl border border-border"
+                loading="lazy"
+              />
+              <figcaption className="mt-1 text-xs text-dim">
+                Left: v{hotfix.fromVersion} (bug) · Right: v{pub.version} (fixed), same moves
+              </figcaption>
+            </figure>
+          )}
+          <p className="mt-1 text-sm">
+            <span aria-hidden>🏅 </span>Bug hunter: <strong>{hotfix.hunter}</strong>
+          </p>
+        </div>
+      )}
+      {pub.gifUrl && !live && !hotfix?.fixGifUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- playtest GIF from our clips bucket
         <img src={pub.gifUrl} alt={`${title} being played`} className="w-full rounded-2xl border border-border" loading="lazy" />
       )}

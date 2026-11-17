@@ -35,7 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <CrewsProvider>
       <NexconnProvider>
-        <PlayerProvider>
+        <PlayerProvider reportBugs>
           <div className="flex h-dvh flex-col overflow-hidden pt-[env(safe-area-inset-top)]">
             <ConnectionBanner />
             <div className="flex min-h-0 flex-1">

@@ -3,7 +3,10 @@
 // Every response is parsed with the shared zod schemas.
 import {
   AgentStateMessage,
+  BugReportResponse,
   CardActionResponse,
+  TranslateQuotaResponse,
+  type BugReportBody,
   LedgerEntry,
   LedgerResponse,
   RoomInfo,
@@ -86,8 +89,11 @@ export const api = {
   room: (channelId: string) => request('GET', `/api/rooms/${encodeURIComponent(channelId)}`, z.object({ room: RoomInfo })).then(r => r.room),
   roomAgents: (channelId: string) =>
     request('GET', `/api/rooms/${encodeURIComponent(channelId)}/agents`, z.object({ states: z.array(AgentStateMessage) })).then(r => r.states),
-  relay: (body: { channelId: string; messageId: string; text: string; mentionedUserIds: string[] }) =>
+  relay: (body: { channelId: string; messageId: string; mentionedUserIds: string[] } & ({ text: string } | { voice: { url: string; durationS: number } })) =>
     request('POST', '/api/chat/relay', z.object({ routed: z.boolean() }), body),
+  // Phase 5: bug reports (screenshot as a data URL) and the tap-to-translate allowance.
+  reportBug: (gameId: string, body: BugReportBody) => request('POST', `/api/games/${encodeURIComponent(gameId)}/bugs`, BugReportResponse, body),
+  translateQuota: (chars: number) => request('POST', '/api/translate/quota', TranslateQuotaResponse, { chars }),
   ledger: (gameId: string) => request('GET', `/api/games/${encodeURIComponent(gameId)}/ledger`, LedgerResponse),
   retryBuild: (messageId: string) => request('POST', `/api/cards/${encodeURIComponent(messageId)}/retry`, z.object({ queued: z.boolean() }), {}),
   publish: (messageId: string, decision: 'allow' | 'block') =>

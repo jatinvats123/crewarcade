@@ -17,7 +17,8 @@ export interface ComposerProps {
   disabled?: boolean;
   onSendText: (text: string, mentionUserIds: string[]) => void;
   onSendImage: (file: File) => void;
-  onSendVoice: (file: File, durationS: number) => void;
+  /** mentionUserIds: agents tagged before recording ("@pixel " then hold the mic) get the voice pitch. */
+  onSendVoice: (file: File, durationS: number, mentionUserIds: string[]) => void;
   onTyping: () => void;
 }
 
@@ -48,6 +49,8 @@ export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSen
   }, []);
 
   const candidates = query ? mentionCandidates(query.query, targets) : [];
+  // Only @mentions typed: the mic stays available, so a voice pitch can be addressed to an agent.
+  const onlyMentions = !!text.trim() && resolveMentions(text, targets).length > 0 && text.replace(/@[\p{L}\p{N}_-]+/gu, '').trim() === '';
   const listOpen = candidates.length > 0;
 
   const updateQuery = (value: string, caret: number) => {
@@ -173,8 +176,12 @@ export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSen
     if (!r) return;
     if (!sendIt) return r.cancel();
     const result = await r.stop();
-    if (result) onSendVoice(result.file, result.durationS);
-    else toast('Hold a little longer to record', 'info');
+    if (result) {
+      // "@pixel " typed before recording: the voice note goes to Pixel (transcribed on the server).
+      const mentions = resolveMentions(text, targets);
+      onSendVoice(result.file, result.durationS, mentions);
+      if (onlyMentions) setText('');
+    } else toast('Hold a little longer to record', 'info');
   }
 
   const micDown = (e: PointerEvent<HTMLButtonElement>) => {
@@ -320,7 +327,7 @@ export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSen
             <IconButton label="Cancel voice note" variant="filled" icon={<span aria-hidden>✕</span>} onClick={() => void finishVoice(false)} />
             <IconButton label="Send voice note" variant="brand" icon={<span aria-hidden>➤</span>} onClick={() => void finishVoice(true)} />
           </>
-        ) : text.trim() && !recording ? (
+        ) : text.trim() && !recording && !onlyMentions ? (
           <IconButton label="Send" variant="brand" icon={<span aria-hidden>➤</span>} onClick={send} disabled={disabled} />
         ) : (
           <button

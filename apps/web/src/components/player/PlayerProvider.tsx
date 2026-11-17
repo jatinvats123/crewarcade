@@ -10,6 +10,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Button, IconButton, useToast } from '@/components/ui';
 import { api, ApiRequestError } from '@/lib/api';
 import { acceptHostMessage, GAME_ALLOW, GAME_SANDBOX } from '@/lib/player-messages';
+import { BugReportPanel } from './BugReport';
 
 export interface PlayRequest {
   gameId: string;
@@ -40,7 +41,8 @@ export function useScoreTick(gameId: string | null): number {
   return v && gameId ? v.scoreTick(gameId) : 0;
 }
 
-export function PlayerProvider({ children, signedIn = true }: { children: ReactNode; signedIn?: boolean }) {
+/** reportBugs: crew pages show [Report a bug] (the server still checks membership). */
+export function PlayerProvider({ children, signedIn = true, reportBugs = false }: { children: ReactNode; signedIn?: boolean; reportBugs?: boolean }) {
   const [request, setRequest] = useState<PlayRequest | null>(null);
   const ticks = useRef(new Map<string, number>());
   const listeners = useRef(new Set<() => void>());
@@ -63,7 +65,14 @@ export function PlayerProvider({ children, signedIn = true }: { children: ReactN
     <PlayerContext.Provider value={value}>
       {children}
       {request && (
-        <GamePlayer key={`${request.gameId}:${request.version}`} request={request} signedIn={signedIn} onClose={() => setRequest(null)} onScore={bump} />
+        <GamePlayer
+          key={`${request.gameId}:${request.version}`}
+          request={request}
+          signedIn={signedIn}
+          reportBugs={reportBugs}
+          onClose={() => setRequest(null)}
+          onScore={bump}
+        />
       )}
     </PlayerContext.Provider>
   );
@@ -88,12 +97,15 @@ export function GamePlayer({
   onClose,
   onScore,
   signedIn,
+  reportBugs = false,
 }: {
   request: PlayRequest;
   onClose: () => void;
   onScore: (gameId: string) => void;
   signedIn: boolean;
+  reportBugs?: boolean;
 }) {
+  const [reporting, setReporting] = useState(false);
   const toast = useToast();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
@@ -121,11 +133,13 @@ export function GamePlayer({
     };
   }, [request.gameId, request.version, attempt]);
 
+  const reportingRef = useRef(false);
+  reportingRef.current = reporting;
   // Lock page scroll while playing; Escape (when focus is outside the game) closes.
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && (reportingRef.current ? setReporting(false) : onClose());
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prev;
@@ -177,6 +191,11 @@ export function GamePlayer({
           {title}
           {link && <span className="ml-2 text-sm font-normal text-white/60">v{link.version}</span>}
         </p>
+        {reportBugs && signedIn && link && (
+          <Button size="sm" variant="ghost" className="text-white hover:bg-white/10" onClick={() => setReporting(true)} data-testid="report-bug">
+            🐞 Report a bug
+          </Button>
+        )}
         {last?.accepted && last.best !== null && (
           <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold" aria-live="polite">
             Best {last.best}
@@ -223,6 +242,7 @@ export function GamePlayer({
             </div>
           </div>
         )}
+        {reporting && link && <BugReportPanel gameId={link.gameId} version={link.version} onClose={() => setReporting(false)} />}
         {showRotate && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-black/85 p-6 text-center" role="status">
             <span className="animate-[spin_2s_ease-in-out_infinite] text-5xl" aria-hidden>

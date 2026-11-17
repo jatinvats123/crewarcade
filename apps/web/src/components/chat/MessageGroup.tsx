@@ -12,6 +12,7 @@ import type { ChatMessage } from '@/lib/chat/types';
 import { cn } from '@/lib/cn';
 import { CardMessage } from '@/components/cards/CardMessage';
 import { Markdown } from './Markdown';
+import { TranslateTap } from './TranslateTap';
 import { VoicePlayer } from './VoicePlayer';
 
 interface Props {
@@ -138,9 +139,11 @@ function Bubble({
   }
 
   const seen = (m.readCount ?? 0) > 0;
+  const translatable = !isMe && (m.kind === 'text' || (m.kind === 'stream' && m.streamComplete)) && !!m.text?.trim();
   return (
     <div className={cn('flex flex-col', isMe ? 'items-end' : 'items-start')}>
       {body}
+      {translatable && <TranslateTap messageId={m.messageId} text={m.text ?? ''} />}
       {m.blockedReason && (
         <p role="alert" className="mt-1 max-w-full rounded-2xl border border-danger/40 bg-danger/8 px-3 py-1.5 text-xs text-danger">
           <span aria-hidden>⛔ </span>Not delivered: {m.blockedReason}

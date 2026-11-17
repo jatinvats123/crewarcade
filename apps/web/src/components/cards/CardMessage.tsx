@@ -2,13 +2,14 @@
 
 // One renderer per card type, all on the common CardShell (agent avatar + name + AI badge, title,
 // body, action row, status chip). Build and score cards are live (Phase 3), test and publish cards
-// (Phase 4); bug cards render their content and get their buttons with the flows that serve them.
+// (Phase 4), bug cards and hotfix publish cards (Phase 5).
 import { AGENTS, parseCardMeta, type AnyCard } from '@crewarcade/shared';
 import Link from 'next/link';
 import { agentKeyOf } from '@/components/identity/MemberAvatar';
 import { Avatar, Badge, Button, CardShell } from '@/components/ui';
 import type { ChatMessage } from '@/lib/chat/types';
 import { useCardEnv } from './context';
+import { BugCard } from './BugCard';
 import { BuildCard } from './BuildCard';
 import { PlanCard } from './PlanCard';
 import { PublishCard } from './PublishCard';
@@ -98,20 +99,8 @@ function CardBody({ m, card }: { m: ChatMessage; card: AnyCard }) {
     case 'publish':
       return <PublishCard m={m} pub={card.content} />;
 
-    case 'bug': {
-      const c = card.content;
-      const meta = parseCardMeta('bug', m.meta);
-      return (
-        <CardShell
-          agent={agent}
-          className="w-full"
-          title="🐞 Bug report"
-          badges={<Badge tone={meta.status === 'fixed' ? 'success' : 'danger'}>{meta.status.replace('_', ' ')}</Badge>}
-        >
-          <p>{c.description}</p>
-        </CardShell>
-      );
-    }
+    case 'bug':
+      return <BugCard m={m} bug={card.content} />;
 
     case 'score': {
       const c = card.content;

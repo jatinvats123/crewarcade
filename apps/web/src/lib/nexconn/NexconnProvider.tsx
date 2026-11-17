@@ -24,6 +24,7 @@ import { api, ApiRequestError } from '../api';
 import { normalizeMessage, parseStreamContent, streamSummary, type SdkMessageLike } from '../chat/normalize';
 import { createChatStore, createPresenceStore, type ChatStore, type PresenceStore } from '../chat/store';
 import type { ChatMessage } from '../chat/types';
+import { createTranslationStore, TranslationContext, type TranslateOutcome, type TranslationApi } from '../chat/translations';
 import { useSession } from '../session';
 
 type Sdk = typeof NexconnSdk;
@@ -52,7 +53,8 @@ interface NexconnValue {
   markRead: (channelId: string) => void;
   sendText: (channelId: string, text: string, mentionUserIds: string[]) => void;
   sendImage: (channelId: string, file: File) => void;
-  sendVoice: (channelId: string, file: File, durationS: number) => void;
+  /** A voice note; with mentions (e.g. @pixel) the server transcribes it and routes it like text. */
+  sendVoice: (channelId: string, file: File, durationS: number, mentionUserIds?: string[]) => void;
   retry: (channelId: string, localId: string) => void;
   sendTyping: (channelId: string) => void;
   watchPresence: (userIds: string[]) => void;
@@ -95,6 +97,8 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
   const needFreshToken = useRef(false);
   const [attempt, setAttempt] = useState(0);
   const userId = user?.id ?? null;
+  const translations = useMemo(createTranslationStore, []);
+  const translateWaiters = useRef(new Map<string, (ok: boolean) => void>());
 
   const isActive = (channelId: string) => activeRef.current === channelId && typeof document !== 'undefined' && document.visibilityState === 'visible';
   const normalize = useCallback(
@@ -346,7 +350,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       const sdk = await loadSdk();
       if (cancelled) return;
       sdkRef.current = sdk;
-      const { NCEngine, LogLevel, AreaCode, ConnectionStatus, ConnectionStatusHandler, MessageHandler, ChannelHandler, UserHandler } = sdk;
+      const { NCEngine, LogLevel, AreaCode, ConnectionStatus, ConnectionStatusHandler, MessageHandler, ChannelHandler, UserHandler, TranslateHandler } = sdk;
       if (initializedKey === null) {
         NCEngine.initialize({ appKey: token.appKey, areaCode: AreaCode.SG, logLevel: process.env.NODE_ENV === 'development' ? LogLevel.DEBUG : LogLevel.WARN });
         NCEngine.registerCustomMessages(MESSAGE_TYPE_REGISTRY.map(r => ({ ...r })));
@@ -433,6 +437,21 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
           },
         }),
       );
+      // Tap-to-translate results (translateMessages only means "accepted").
+      NCEngine.addTranslateHandler(
+        'crewarcade',
+        new TranslateHandler({
+          onTranslationCompleted: ({ results }) => {
+            for (const r of results) {
+              const text = r.translateInfo?.translatedText?.trim();
+              const ok = r.code === 0 && !!text;
+              if (ok) translations.set(r.identifier, { state: 'done', text: text!, from: null });
+              translateWaiters.current.get(r.identifier)?.(ok);
+              translateWaiters.current.delete(r.identifier);
+            }
+          },
+        }),
+      );
       NCEngine.addUserHandler(
         'crewarcade',
         new UserHandler({
@@ -460,7 +479,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [session, userId, attempt, handleIncoming, refreshChannelList, refreshPresence, store, channelOfMessage, noteOrphanStream]);
+  }, [session, userId, attempt, handleIncoming, refreshChannelList, refreshPresence, store, channelOfMessage, noteOrphanStream, translations]);
 
   // Sign-out / unmount: drop the connection.
   useEffect(() => {
@@ -610,7 +629,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
   );
 
   const sendMedia = useCallback(
-    (channelId: string, kind: 'image' | 'voice', file: File, durationS = 0) => {
+    (channelId: string, kind: 'image' | 'voice', file: File, durationS = 0, mentionUserIds: string[] = []) => {
       const sdk = sdkRef.current;
       if (!sdk) return;
       const localId = newLocalId();
@@ -631,11 +650,18 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
         const params = made.data;
         params.needReceipt = true;
         if (kind === 'voice') {
-          const content = params.content as { duration?: number };
+          const content = params.content as { duration?: number; mentionedInfo?: { type: number; userIdList: string[] } };
           if (!content.duration) content.duration = Math.max(1, Math.round(durationS));
+          if (mentionUserIds.length > 0) content.mentionedInfo = { type: sdk.MentionedType.USERS, userIdList: mentionUserIds };
         }
         params.onUploadProgress = (p: number) => store.dispatch({ type: 'message/progress', channelId, localId, progress: Math.round(p) });
         const res = await new sdk.GroupChannel(channelId).sendMediaMessage(params as Parameters<BaseChannel['sendMediaMessage']>[0]);
+        // Backup trigger for a voice pitch to an agent (the webhook is primary; the server dedupes).
+        const remoteUrl = (res.data?.content as { remoteUrl?: string } | undefined)?.remoteUrl;
+        if (kind === 'voice' && res.isOk && res.data?.messageId && remoteUrl && mentionUserIds.length > 0)
+          void api
+            .relay({ channelId, messageId: res.data.messageId, voice: { url: remoteUrl, durationS: Math.round(durationS) }, mentionedUserIds: mentionUserIds })
+            .catch(() => {});
         // Keep showing the local file: no flash while the uploaded copy loads.
         settle(channelId, localId, res, kind === 'image' ? { image: { url: preview, thumb: null } } : { voice: { url: preview, durationS } });
       };
@@ -698,6 +724,47 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
 
   const retryConnect = useCallback(() => setAttempt(a => a + 1), []);
 
+  // ---- tap-to-translate: reserve the daily allowance on our server, then ask Nexconn
+  const language = user?.language ?? 'en';
+  const translateLang = useRef<string | null>(null);
+  const translate = useCallback(
+    async (messageId: string, text: string): Promise<TranslateOutcome> => {
+      const sdk = sdkRef.current;
+      const current = translations.get(messageId);
+      if (current?.state === 'done' || current?.state === 'pending') return 'ok';
+      if (!sdk || !text.trim()) return 'failed';
+      translations.set(messageId, { state: 'pending' });
+      try {
+        const quota = await api.translateQuota(text.length);
+        if (!quota.ok) {
+          translations.set(messageId, { state: 'error', reason: 'cap' });
+          return 'cap';
+        }
+        if (translateLang.current !== language) {
+          await sdk.NCEngine.translateModule.setTranslationLanguage(language);
+          translateLang.current = language;
+        }
+        const done = new Promise<boolean>(resolve => {
+          translateWaiters.current.set(messageId, resolve);
+          setTimeout(() => resolve(false), 15_000);
+        });
+        // `text` is required on Web (else error 35060).
+        const res = await sdk.NCEngine.translateModule.translateMessages({
+          list: [new sdk.TranslateMessageParam(messageId, 'auto', language, text)],
+          force: false,
+        });
+        if (!res.isOk || !(await done)) throw new Error(`translate failed (${res.code})`);
+        return 'ok';
+      } catch {
+        translateWaiters.current.delete(messageId);
+        if (translations.get(messageId)?.state !== 'done') translations.set(messageId, { state: 'error', reason: 'failed' });
+        return translations.get(messageId)?.state === 'done' ? 'ok' : 'failed';
+      }
+    },
+    [language, translations],
+  );
+  const translationApi = useMemo<TranslationApi>(() => ({ store: translations, language, translate }), [translations, language, translate]);
+
   const value = useMemo<NexconnValue>(
     () => ({
       state,
@@ -711,7 +778,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       markRead,
       sendText,
       sendImage: (c, f) => sendMedia(c, 'image', f),
-      sendVoice: (c, f, d) => sendMedia(c, 'voice', f, d),
+      sendVoice: (c, f, d, mentions) => sendMedia(c, 'voice', f, d, mentions),
       retry,
       sendTyping,
       watchPresence,
@@ -737,7 +804,11 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       onUnknownChannel,
     ],
   );
-  return <NexconnContext.Provider value={value}>{children}</NexconnContext.Provider>;
+  return (
+    <NexconnContext.Provider value={value}>
+      <TranslationContext.Provider value={translationApi}>{children}</TranslationContext.Provider>
+    </NexconnContext.Provider>
+  );
 }
 
 export function useNexconn(): NexconnValue {

@@ -268,6 +268,55 @@ export function CardsDemo() {
     };
   }, [player]);
 
+  // Phase 5 sample flow: a bug report -> Glitch reproduces it -> Forge's hotfix -> hotfix publish card.
+  const simulateBug = () => {
+    const bugCard: AnyCard = {
+      kind: 'bug',
+      content: {
+        v: 1,
+        bugId: 'bDemo1',
+        gameId: 'gDemo',
+        reporterId: 'u1',
+        reporterName: 'Riya',
+        description: 'Holding right against the wall, the potholes never hit me',
+        version: 1,
+      },
+    };
+    setMsgs(list => [...list, { ...base('DEMO-BUG', bugCard, { status: 'open', phase: 'queued' }), senderId: 'agentglitch' }]);
+    const meta = (m: Record<string, unknown>) => setMsgs(list => list.map(x => (x.messageId === 'DEMO-BUG' ? { ...x, meta: metaToStrings(m) } : x)));
+    setTimeout(() => meta({ status: 'open', phase: 'repro' }), 400);
+    setTimeout(
+      () => meta({ status: 'reproduced', phase: 'hotfix', reproducedOnVersion: 1, check: 'BUG 1: hugging the right wall should not dodge every pothole' }),
+      900,
+    );
+    setTimeout(
+      () =>
+        meta({
+          status: 'reproduced',
+          phase: 'hotfix',
+          reproducedOnVersion: 1,
+          hotfixVersion: 2,
+          check: 'BUG 1: hugging the right wall should not dodge every pothole',
+        }),
+      1300,
+    );
+    setTimeout(() => {
+      const hotfix: AnyCard = {
+        kind: 'publish',
+        content: {
+          v: 1,
+          gameId: 'gDemo',
+          version: 2,
+          arcadeUrl: 'https://crewarcade.test/g/sample-scooter-run',
+          title: 'Sample Scooter Run',
+          slug: 'sample-scooter-run',
+          hotfix: { bugId: 'bDemo1', bug: 'Holding right against the wall, the potholes never hit me', hunter: 'Riya', fromVersion: 1 },
+        },
+      };
+      setMsgs(list => [...list, { ...base('DEMO-HOTFIX', hotfix, { status: 'waiting' }), senderId: 'agentglitch' }]);
+    }, 1800);
+  };
+
   // Streamed reply that types itself out; replay restarts it.
   const [n, setN] = useState(0);
   const [run, setRun] = useState(0);
@@ -308,6 +357,9 @@ export function CardsDemo() {
           <CardMessage key={m.key} m={m} />
         ))}
       </CardEnvProvider>
+      <Button size="sm" variant="ghost" onClick={simulateBug} data-testid="demo-bug">
+        🐞 Simulate a bug report
+      </Button>
     </div>
   );
 }

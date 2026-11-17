@@ -153,6 +153,24 @@ function GamePageBody({ game }: { game: GamePageResponse }) {
           </section>
         )}
 
+        {game.bugHunters.length > 0 && (
+          <section aria-labelledby="hunters-title" className="flex flex-col gap-2" data-testid="bug-hunters">
+            <h2 id="hunters-title" className="font-display text-xl font-bold">
+              🏅 Bug hunters
+            </h2>
+            <ul className="flex flex-col gap-1">
+              {game.bugHunters.map((b, i) => (
+                <li key={`${b.version}-${i}`} className="rounded-2xl bg-surface px-3 py-2 text-sm">
+                  <strong>{b.name}</strong>{' '}
+                  <span className="text-dim">
+                    found “{b.bug}”, fixed in v{b.version}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {published && (
           <Button variant="ghost" onClick={() => setStoryOpen(true)}>
             📜 How it was made
