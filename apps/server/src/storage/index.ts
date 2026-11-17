@@ -26,6 +26,14 @@ export const gameHtmlKey = (slug: string, version: number): string => `${slug}/v
 export const CLIP_FILES = { gif: 'play.gif', shot: 'shot.png' } as const;
 export const clipKey = (slug: string, version: number, file: keyof typeof CLIP_FILES): string => `${slug}/v${version}/${CLIP_FILES[file]}`;
 /** Public URL of a clip, served by our server (GET /clips/...) whatever the storage driver. */
+/** A bug's repro GIF (on the version it was reproduced on) or its hotfix side-by-side GIF. */
+export const bugClipFile = (bugNo: number, kind: 'repro' | 'fix'): string => `bug-${bugNo}-${kind}.gif`;
+export const bugClipKey = (slug: string, version: number, bugNo: number, kind: 'repro' | 'fix'): string => `${slug}/v${version}/${bugClipFile(bugNo, kind)}`;
+export const bugClipUrl = (apiOrigin: string, slug: string, version: number, bugNo: number, kind: 'repro' | 'fix'): string =>
+  `${apiOrigin.replace(/\/+$/, '')}/clips/${bugClipKey(slug, version, bugNo, kind)}`;
+/** A player's screenshot in the private uploads bucket. */
+export const screenshotKey = (slug: string, bugId: string, ext: 'png' | 'jpg' | 'webp'): string => `${slug}/bugs/${bugId}.${ext}`;
+
 export const clipUrl = (apiOrigin: string, slug: string, version: number, file: keyof typeof CLIP_FILES): string =>
   `${apiOrigin.replace(/\/+$/, '')}/clips/${clipKey(slug, version, file)}`;
 
@@ -155,4 +163,14 @@ export function createClipStorage(
     });
   if (config.NODE_ENV === 'production') throw new StorageError('Supabase Storage is required in production (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
   return createLocalStorage({ dir: config.CLIPS_LOCAL_DIR, bucket: config.SUPABASE_CLIPS_BUCKET });
+}
+
+/** The private `uploads` bucket (bug screenshots): never public, read only through a members-only route. */
+export function createUploadStorage(
+  config: Pick<Config, 'NODE_ENV' | 'SUPABASE_URL' | 'SUPABASE_SERVICE_ROLE_KEY' | 'SUPABASE_UPLOADS_BUCKET' | 'UPLOADS_LOCAL_DIR'>,
+): ObjectStorage {
+  if (config.SUPABASE_URL && config.SUPABASE_SERVICE_ROLE_KEY)
+    return createSupabaseStorage({ url: config.SUPABASE_URL, serviceKey: config.SUPABASE_SERVICE_ROLE_KEY, bucket: config.SUPABASE_UPLOADS_BUCKET });
+  if (config.NODE_ENV === 'production') throw new StorageError('Supabase Storage is required in production (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)');
+  return createLocalStorage({ dir: config.UPLOADS_LOCAL_DIR, bucket: config.SUPABASE_UPLOADS_BUCKET });
 }

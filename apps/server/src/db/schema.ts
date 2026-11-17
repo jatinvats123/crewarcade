@@ -156,6 +156,16 @@ export const bugs = pgTable(
     reproScenario: jsonb(),
     reproducedOnVersion: integer(),
     fixedInVersion: integer(),
+    /** Per game: BUG <number> in repro labels and clip names. */
+    number: integer().notNull().default(1),
+    /** The CA:BugCard in the game room (live status via metadata). */
+    cardMessageId: text(),
+    /** The version the player was on, if they said. */
+    reportedOnVersion: integer(),
+    /** Forge's hotfix version (testing or waiting for Allow). */
+    hotfixVersion: integer(),
+    /** Not reproduced: Glitch's follow-up question. */
+    question: text(),
     status: text({ enum: BUG_STATUSES }).notNull().default('open'),
     createdAt: createdAt(),
   },

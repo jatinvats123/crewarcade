@@ -3,8 +3,9 @@
 // playtest worker (later phases).
 import type { FastifyBaseLogger } from 'fastify';
 import { createAgentServices, createAi, createQueue, startAgentWorker } from './agents';
-import { createClipStorage, createGameStorage } from './storage';
+import { createClipStorage, createGameStorage, createUploadStorage } from './storage';
 import { createHeadless } from './agents/smoke';
+import { createSarvamStt } from './ai/sarvam';
 import { buildApp } from './app';
 import { ConfigError, integrations, loadConfig } from './config';
 import type { Ctx } from './context';
@@ -46,17 +47,20 @@ const agents = createAgentServices({
   nexconn,
   ai,
   buildAi,
+  ...(config.SARVAM_API_KEY && { stt: createSarvamStt({ apiKey: config.SARVAM_API_KEY }) }),
   ...(config.FORGE_SMOKE && { smoke: headless.smoke }),
-  playtester: headless.playtester,
+  ...(config.PLAYTESTS && { playtester: headless.playtester }),
   queue,
   ctxRef,
   log: lateLog,
 });
 const storage = createGameStorage(config);
 const clips = createClipStorage(config);
-const server = await buildApp({ config, pingDb: database.ping, db: database.db, nexconn, agents, storage, clips, onReady: c => (ctxRef.current = c) });
+const uploads = createUploadStorage(config);
+const server = await buildApp({ config, pingDb: database.ping, db: database.db, nexconn, agents, storage, clips, uploads, onReady: c => (ctxRef.current = c) });
 await storage.ensureBucket().catch(e => server.log.error({ err: e }, 'could not check the games bucket'));
 await clips.ensureBucket().catch(e => server.log.error({ err: e }, 'could not check the clips bucket'));
+await uploads.ensureBucket().catch(e => server.log.error({ err: e }, 'could not check the uploads bucket'));
 server.log.info({ storage: storage.kind, bucket: storage.bucket }, 'game storage ready');
 logRef.current = server.log;
 if (!ai) server.log.warn('ANTHROPIC_API_KEY not set and FAKE_AGENTS off: agents answer with an error message');

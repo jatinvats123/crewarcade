@@ -11,7 +11,7 @@ import { registerGameRoutes } from './routes/games';
 import { registerPlayRoutes } from './routes/play';
 import { installApiPlumbing } from './routes/http';
 import { registerWebhookRoutes } from './webhooks/routes';
-import { createClipStorage, createGameStorage, type ObjectStorage } from './storage';
+import { createClipStorage, createGameStorage, createUploadStorage, type ObjectStorage } from './storage';
 
 export interface AppDeps {
   config: Config;
@@ -25,6 +25,8 @@ export interface AppDeps {
   storage?: ObjectStorage;
   /** Clip storage (GIFs, screenshots); defaults to createClipStorage(config). */
   clips?: ObjectStorage;
+  /** Upload storage (bug screenshots); defaults to createUploadStorage(config). */
+  uploads?: ObjectStorage;
   /** Pino logger options override (tests pass false). */
   logger?: boolean | object;
   version?: string;
@@ -81,6 +83,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       log: app.log,
       storage: deps.storage ?? createGameStorage(config),
       clips: deps.clips ?? createClipStorage(config),
+      uploads: deps.uploads ?? createUploadStorage(config),
       session: { secret: sessionSecret(config), secure: cookieSecure(config), ...(deps.now && { now: deps.now }) },
       now: deps.now ?? Date.now,
       runInBackground:

@@ -2,7 +2,8 @@
 //   decidePublish: Allow / Block on a publish request card. Owner or approver only; agents never.
 //   askForFix:     [Ask for fix] / [Try again] on a FAIL Test card (any human crew member).
 import { AGENTS, nexconnUserId, type CrewRole } from '@crewarcade/shared';
-import { startFix, nameOf } from '../agents/glitch';
+import { bugCardMeta, startFix, nameOf } from '../agents/glitch';
+import { bugsFixedBy, updateBug } from '../repo/bugs';
 import type { AgentServices } from '../agents/runtime-deps';
 import type { Ctx } from '../context';
 import { getRole } from '../repo/crews';
@@ -68,6 +69,7 @@ export async function decidePublish(ctx: AgentCtx, user: UserRow, messageId: str
     summary: `${user.displayName} ${decision === 'allow' ? 'published' : 'blocked'} ${game.title} v${version}`,
     input: { version, role },
   });
+  if (decision === 'allow') await closeFixedBugs(ctx, game, version, card.channelId);
   const link = `${ctx.config.WEB_ORIGIN.replace(/\/+$/, '')}/g/${game.slug}`;
   await postText(
     ctx,
@@ -79,6 +81,30 @@ export async function decidePublish(ctx: AgentCtx, user: UserRow, messageId: str
   ).catch(err => ctx.log.warn({ err }, 'publish announcement failed'));
   await ctx.agents.states.set(card.channelId, 'glitch', 'idle');
   return metadata;
+}
+
+/** A published hotfix: its bug is fixed (BugCard turns green, the bug hunter is credited on /g). */
+async function closeFixedBugs(ctx: AgentCtx, game: { id: string; crewId: string; slug: string }, version: number, channelId: string): Promise<void> {
+  for (const bug of await bugsFixedBy(ctx.db, game.id, version)) {
+    if (bug.status === 'fixed') continue;
+    await updateBug(ctx.db, bug.id, { status: 'fixed', fixedInVersion: version });
+    const fixed = { ...bug, status: 'fixed' as const, fixedInVersion: version };
+    if (bug.cardMessageId)
+      await updateCard(ctx, {
+        messageId: bug.cardMessageId,
+        channelId,
+        operatorId: nexconnUserId(AGENTS.glitch.id),
+        metadata: bugCardMeta(fixed, { origin: ctx.config.PUBLIC_API_ORIGIN, slug: game.slug }),
+      }).catch(err => ctx.log.warn({ err }, 'bug card update failed'));
+    await record(ctx, {
+      action: 'bug.fixed',
+      actor: { type: 'system' },
+      crewId: game.crewId,
+      gameId: game.id,
+      summary: `BUG ${bug.number} fixed in v${version} (bug hunter: ${await nameOf(ctx, bug.reporterId)})`,
+      output: { bugId: bug.id },
+    });
+  }
 }
 
 /** [Ask for fix] / [Try again] on a FAIL Test card: Forge fixes the failed checks as the next version. */

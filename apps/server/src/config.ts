@@ -54,6 +54,19 @@ const BaseSchema = z.object({
   /** Public bucket for Glitch's GIFs and screenshots (served through GET /clips too). */
   SUPABASE_CLIPS_BUCKET: z.string().min(3).max(63).default('clips'),
   CLIPS_LOCAL_DIR: z.string().min(1).default('.data/clips'),
+  /** Private bucket for players' bug screenshots (served only to crew members). */
+  SUPABASE_UPLOADS_BUCKET: z.string().min(3).max(63).default('uploads'),
+  UPLOADS_LOCAL_DIR: z.string().min(1).default('.data/uploads'),
+  /** Hosts a relayed voice note may be downloaded from (comma list; the webhook path needs none). */
+  NEXCONN_MEDIA_HOSTS: z
+    .string()
+    .default('')
+    .transform(s =>
+      s
+        .split(',')
+        .map(h => h.trim().toLowerCase())
+        .filter(Boolean),
+    ),
 
   ANTHROPIC_API_KEY: optionalSecret,
   ANTHROPIC_MODEL: z.string().default('claude-opus-5-5'),
@@ -102,6 +115,8 @@ const BaseSchema = z.object({
   AI_TIMEOUT_MS: z.coerce.number().int().min(5000).default(120_000),
   /** Forge plays each build for a few seconds in headless Chromium before posting it (catches dead games). */
   FORGE_SMOKE: bool(true),
+  /** Glitch's headless-Chromium playtests and bug repros (off on Render's free plan: 512 MB). */
+  PLAYTESTS: bool(true),
   /** Per-call timeout for a Forge build (a whole game in one structured call). */
   BUILD_TIMEOUT_MS: z.coerce.number().int().min(10_000).default(240_000),
 

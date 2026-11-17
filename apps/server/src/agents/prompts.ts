@@ -121,7 +121,7 @@ export const CANNED = {
   forgeNoPlan: 'I build once a plan is approved. Pitch it to @pixel, vote, and an approver taps Approve.',
   forgeQueued: 'Plan received. Build v1 is queued; I start soon.',
   glitchNoBuild: 'I playtest every build Forge makes and record a GIF. Nothing to test here yet.',
-  glitchBug: "Got it, I've noted that bug. Recording repros on camera arrives in a later update; describe what you did and what you expected.",
+  glitchBug: "Bugs go in the game's own room (or tap **Report a bug** in the player), so I can replay that game. See you there!",
   refusal: "I can't make that one. Try another idea?",
   failed: 'Oops, my sketchbook jammed. Try again in a minute?',
   budget: "We've used today's AI budget. Plans are back tomorrow (or ask the crew owner).",

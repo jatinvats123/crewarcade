@@ -14,7 +14,7 @@ import { streamJsonStringField } from './json-stream';
 
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 /** Which agent step a call belongs to (logs, ledger, the fake client's canned outputs). */
-export type AiPurpose = 'pixel.plan' | 'pixel.revise' | 'pixel.delta' | 'pixel.explain' | 'pixel.reply' | 'forge.build' | 'glitch.scenario';
+export type AiPurpose = 'pixel.plan' | 'pixel.revise' | 'pixel.delta' | 'pixel.explain' | 'pixel.reply' | 'forge.build' | 'glitch.scenario' | 'glitch.repro';
 
 export interface AiUsage {
   model: string;
@@ -28,12 +28,19 @@ export interface AiUsage {
   fellBack: boolean;
 }
 
+export interface AiImage {
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp';
+  data: string;
+}
+
 interface CallBase {
   purpose: AiPurpose;
   /** Stable system prompt (cached). Never put per-request data here. */
   system: string;
   /** The per-request part: untrusted chat text goes inside delimited blocks (prompts.ts). */
   user: string;
+  /** Images sent before the text (a player's bug screenshot): base64 without the data: prefix. */
+  images?: AiImage[];
   effort: Effort;
   /** Output cap. Thinking counts against it, so leave room. */
   maxTokens: number;
@@ -253,7 +260,17 @@ export function createClaudeClient(o: ClaudeOptions): AiClient {
         betas: [FALLBACK_BETA],
         fallbacks: 'default',
         system: [{ type: 'text', text: call.system, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: call.user }],
+        messages: [
+          {
+            role: 'user',
+            content: call.images?.length
+              ? [
+                  ...call.images.map(i => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: i.mediaType, data: i.data } })),
+                  { type: 'text' as const, text: call.user },
+                ]
+              : call.user,
+          },
+        ],
         output_config: { effort: call.effort, ...(format && { format: { type: 'json_schema', schema: format } }) },
       },
       { timeout: timeoutMs, ...(call.signal && { signal: call.signal }) },

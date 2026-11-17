@@ -15,6 +15,7 @@ import { CrewRuleError, createCrew } from './crews';
 import { record } from './ledger';
 import { playUrl } from './play';
 import { clipUrl } from '../storage';
+import { bugHunters } from '../repo/bugs';
 
 type AgentCtx = Ctx & { agents: AgentServices };
 
@@ -172,6 +173,7 @@ export async function gamePage(ctx: Ctx, slug: string): Promise<GamePageResponse
     remixOf: source ? { slug: source.slug, title: source.title } : null,
     remixes: game.publishedVersion ? await listRemixes(ctx.db, game.id) : [],
     versions: pub ? versions.filter(v => v.version <= pub.version && v.htmlPath).map(v => summary(v, game)) : [],
+    bugHunters: pub ? await bugHunters(ctx.db, game.id, pub.version) : [],
     createdAt: game.createdAt.toISOString(),
   };
 }

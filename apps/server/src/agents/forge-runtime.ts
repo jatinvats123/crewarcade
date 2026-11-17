@@ -229,10 +229,15 @@ export async function runBuildJob(ctx: AgentCtx, job: BuildJobData): Promise<voi
     const htmlPath = await ctx.storage.put(gameHtmlKey(game.slug, job.version), result.html, 'text/html; charset=utf-8');
     const buildMs = Math.round(ctx.now() - t0);
     const usage = result.usage;
-    const notes = result.output.notes
-      .map(n => n.trim())
-      .filter(Boolean)
-      .slice(0, 6);
+    // A hotfix's first note credits the bug hunter (docs/ENGINE.md: readHotfix()).
+    const hotfixNote = typeof row.meta.hotfixNote === 'string' ? row.meta.hotfixNote : null;
+    const notes = [
+      ...(hotfixNote ? [hotfixNote] : []),
+      ...result.output.notes
+        .map(n => n.trim())
+        .filter(Boolean)
+        .filter(n => !/^-?\s*hotfix:/i.test(n)),
+    ].slice(0, 6);
     await updateVersion(ctx.db, game.id, job.version, {
       htmlPath,
       sizeBytes: result.check.sizeBytes,
@@ -251,7 +256,7 @@ export async function runBuildJob(ctx: AgentCtx, job: BuildJobData): Promise<voi
         emoji: result.output.emoji,
         colors: result.output.colors,
         attempts: result.attempts.length,
-        reason: row.meta.reason === 'fix' ? 'fix' : job.reason,
+        reason: row.meta.reason === 'fix' || row.meta.reason === 'hotfix' ? row.meta.reason : job.reason,
         ...(change && { change: change.summary }),
         ...(job.requestedBy && { requestedBy: job.requestedBy }),
       },

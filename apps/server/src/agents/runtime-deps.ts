@@ -5,6 +5,7 @@ import { AiNotConfiguredError, type AiClient, type AiUsage } from '../ai/claude'
 import type { Ctx } from '../context';
 import { addUsageCost, dayOf, totalCostOn } from '../repo/games';
 import type { JobQueue } from './queue';
+import type { SpeechToText } from '../ai/sarvam';
 import type { Playtester } from './smoke';
 import type { AgentStates } from './states';
 
@@ -17,6 +18,8 @@ export interface AgentServices {
   smoke?: (html: string) => Promise<string[]>;
   /** Glitch's sandboxed playtest + clip; undefined = no playtest worker in this process (unit tests). */
   playtester?: Playtester;
+  /** Voice pitches (Sarvam); undefined = no SARVAM_API_KEY (the agent asks to type instead). */
+  stt?: SpeechToText;
   queue: JobQueue;
   states: AgentStates;
 }

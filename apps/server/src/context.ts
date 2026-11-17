@@ -17,6 +17,8 @@ export interface Ctx {
   storage: ObjectStorage;
   /** Public `clips` bucket: playtest GIFs and screenshots. */
   clips: ObjectStorage;
+  /** Private `uploads` bucket: players' bug screenshots (members-only route). */
+  uploads: ObjectStorage;
   session: SessionOptions;
   now: () => number;
   /** AI client, job queue and live agent states. null: agents are not running (card actions answer 503). */

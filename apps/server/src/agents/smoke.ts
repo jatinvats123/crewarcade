@@ -3,7 +3,7 @@
 // starts, the score rises (or the run ends), and nothing throws. Problems go back to Forge as
 // numbered items, like static-check problems. Glitch's full playtest (Phase 4) still follows; this
 // only catches games that are dead on arrival (e.g. addScore(Math.round(dt * 10)) is always 0).
-import { clip, launchBrowser, playtest, type PlaytestInput, type PlaytestResult } from '@crewarcade/engine';
+import { clip, launchBrowser, playtest, type ClipSide, type PlaytestInput, type PlaytestResult, type Scenario } from '@crewarcade/engine';
 
 type Browser = Awaited<ReturnType<typeof launchBrowser>>;
 
@@ -36,7 +36,13 @@ export interface Playtester {
   playtest(input: Omit<PlaytestInput, 'browser' | 'sandbox'>): Promise<PlaytestResult>;
   /** A ~6 s GIF of the game being played (null when the clipper fails: the report still stands). */
   clip(html: string, title: string): Promise<Buffer | null>;
+  /** Phase 5: a repro GIF (red banner when the bug shows) or the hotfix side-by-side (old fails, new passes). */
+  clipBug(input: BugClipInput): Promise<Buffer | null>;
 }
+
+export type BugClipInput =
+  | { kind: 'repro'; title: string; game: ClipSide; repro: { name: string; steps: Scenario } }
+  | { kind: 'fix'; title: string; before: ClipSide; after: ClipSide; repro: { name: string; steps: Scenario } };
 
 /** One shared headless Chromium per process for Forge's smoke test and Glitch's playtests. */
 export function createHeadless(): { smoke: (html: string) => Promise<string[]>; playtester: Playtester; close: () => Promise<void> } {
@@ -58,6 +64,13 @@ export function createHeadless(): { smoke: (html: string) => Promise<string[]>; 
       async clip(html, title) {
         try {
           return (await clip({ kind: 'clip', title: title.slice(0, 40), game: { html, version: 1 }, sandbox: true, browser: await get() })).gif;
+        } catch {
+          return null;
+        }
+      },
+      async clipBug(input) {
+        try {
+          return (await clip({ ...input, title: input.title.slice(0, 40), sandbox: true, browser: await get() })).gif;
         } catch {
           return null;
         }

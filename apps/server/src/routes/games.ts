@@ -8,13 +8,18 @@
 //   GET  /api/rooms/:channelId/agents                     live agent states in that room
 //   GET  /api/games/:id/ledger                            the game's Decision Ledger (members; public once published)
 //   GET  /api/crews/:id/agents/:agent/activity            an agent's last 5 ledger actions in a crew
+//   POST /api/games/:id/bugs             {description, version?, screenshot?}  any human crew member (Phase 5)
+//   GET  /api/bugs/:id/screenshot                         the report's screenshot (crew members only)
+//   POST /api/translate/quota            {chars}          reserve today's tap-to-translate allowance
 import {
   AGENTS,
+  BugReportBody,
   BUILTIN_MESSAGE_TYPES,
   ChangeRequestBody,
   LIMITS,
   nexconnUserId,
   PublishDecisionBody,
+  TranslateQuotaBody,
   VoteBody,
   type LedgerResponse,
   type RoomInfo,
@@ -29,6 +34,7 @@ import { getCrew, getRole } from '../repo/crews';
 import { getCard, getGame, listLedgerForActor, listLedgerForGame, toGameSummary, toLedgerEntry } from '../repo/games';
 import { requestBuildChange } from '../services/builds';
 import { approvePlan, requestChange, votePlan } from '../services/plans';
+import { bugScreenshot, reportBug, reserveTranslation } from '../services/bugs';
 import { askForFix, decidePublish } from '../services/publish';
 import { resolveRoom } from '../services/rooms';
 import { fixedWindowLimiter, HttpError, optionalUser, rateLimit, requireUser } from './http';
@@ -37,15 +43,20 @@ const MessageParam = z.object({ messageId: z.string().min(1).max(64) });
 const ChannelParam = z.object({ channelId: z.string().regex(/^[A-Za-z0-9]{1,64}$/) });
 const IdParam = z.object({ id: z.string().min(1).max(64) });
 const ActivityParams = z.object({ id: z.string().min(1).max(64), agent: z.enum(['pixel', 'forge', 'glitch']) });
-const RelayBody = z.object({
-  channelId: z.string().regex(/^[A-Za-z0-9]{1,64}$/),
-  messageId: z.string().min(1).max(128),
-  text: z
-    .string()
-    .min(1)
-    .max(LIMITS.chatTextChars * 2),
-  mentionedUserIds: z.array(z.string().max(64)).max(30).default([]),
-});
+const RelayBody = z
+  .object({
+    channelId: z.string().regex(/^[A-Za-z0-9]{1,64}$/),
+    messageId: z.string().min(1).max(128),
+    text: z
+      .string()
+      .min(1)
+      .max(LIMITS.chatTextChars * 2)
+      .optional(),
+    /** Phase 5: a voice note (its uploaded URL); routed after transcription. */
+    voice: z.object({ url: z.string().url().max(2048), durationS: z.number().min(0).max(3600) }).optional(),
+    mentionedUserIds: z.array(z.string().max(64)).max(30).default([]),
+  })
+  .refine(b => !!b.text !== !!b.voice, 'Send text or a voice note');
 
 function agentsOf(ctx: Ctx): Ctx & { agents: AgentServices } {
   if (!ctx.agents) throw new HttpError(503, 'agents_unavailable', 'The agents are not running on this server');
@@ -110,17 +121,21 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx): void {
     rateLimit(relayLimit, `user:${user.id}`);
     const body = RelayBody.parse(req.body);
     await memberRoom(user.id, body.channelId);
-    const content = JSON.stringify({
-      content: body.text,
-      ...(body.mentionedUserIds.length > 0 && { mentionedInfo: { type: 2, userIdList: body.mentionedUserIds } }),
-    });
+    const mentions = body.mentionedUserIds.length > 0 ? { mentionedInfo: { type: 2, userIdList: body.mentionedUserIds } } : {};
+    // A relayed voice URL comes from the browser: only hosts in NEXCONN_MEDIA_HOSTS are fetched;
+    // without that list the signed webhook (same messageId) is the only trigger.
+    if (body.voice && ctx.config.NEXCONN_MEDIA_HOSTS.length === 0) return { routed: false };
+    const messageType = body.voice ? BUILTIN_MESSAGE_TYPES.hdVoice : BUILTIN_MESSAGE_TYPES.text;
+    const content = JSON.stringify(
+      body.voice ? { remoteUrl: body.voice.url, duration: body.voice.durationS, ...mentions } : { content: body.text, ...mentions },
+    );
     await logMessage(ctx.db, {
       nexconnMessageId: body.messageId,
       channelId: body.channelId,
       channelType: 3,
       fromUserId: user.id,
-      messageType: BUILTIN_MESSAGE_TYPES.text,
-      text: body.text.slice(0, 2000),
+      messageType,
+      text: body.text?.slice(0, 2000) ?? null,
       createdAt: new Date(ctx.now()),
     });
     const key = ctx.agents
@@ -128,11 +143,41 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx): void {
           messageId: body.messageId,
           channelId: body.channelId,
           userId: nexconnUserId(user.id),
-          messageType: BUILTIN_MESSAGE_TYPES.text,
+          messageType,
           content,
+          relayed: true,
         })
       : null;
     return { routed: key !== null };
+  });
+
+  // ---- Phase 5: bug reports, screenshots, translation allowance
+
+  const bugLimit = fixedWindowLimiter({ limit: 5, windowMs: 60_000, now: ctx.now });
+  app.post('/api/games/:id/bugs', { bodyLimit: 6 * 1024 * 1024 }, async req => {
+    const user = await requireUser(ctx, req);
+    rateLimit(bugLimit, `user:${user.id}`);
+    const { id } = IdParam.parse(req.params);
+    const body = BugReportBody.parse(req.body);
+    return reportBug(agentsOf(ctx), user, id, body, 'player');
+  });
+
+  app.get('/api/bugs/:id/screenshot', async (req, reply) => {
+    const user = await requireUser(ctx, req);
+    const { id } = IdParam.parse(req.params);
+    const shot = await bugScreenshot(ctx, user, id);
+    return reply
+      .code(200)
+      .headers({ 'content-type': shot.contentType, 'cache-control': 'private, max-age=300', 'x-content-type-options': 'nosniff' })
+      .send(shot.body);
+  });
+
+  const translateLimit = fixedWindowLimiter({ limit: 30, windowMs: 60_000, now: ctx.now });
+  app.post('/api/translate/quota', async req => {
+    const user = await requireUser(ctx, req);
+    rateLimit(translateLimit, `user:${user.id}`);
+    const { chars } = TranslateQuotaBody.parse(req.body);
+    return reserveTranslation(ctx, user, chars);
   });
 
   async function memberRoom(userId: string, channelId: string) {

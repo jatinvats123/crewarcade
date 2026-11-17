@@ -17,7 +17,7 @@ import { getGameBySlug, getVersion } from '../repo/versions';
 import { gamePage, playLink, retryBuild, startRemix, versionsOf } from '../services/builds';
 import { frameAncestors, gameHeaders, verifyPlayToken } from '../services/play';
 import { leaderboard, submitScore } from '../services/scores';
-import { CLIP_FILES, gameHtmlKey } from '../storage';
+import { gameHtmlKey } from '../storage';
 import { fixedWindowLimiter, HttpError, optionalUser, rateLimit, requireUser } from './http';
 
 const slugRe = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
@@ -66,7 +66,11 @@ export function registerPlayRoutes(app: FastifyInstance, ctx: Ctx): void {
     return reply.code(200).headers(gameHeaders({ ancestors, published })).send(html);
   });
 
-  const ClipParams = z.object({ slug: z.string().regex(slugRe), version: z.string().regex(/^v\d{1,5}$/), file: z.enum([CLIP_FILES.gif, CLIP_FILES.shot]) });
+  const ClipParams = z.object({
+    slug: z.string().regex(slugRe),
+    version: z.string().regex(/^v\d{1,5}$/),
+    file: z.string().regex(/^(play\.gif|shot\.png|bug-\d{1,4}-(repro|fix)\.gif)$/),
+  });
   app.get('/clips/:slug/:version/:file', async (req, reply) => {
     rateLimit(playLimit, `ip:${req.ip}`);
     const p = ClipParams.safeParse(req.params);
@@ -76,7 +80,7 @@ export function registerPlayRoutes(app: FastifyInstance, ctx: Ctx): void {
     return reply
       .code(200)
       .headers({
-        'content-type': p.data.file === CLIP_FILES.gif ? 'image/gif' : 'image/png',
+        'content-type': p.data.file.endsWith('.gif') ? 'image/gif' : 'image/png',
         'cache-control': 'public, max-age=300',
         'x-content-type-options': 'nosniff',
         'cross-origin-resource-policy': 'cross-origin',

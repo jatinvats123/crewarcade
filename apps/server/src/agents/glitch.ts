@@ -25,12 +25,13 @@ import { z } from 'zod';
 import type { AiUsage } from '../ai/claude';
 import type { Ctx } from '../context';
 import { bugs } from '../db/schema';
+import { getBug, updateBug, type BugRow } from '../repo/bugs';
 import { getGame, insertVersion, updateGame, type GameRow } from '../repo/games';
 import { getUser } from '../repo/users';
 import { getVersion, listVersions, maxVersion, updateVersion, type VersionRow } from '../repo/versions';
 import { postCard, postText, updateCard } from '../services/chat';
 import { record } from '../services/ledger';
-import { clipKey, clipUrl, gameHtmlKey } from '../storage';
+import { bugClipKey, bugClipUrl, clipKey, clipUrl, gameHtmlKey } from '../storage';
 import { SAFETY_RULES } from './prompts';
 import type { PlaytestJobData } from './queue';
 import { chargeUsage, checkBudget, requireAi, type AgentServices } from './runtime-deps';
@@ -47,7 +48,7 @@ const glitchOperator = nexconnUserId(AGENTS.glitch.id);
 // ---- the scenario ------------------------------------------------------------------------------
 
 /** What the model returns: flat optional fields (simple for structured outputs), converted below. */
-const RawStep = z.object({
+export const RawStep = z.object({
   call: z.enum(['start', 'reset']).optional(),
   press: z.string().max(20).optional(),
   ms: z.number().int().min(1).max(30_000).optional(),
@@ -68,6 +69,26 @@ export const labelId = (label: string | undefined): string | null => /^(A\d{1,2}
  * per acceptance item and no other expects, total game time within MAX_SCENARIO_MS.
  */
 export function validateScenario(raw: GlitchScenarioOutput['steps'], acceptance: readonly AcceptanceItem[]): { steps: Scenario | null; problems: string[] } {
+  const { steps, problems, parsed } = convertSteps(raw);
+  const expects = steps.filter((s): s is Extract<Step, { expect: string }> => 'expect' in s);
+  const ids = new Set(acceptance.map(a => a.id));
+  for (const e of expects) {
+    const id = labelId(e.label);
+    if (!id || !ids.has(id))
+      problems.push(`expect "${(e.label ?? e.expect).slice(0, 60)}": its label must start with an acceptance id (${[...ids].join(', ')})`);
+  }
+  for (const a of acceptance) {
+    const n = expects.filter(e => labelId(e.label) === a.id).length;
+    if (n !== 1) problems.push(`${a.id}: needs exactly one labelled expect (found ${n})`);
+  }
+  return { steps: problems.length === 0 && parsed ? parsed : null, problems: problems.slice(0, 10) };
+}
+
+/**
+ * The model's flat steps -> engine steps, plus the rules every Glitch scenario shares: one action
+ * per step, the engine schema, at least one start, game time within MAX_SCENARIO_MS.
+ */
+export function convertSteps(raw: GlitchScenarioOutput['steps']): { steps: Step[]; problems: string[]; parsed: Scenario | null } {
   const problems: string[] = [];
   const steps: Step[] = [];
   raw.forEach((r, i) => {
@@ -93,20 +114,9 @@ export function validateScenario(raw: GlitchScenarioOutput['steps'], acceptance:
     problems.push(`${first?.path.length ? `step ${Number(first.path[0]) + 1}` : 'scenario'}: ${first?.message ?? 'invalid'}`);
   }
   if (!steps.some(s => 'call' in s && s.call === 'start')) problems.push('the scenario never calls start');
-  const expects = steps.filter((s): s is Extract<Step, { expect: string }> => 'expect' in s);
-  const ids = new Set(acceptance.map(a => a.id));
-  for (const e of expects) {
-    const id = labelId(e.label);
-    if (!id || !ids.has(id))
-      problems.push(`expect "${(e.label ?? e.expect).slice(0, 60)}": its label must start with an acceptance id (${[...ids].join(', ')})`);
-  }
-  for (const a of acceptance) {
-    const n = expects.filter(e => labelId(e.label) === a.id).length;
-    if (n !== 1) problems.push(`${a.id}: needs exactly one labelled expect (found ${n})`);
-  }
   const ms = scenarioMs(steps);
   if (ms > MAX_SCENARIO_MS) problems.push(`the scenario spends ${Math.round(ms / 1000)} s of game time (max ${MAX_SCENARIO_MS / 1000} s)`);
-  return { steps: problems.length === 0 && parsed.success ? parsed.data : null, problems: problems.slice(0, 10) };
+  return { steps, problems, parsed: parsed.success ? parsed.data : null };
 }
 
 const SCENARIO_SYSTEM = `You are Glitch, the Playtester agent in CrewArcade. You write the automated playtest for a small browser game: a JSON list of steps that a headless browser runs on a fresh page (seed 42, a paused fake clock: game time only moves on wait/press steps, so runs are deterministic).
@@ -220,13 +230,13 @@ export const afterFail = (round: number): 'autofix' | 'ask_crew' => (round < MAX
 
 async function savedRepros(ctx: AgentCtx, gameId: string, version: number): Promise<ScenarioRef[]> {
   const rows = await ctx.db
-    .select({ id: bugs.id, steps: bugs.reproScenario, on: bugs.reproducedOnVersion })
+    .select({ id: bugs.id, n: bugs.number, steps: bugs.reproScenario, on: bugs.reproducedOnVersion })
     .from(bugs)
     .where(and(eq(bugs.gameId, gameId), isNotNull(bugs.reproScenario), lte(bugs.reproducedOnVersion, version)));
-  return rows.map((b, i) => {
+  return rows.map(b => {
     const p = ScenarioSchema.safeParse(b.steps);
     return {
-      name: `repro-${i + 1}`,
+      name: `repro-${b.n}`,
       ...(b.on && { version: b.on }),
       steps: p.success ? p.data : null,
       ...(!p.success && { error: 'saved repro is not a valid scenario' }),
@@ -298,7 +308,9 @@ export async function runPlaytestJob(ctx: AgentCtx, job: PlaytestJobData): Promi
   const gifPath = gif ? await ctx.clips.put(clipKey(game.slug, job.version, 'gif'), gif, 'image/gif').catch(() => null) : null;
   const shotPath = result.screenshot ? await ctx.clips.put(clipKey(game.slug, job.version, 'shot'), result.screenshot, 'image/png').catch(() => null) : null;
   const testMs = Math.round(ctx.now() - t0);
-  const pass = result.pass;
+  const bugId = typeof row.meta.bugId === 'string' ? row.meta.bugId : null;
+  // A hotfix passes only when every saved repro (its own bug's included) ran and passed.
+  const pass = result.pass && (!bugId || hotfixPasses(result.checks));
   const round = fixRoundOf(row);
   const next = pass ? 'publish' : !steps ? 'ask_crew' : afterFail(round);
   const items = itemRows(acceptance, result, !!steps);
@@ -358,7 +370,7 @@ export async function runPlaytestJob(ctx: AgentCtx, job: PlaytestJobData): Promi
   });
 
   // 4. What happens next.
-  if (pass) await requestPublish(ctx, game, job.version, { gifPath, shotPath });
+  if (pass) await requestPublish(ctx, game, job.version, { gifPath, shotPath }, bugId ? { bugId, html } : null);
   else if (next === 'autofix') await startFix(ctx, game, job.version, { failures: failuresForForge(result), round: round + 1, by: 'Glitch', testCardId });
   else {
     await updateGame(ctx.db, game.id, { status: 'failed' });
@@ -375,9 +387,16 @@ export async function runPlaytestJob(ctx: AgentCtx, job: PlaytestJobData): Promi
 }
 
 /** PASS: the publish request card (Play, GIF, Allow/Block for the owner and approvers). */
-async function requestPublish(ctx: AgentCtx, game: GameRow, version: number, media: { gifPath: string | null; shotPath: string | null }): Promise<void> {
+async function requestPublish(
+  ctx: AgentCtx,
+  game: GameRow,
+  version: number,
+  media: { gifPath: string | null; shotPath: string | null },
+  hotfixOf: { bugId: string; html: string } | null,
+): Promise<void> {
   const channelId = game.roomChannelId!;
   const origin = ctx.config.PUBLIC_API_ORIGIN;
+  const hotfix = hotfixOf ? await hotfixMedia(ctx, game, version, hotfixOf.bugId, hotfixOf.html) : null;
   const arcadeUrl = `${ctx.config.WEB_ORIGIN.replace(/\/+$/, '')}/g/${game.slug}`;
   const cardId = await postCard(ctx, {
     channelId,
@@ -392,6 +411,7 @@ async function requestPublish(ctx: AgentCtx, game: GameRow, version: number, med
       slug: game.slug,
       ...(media.gifPath && { gifUrl: clipUrl(origin, game.slug, version, 'gif') }),
       ...(media.shotPath && { screenshotUrl: clipUrl(origin, game.slug, version, 'shot') }),
+      ...(hotfix && { hotfix: hotfix.content }),
     },
     metadata: { status: 'waiting' },
     gameId: game.id,
@@ -405,9 +425,27 @@ async function requestPublish(ctx: AgentCtx, game: GameRow, version: number, med
     actor: { type: 'agent', agent: 'glitch' },
     crewId: game.crewId,
     gameId: game.id,
-    summary: `Glitch asked the crew to publish v${version} (owner or approver: Allow / Block)`,
-    output: { publishCardMessageId: cardId },
+    summary: `Glitch asked the crew to publish ${hotfix ? 'hotfix ' : ''}v${version} (owner or approver: Allow / Block)`,
+    output: { publishCardMessageId: cardId, ...(hotfix && { bugId: hotfix.content.bugId }) },
   });
+  if (hotfix) {
+    const bug = hotfix.bug;
+    if (bug.cardMessageId)
+      await updateCard(ctx, {
+        messageId: bug.cardMessageId,
+        channelId,
+        operatorId: glitchOperator,
+        metadata: bugCardMeta(bug, { origin, slug: game.slug }, { phase: 'hotfix', hotfixVersion: version }),
+      }).catch(err => ctx.log.warn({ err }, 'bug card update failed'));
+    await record(ctx, {
+      action: 'bug.hotfix_passed',
+      actor: { type: 'agent', agent: 'glitch' },
+      crewId: game.crewId,
+      gameId: game.id,
+      summary: `Hotfix v${version} passes BUG ${bug.number} and every older repro (bug hunter: ${hotfix.content.hunter})`,
+      output: { bugId: bug.id, fixGif: !!hotfix.content.fixGifUrl },
+    });
+  }
   await ctx.agents.states.set(channelId, 'glitch', 'waiting_approval', { detail: `v${version} waits for Allow`, gameId: game.id });
 }
 
@@ -419,7 +457,15 @@ export async function startFix(
   ctx: AgentCtx,
   game: GameRow,
   fromVersion: number,
-  o: { failures: string[]; round: number; by: string; testCardId: string; requestedBy?: string },
+  o: {
+    failures: string[];
+    round: number;
+    by: string;
+    testCardId: string;
+    requestedBy?: string;
+    /** Phase 5: the first build of a hotfix (Glitch reproduced a player's bug). */
+    hotfix?: { bugId: string; bugNo: number; note: string; summary: string };
+  },
 ): Promise<number> {
   const channelId = game.roomChannelId!;
   const from = await getVersion(ctx.db, game.id, fromVersion);
@@ -427,7 +473,12 @@ export async function startFix(
   const spec = GameSpecSchema.parse(from.spec);
   const next = (await maxVersion(ctx.db, game.id)) + 1;
   const list = o.failures.length ? o.failures : ['the playtest failed; make the game start, score and end cleanly'];
-  const summary = `Fix what Glitch's playtest of v${fromVersion} found, keep everything else: ${list.map((f, i) => `${i + 1}. ${f}`).join(' ')}`.slice(0, 600);
+  // Fix rounds of a hotfix keep its bug (the publish card then shows the side-by-side clip).
+  const bugId = o.hotfix?.bugId ?? (typeof from.meta.bugId === 'string' ? from.meta.bugId : null);
+  const hotfixNote = o.hotfix?.note ?? (typeof from.meta.hotfixNote === 'string' ? from.meta.hotfixNote : null);
+  const summary = (
+    o.hotfix ? o.hotfix.summary : `Fix what Glitch's playtest of v${fromVersion} found, keep everything else: ${list.map((f, i) => `${i + 1}. ${f}`).join(' ')}`
+  ).slice(0, 600);
   const nextSpec = GameSpecSchema.parse({
     ...spec,
     changes: [...spec.changes.filter(c => c.version < next), { version: next, askedBy: [o.by.slice(0, 64)], summary, acceptance: [] }].slice(-50),
@@ -438,11 +489,14 @@ export async function startFix(
     version: next,
     spec: nextSpec,
     status: 'building',
-    meta: { reason: 'fix', fixRound: o.round, fixOf: fromVersion },
+    meta: { reason: o.hotfix ? 'hotfix' : 'fix', fixRound: o.round, fixOf: fromVersion, ...(bugId && { bugId }), ...(hotfixNote && { hotfixNote }) },
     createdAt: new Date(ctx.now()),
   });
   await updateGame(ctx.db, game.id, { status: 'building' });
-  const task = `Fix v${fromVersion}: ${list.length} failed check${list.length === 1 ? '' : 's'} -> v${next}`;
+  if (bugId) await updateBug(ctx.db, bugId, { hotfixVersion: next });
+  const task = o.hotfix
+    ? `Hotfix BUG ${o.hotfix.bugNo} from v${fromVersion} -> v${next}`
+    : `Fix v${fromVersion}: ${list.length} failed check${list.length === 1 ? '' : 's'} -> v${next}`;
   const handoffId = await postCard(ctx, {
     channelId,
     agent: 'glitch',
@@ -453,9 +507,12 @@ export async function startFix(
       from: 'glitch',
       to: 'forge',
       task,
-      contextSummary:
-        (o.round > 0 ? `Automatic fix ${o.round} of ${MAX_AUTO_FIX_ROUNDS}. ` : `${o.by} asked for a fix. `) + list.slice(0, 3).join(' · ').slice(0, 500),
-      artifacts: [{ kind: 'scenario', label: `Test v${fromVersion}`, ref: o.testCardId }],
+      contextSummary: o.hotfix
+        ? `${o.hotfix.note}. ${list[0] ?? ''}`.slice(0, 600)
+        : (o.round > 0 ? `Automatic fix ${o.round} of ${MAX_AUTO_FIX_ROUNDS}. ` : `${o.by} asked for a fix. `) + list.slice(0, 3).join(' · ').slice(0, 500),
+      artifacts: [
+        o.hotfix ? { kind: 'bug', label: `BUG ${o.hotfix.bugNo}`, ref: o.testCardId } : { kind: 'scenario', label: `Test v${fromVersion}`, ref: o.testCardId },
+      ],
     },
     metadata: { status: 'waiting' },
     gameId: game.id,
@@ -477,14 +534,89 @@ export async function startFix(
     version: next,
     channelId,
     handoffMessageId: handoffId,
-    reason: 'fix',
+    reason: o.hotfix ? 'hotfix' : 'fix',
     requestedBy: o.requestedBy ?? game.createdBy,
   });
-  await ctx.agents.states.set(channelId, 'forge', 'waiting_approval', { detail: `fixing v${fromVersion} as v${next}`, gameId: game.id });
+  await ctx.agents.states.set(channelId, 'forge', 'waiting_approval', {
+    detail: o.hotfix ? `hotfix v${next}` : `fixing v${fromVersion} as v${next}`,
+    gameId: game.id,
+  });
   return next;
 }
 
 /** Display name for ledger lines ("Asha asked for a fix"). */
 export async function nameOf(ctx: Pick<Ctx, 'db'>, userId: string): Promise<string> {
   return (await getUser(ctx.db, userId))?.displayName ?? 'Someone';
+}
+
+// ---- hotfix (Phase 5) ----------------------------------------------------------------------------
+
+/**
+ * The hotfix rule (pure, tested): at least one saved repro ran (the hotfix's own bug) and every
+ * repro check passed, so the bug is fixed and no older fixed bug came back.
+ */
+export function hotfixPasses(checks: ReadonlyArray<Pick<PlaytestResult['checks'][number], 'kind' | 'pass' | 'advisory'>>): boolean {
+  const repros = checks.filter(c => c.kind === 'repro' && !c.advisory);
+  return repros.length > 0 && repros.every(c => c.pass);
+}
+
+/** BugCard metadata from the bug row plus a patch (always the whole set, so a retry is idempotent). */
+export function bugCardMeta(bug: BugRow, at: { origin: string; slug: string }, patch: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    status: bug.status,
+    phase: bug.status === 'open' ? 'queued' : bug.status === 'reproduced' ? 'hotfix' : 'done',
+    ...(bug.reproducedOnVersion && {
+      reproducedOnVersion: bug.reproducedOnVersion,
+      reproClipUrl: bugClipUrl(at.origin, at.slug, bug.reproducedOnVersion, bug.number, 'repro'),
+    }),
+    ...(bug.question && bug.status === 'not_reproduced' && { question: bug.question.slice(0, 300) }),
+    ...(bug.hotfixVersion && { hotfixVersion: bug.hotfixVersion }),
+    ...(bug.fixedInVersion && { fixedInVersion: bug.fixedInVersion }),
+    ...(bug.reproScenario ? { check: reproCheckLabel(bug.reproScenario) } : {}),
+    ...patch,
+  };
+}
+
+/** The BUG check label of a saved repro. */
+export function reproCheckLabel(steps: unknown): string | undefined {
+  const p = ScenarioSchema.safeParse(steps);
+  if (!p.success) return undefined;
+  const e = p.data.find((s): s is Extract<Step, { expect: string }> => 'expect' in s);
+  return e?.label?.slice(0, 200);
+}
+
+/** Side-by-side GIF (the old version fails the repro, the hotfix passes it) and the publish card's hotfix block. */
+async function hotfixMedia(ctx: AgentCtx, game: GameRow, version: number, bugId: string, html: string) {
+  const bug = await getBug(ctx.db, bugId);
+  if (!bug) return null;
+  const hunter = (await nameOf(ctx, bug.reporterId)).slice(0, 64);
+  const steps = ScenarioSchema.safeParse(bug.reproScenario);
+  let fixGifUrl: string | undefined;
+  if (steps.success && bug.reproducedOnVersion && ctx.agents.playtester) {
+    const before = (await ctx.storage.get(gameHtmlKey(game.slug, bug.reproducedOnVersion)))?.toString('utf8');
+    const gif = before
+      ? await ctx.agents.playtester.clipBug({
+          kind: 'fix',
+          title: `${game.title} BUG ${bug.number}`,
+          before: { html: before, version: bug.reproducedOnVersion },
+          after: { html, version },
+          repro: { name: `repro-${bug.number}`, steps: steps.data },
+        })
+      : null;
+    if (gif) {
+      const key = bugClipKey(game.slug, version, bug.number, 'fix');
+      if (await ctx.clips.put(key, gif, 'image/gif').catch(() => null))
+        fixGifUrl = bugClipUrl(ctx.config.PUBLIC_API_ORIGIN, game.slug, version, bug.number, 'fix');
+    }
+  }
+  return {
+    bug,
+    content: {
+      bugId: bug.id,
+      bug: bug.description.slice(0, 120),
+      hunter,
+      fromVersion: bug.reproducedOnVersion ?? Math.max(1, version - 1),
+      ...(fixGifUrl && { fixGifUrl }),
+    },
+  };
 }

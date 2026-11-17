@@ -99,7 +99,7 @@ export function createGeminiClient(o: GeminiOptions): AiClient {
     try {
       const stream = await ai.models.generateContentStream({
         model: o.model,
-        contents: [{ role: 'user', parts: [{ text: call.user }] }],
+        contents: [{ role: 'user', parts: [...(call.images ?? []).map(i => ({ inlineData: { mimeType: i.mediaType, data: i.data } })), { text: call.user }] }],
         config: {
           systemInstruction: call.system,
           maxOutputTokens: call.maxTokens,

@@ -26,6 +26,15 @@ export const AgentJobData = z.object({
   remix: z.object({ source: z.string(), idea: z.string() }).optional(),
   /** For change requests from the [Change] button: the plan card being changed. */
   cardMessageId: z.string().optional(),
+  /** Phase 5: a voice note, transcribed (Sarvam) and then routed like a text message. */
+  voice: z
+    .object({
+      url: z.string().url().max(2048),
+      durationS: z.number().min(0).max(3600),
+      relayed: z.boolean().default(false),
+      mentionedUserIds: z.array(z.string().max(64)).max(30).default([]),
+    })
+    .optional(),
 });
 export type AgentJobData = z.infer<typeof AgentJobData>;
 
@@ -37,7 +46,7 @@ export const BuildJobData = z.object({
   channelId: z.string(),
   handoffMessageId: z.string(),
   /** First build, a change request, a remix's v1, a retry after a failed build, or a fix of failed playtest checks. */
-  reason: z.enum(['build', 'change', 'remix', 'retry', 'fix']).default('build'),
+  reason: z.enum(['build', 'change', 'remix', 'retry', 'fix', 'hotfix']).default('build'),
   /** DB user id of the human whose action led here (usage is charged to them). */
   requestedBy: z.string().optional(),
 });
@@ -50,6 +59,8 @@ export const PlaytestJobData = z.object({
   version: z.number().int().min(1),
   channelId: z.string(),
   handoffMessageId: z.string(),
+  /** Phase 5: set for a bug repro run (handoffMessageId is then the BugCard). */
+  bugId: z.string().optional(),
 });
 export type PlaytestJobData = z.infer<typeof PlaytestJobData>;
 

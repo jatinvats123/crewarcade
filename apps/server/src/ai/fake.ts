@@ -144,6 +144,20 @@ export function createFakeAiClient(o: FakeOptions = {}): AiClient {
               };
               break;
             }
+            case 'glitch.repro': {
+              // A generic repro: a working game passes it (not reproduced -> one follow-up question).
+              await wait(1200);
+              raw = {
+                steps: [
+                  { call: 'start' },
+                  { mark: 'a' },
+                  { wait: 3000 },
+                  { expect: "state.scene === 'playing' || state.scene === 'over'", label: 'the game keeps running' },
+                ],
+                question: 'I could not make it happen on my run. What were you doing just before it went wrong (which keys, and how long into the run)?',
+              };
+              break;
+            }
             case 'forge.build': {
               const h = (call.hint ?? {}) as Parameters<typeof fakeBuildOutput>[0];
               const out = fakeBuildOutput(h);

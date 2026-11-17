@@ -13,8 +13,9 @@ import { runBuildJob } from './forge-runtime';
 import { handleAgentJob } from './runtime';
 import type { AgentServices } from './runtime-deps';
 import { createAgentStates } from './states';
+import type { SpeechToText } from '../ai/sarvam';
 import type { Playtester } from './smoke';
-import { runPlaytestJob } from './glitch';
+import { runGlitchJob } from './bugs';
 
 type AiConfig = Pick<
   Config,
@@ -59,6 +60,7 @@ export function createAgentServices(o: {
   buildAi?: AiClient | null;
   smoke?: (html: string) => Promise<string[]>;
   playtester?: Playtester;
+  stt?: SpeechToText;
   queue: JobQueue;
   /** Late-bound context for sending states (the app builds it after this). */
   ctxRef: { current: Ctx | null };
@@ -77,6 +79,7 @@ export function createAgentServices(o: {
     buildAi: o.buildAi === undefined ? o.ai : o.buildAi,
     ...(o.smoke && { smoke: o.smoke }),
     ...(o.playtester && { playtester: o.playtester }),
+    ...(o.stt && { stt: o.stt }),
     queue: o.queue,
     states,
   };
@@ -97,5 +100,6 @@ export async function startAgentWorker(ctx: Ctx): Promise<void> {
   if (!agents) return;
   await agents.queue.start(job => handleAgentJob({ ...ctx, agents }, job));
   await agents.queue.startBuilds(job => runBuildJob({ ...ctx, agents }, job));
-  if (agents.playtester) await agents.queue.startPlaytests(job => runPlaytestJob({ ...ctx, agents }, job));
+  // Always consumed: without a playtester (PLAYTESTS=false) Glitch says testing is off instead of jobs waiting forever.
+  await agents.queue.startPlaytests(job => runGlitchJob({ ...ctx, agents }, job));
 }
