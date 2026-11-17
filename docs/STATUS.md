@@ -240,15 +240,13 @@ repro, and it goes public only through Allow. Plus voice pitches (Sarvam) and ta
 - In FAKE mode Glitch's repro is generic: a working game "doesn't reproduce" and Glitch asks a question.
 - The translated source language isn't shown (the SDK result gives only the target).
 
-### Render: free plan for now (2026-11-17)
+### Render plan (2026-11-17)
 
-`render.yaml` now deploys `crewarcade-server` on **`plan: free`** (512 MB, 0.1 CPU, sleeps after 15
-min idle, ~1 min to wake, 750 h/month). Free has no pre-deploy step, so `dockerCommand` runs the
-migrations and then the server. Chromium can't fit in 512 MB, so `PLAYTESTS=false` and
-`FORGE_SMOKE=false`. Builds are playable, Glitch posts "playtests are switched off" (tested), and
-bug reports are saved but not replayed. **Nothing can be published** (Allow needs a passed playtest).
-Back to the full product: `plan: standard`, both flags `true`, `preDeployCommand: node dist/migrate.js`
-instead of `dockerCommand`.
+`render.yaml` deploys `crewarcade-server` on **`plan: standard`** (2 GB, needed for headless
+Chromium), paid from the owner's $50 Render hackathon credit (valid until 2027-10-01). Render may still
+ask for a card on file. Low-cost fallback (tested): `plan: free`, `PLAYTESTS=false`,
+`FORGE_SMOKE=false`, migrations in `dockerCommand` (free has no pre-deploy step). Then builds are
+playable, Glitch says playtests are off, and nothing can be published.
 
 ### Needed from the owner
 

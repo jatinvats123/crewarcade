@@ -5,17 +5,14 @@ services:
     name: crewarcade-server
     runtime: docker
     region: singapore # next to Nexconn SG and Supabase ap-southeast-1
-    # FREE FOR NOW (512 MB, 0.1 CPU, sleeps after 15 min idle, 750 h/month): chat, Pixel, Forge
-    # builds, play, scores, bug reports and voice work; headless Chromium does not fit, so Glitch's
-    # playtests / repros and Forge's smoke test are off (PLAYTESTS=false, FORGE_SMOKE=false) and
-    # nothing can be published. Full product: plan: standard (2 GB), set both back to 'true', and
-    # move the migration back to `preDeployCommand: node dist/migrate.js` (paid plans only).
-    plan: free
+    # 2 GB RAM: headless Chromium (Glitch's playtests, repros, clips) needs >= 2 GB. Paid by the
+    # Render hackathon credit. Low-cost fallback: plan: free + PLAYTESTS=false + FORGE_SMOKE=false
+    # + migrations in dockerCommand (free has no pre-deploy step); see docs/STATUS.md.
+    plan: standard
     dockerfilePath: ./apps/server/Dockerfile
     dockerContext: .
     healthCheckPath: /health
-    # Free plans have no pre-deploy step: migrate, then start (the Dockerfile's CMD otherwise).
-    dockerCommand: /bin/sh -c "node dist/migrate.js && exec node --enable-source-maps dist/index.js"
+    preDeployCommand: node dist/migrate.js
     autoDeploy: true
     buildFilter:
       paths:
@@ -36,13 +33,11 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: DATABASE_POOL_MAX
-        value: '5'
-      - key: AGENT_CONCURRENCY
-        value: '2'
+        value: '10'
       - key: PLAYTESTS
-        value: 'false'
+        value: 'true'
       - key: FORGE_SMOKE
-        value: 'false'
+        value: 'true'
       - key: NEXCONN_APP_KEY
         sync: false
       - key: NEXCONN_APP_SECRET
