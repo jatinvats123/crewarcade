@@ -3,8 +3,8 @@
 // playtest worker (later phases).
 import type { FastifyBaseLogger } from 'fastify';
 import { createAgentServices, createAi, createQueue, startAgentWorker } from './agents';
-import { createGameStorage } from './storage';
-import { createSmoke } from './agents/smoke';
+import { createClipStorage, createGameStorage } from './storage';
+import { createHeadless } from './agents/smoke';
 import { buildApp } from './app';
 import { ConfigError, integrations, loadConfig } from './config';
 import type { Ctx } from './context';
@@ -39,11 +39,24 @@ const ctxRef: { current: Ctx | null } = { current: null };
 const ai = createAi(config, lateLog);
 const buildAi = createAi(config, lateLog, 'build');
 const queue = createQueue(config, lateLog);
-const smoke = config.FORGE_SMOKE ? createSmoke() : null;
-const agents = createAgentServices({ config, nexconn, ai, buildAi, ...(smoke && { smoke: smoke.run }), queue, ctxRef, log: lateLog });
+// One headless Chromium for Forge's smoke test and Glitch's playtests (launched on first use).
+const headless = createHeadless();
+const agents = createAgentServices({
+  config,
+  nexconn,
+  ai,
+  buildAi,
+  ...(config.FORGE_SMOKE && { smoke: headless.smoke }),
+  playtester: headless.playtester,
+  queue,
+  ctxRef,
+  log: lateLog,
+});
 const storage = createGameStorage(config);
-const server = await buildApp({ config, pingDb: database.ping, db: database.db, nexconn, agents, storage, onReady: c => (ctxRef.current = c) });
+const clips = createClipStorage(config);
+const server = await buildApp({ config, pingDb: database.ping, db: database.db, nexconn, agents, storage, clips, onReady: c => (ctxRef.current = c) });
 await storage.ensureBucket().catch(e => server.log.error({ err: e }, 'could not check the games bucket'));
+await clips.ensureBucket().catch(e => server.log.error({ err: e }, 'could not check the clips bucket'));
 server.log.info({ storage: storage.kind, bucket: storage.bucket }, 'game storage ready');
 logRef.current = server.log;
 if (!ai) server.log.warn('ANTHROPIC_API_KEY not set and FAKE_AGENTS off: agents answer with an error message');
@@ -64,7 +77,7 @@ const shutdown = async (signal: string) => {
   server.log.info({ signal }, 'shutting down');
   agents.states.stopAll();
   await queue.stop().catch(() => {});
-  await smoke?.close();
+  await headless.close();
   await server.close().catch(() => {});
   await database.close().catch(() => {});
   process.exit(0);

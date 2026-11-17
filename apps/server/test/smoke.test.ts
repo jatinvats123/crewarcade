@@ -8,19 +8,19 @@ import { channel, type AiClient, type StructuredCall } from '../src/ai/claude';
 import { fakeBuildOutput } from '../src/ai/fake-game';
 import { createGeminiClient, isBusyError } from '../src/ai/gemini';
 import { insertCode, runBuildLoop } from '../src/agents/forge';
-import { createSmoke, smokeFindings } from '../src/agents/smoke';
+import { createHeadless, smokeFindings } from '../src/agents/smoke';
 
 const good = fakeBuildOutput({ title: 'Smoke Test', pitch: 'A small game for the smoke test.', seed: 7 });
 // The bug a real build had: per-frame points round to 0, so the score never rises.
 const dead = { ...good, code: good.code.replace(/addScore\((10|1)\)/g, 'addScore(Math.round(dt * 10))') };
 
 describe('Forge smoke playtest', () => {
-  const smoke = createSmoke();
+  const smoke = createHeadless();
   afterAll(() => smoke.close());
 
   it('passes a game that starts and scores; flags one whose score never rises', async () => {
-    expect(await smoke.run(insertCode(starterHtml(), good.code))).toEqual([]);
-    const problems = await smoke.run(insertCode(starterHtml(), dead.code));
+    expect(await smoke.smoke(insertCode(starterHtml(), good.code))).toEqual([]);
+    const problems = await smoke.smoke(insertCode(starterHtml(), dead.code));
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/score did not rise.*whole numbers/s);
   }, 60_000);
@@ -79,7 +79,7 @@ describe('Forge smoke playtest', () => {
       },
       version: 1,
       language: 'en',
-      smoke: smoke.run,
+      smoke: smoke.smoke,
     });
     expect(r.attempts.map(a => a.problems.length)).toEqual([1, 0]);
     expect(calls[1]).toMatch(/Problems:\n1\. Smoke test: after 6 s of play the score did not rise/);

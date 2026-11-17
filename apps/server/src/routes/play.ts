@@ -1,5 +1,6 @@
 // Builds, playing and scores.
 //   GET  /play/:slug/v/:version[?t=token]        the game HTML, strict CSP (sandboxed iframe only)
+//   GET  /clips/:slug/v:version/:file             Glitch's GIF (play.gif) / screenshot (shot.png), public
 //   GET  /api/games/:id/versions/:version/play   a play URL (signed for unpublished versions; members)
 //   GET  /api/games/:id/versions                  versions (members: all; others: published only)
 //   POST /api/cards/:messageId/retry              [Try again] on a failed Build card (members)
@@ -16,7 +17,7 @@ import { getGameBySlug, getVersion } from '../repo/versions';
 import { gamePage, playLink, retryBuild, startRemix, versionsOf } from '../services/builds';
 import { frameAncestors, gameHeaders, verifyPlayToken } from '../services/play';
 import { leaderboard, submitScore } from '../services/scores';
-import { gameHtmlKey } from '../storage';
+import { CLIP_FILES, gameHtmlKey } from '../storage';
 import { fixedWindowLimiter, HttpError, optionalUser, rateLimit, requireUser } from './http';
 
 const slugRe = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
@@ -63,6 +64,24 @@ export function registerPlayRoutes(app: FastifyInstance, ctx: Ctx): void {
       return notFound();
     }
     return reply.code(200).headers(gameHeaders({ ancestors, published })).send(html);
+  });
+
+  const ClipParams = z.object({ slug: z.string().regex(slugRe), version: z.string().regex(/^v\d{1,5}$/), file: z.enum([CLIP_FILES.gif, CLIP_FILES.shot]) });
+  app.get('/clips/:slug/:version/:file', async (req, reply) => {
+    rateLimit(playLimit, `ip:${req.ip}`);
+    const p = ClipParams.safeParse(req.params);
+    if (!p.success) throw new HttpError(404, 'not_found', 'Not found');
+    const body = await ctx.clips.get(`${p.data.slug}/${p.data.version}/${p.data.file}`);
+    if (!body) throw new HttpError(404, 'not_found', 'Not found');
+    return reply
+      .code(200)
+      .headers({
+        'content-type': p.data.file === CLIP_FILES.gif ? 'image/gif' : 'image/png',
+        'cache-control': 'public, max-age=300',
+        'x-content-type-options': 'nosniff',
+        'cross-origin-resource-policy': 'cross-origin',
+      })
+      .send(body);
   });
 
   app.get('/api/games/:id/versions/:version/play', async req => {

@@ -15,6 +15,13 @@
       "when": 1794662318752,
       "tag": "0001_phase3_builds_scores",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794895711861,
+      "tag": "0002_phase4_publish",
+      "breakpoints": true
     }
   ]
 }

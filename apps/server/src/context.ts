@@ -15,6 +15,8 @@ export interface Ctx {
   log: FastifyBaseLogger;
   /** Private `games` bucket (Supabase in production, local disk in development, memory in tests). */
   storage: ObjectStorage;
+  /** Public `clips` bucket: playtest GIFs and screenshots. */
+  clips: ObjectStorage;
   session: SessionOptions;
   now: () => number;
   /** AI client, job queue and live agent states. null: agents are not running (card actions answer 503). */

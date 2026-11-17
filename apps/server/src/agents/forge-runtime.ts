@@ -245,11 +245,13 @@ export async function runBuildJob(ctx: AgentCtx, job: BuildJobData): Promise<voi
       status: 'testing',
       notes,
       meta: {
+        // Keeps what the version was created with (e.g. Glitch's fix round), then the build's own details.
+        ...row.meta,
         orientation: result.output.orientation,
         emoji: result.output.emoji,
         colors: result.output.colors,
         attempts: result.attempts.length,
-        reason: job.reason,
+        reason: row.meta.reason === 'fix' ? 'fix' : job.reason,
         ...(change && { change: change.summary }),
         ...(job.requestedBy && { requestedBy: job.requestedBy }),
       },
@@ -358,7 +360,7 @@ async function failBuild(
   await ctx.agents.states.set(channelId, 'forge', 'idle');
 }
 
-/** Forge → Glitch handoff and the playtest job (Phase 4 runs it; FAKE_AGENTS simulates it now). */
+/** Forge → Glitch handoff and the playtest job (agents/glitch.ts runs it). */
 async function handToGlitch(ctx: AgentCtx, game: GameRow, version: number, buildCardId: string, spec: GameSpec): Promise<void> {
   const channelId = game.roomChannelId!;
   const checks = acceptanceFor(spec, version);
@@ -389,39 +391,8 @@ async function handToGlitch(ctx: AgentCtx, game: GameRow, version: number, build
     summary: `Forge → Glitch: ${task}`,
     output: { handoffMessageId: handoffId, buildCardMessageId: buildCardId },
   });
-  await ctx.agents.queue.enqueuePlaytest({ key: `${game.id}:v${version}:${buildCardId}`, gameId: game.id, version, channelId, handoffMessageId: handoffId });
-  if (ctx.config.FAKE_AGENTS) {
-    await simulatePlaytest(ctx, game, version, handoffId, checks.length);
-    return;
-  }
   await ctx.agents.states.set(channelId, 'glitch', 'waiting_approval', { detail: `testing v${version} soon`, gameId: game.id });
-}
-
-/** FAKE_AGENTS only: what Glitch will do in Phase 4, simulated (a PASS card, no real playtest). */
-async function simulatePlaytest(ctx: AgentCtx, game: GameRow, version: number, handoffId: string, total: number): Promise<void> {
-  const channelId = game.roomChannelId!;
-  await updateCard(ctx, { messageId: handoffId, channelId, operatorId: nexconnUserId(AGENTS.glitch.id), metadata: { status: 'started' } }).catch(() => {});
-  await ctx.agents.states.set(channelId, 'glitch', 'testing', { detail: `v${version}`, gameId: game.id, progress: { done: 0, total: Math.max(1, total) } });
-  await postCard(ctx, {
-    channelId,
-    agent: 'glitch',
-    kind: 'test',
-    content: { v: 1, gameId: game.id, version, pass: true, passed: total, total, fps: 60, failures: [], regressions: [] },
-    metadata: { status: 'done' },
-    gameId: game.id,
-    version,
-    state: { kind: 'test', status: 'done', simulated: true },
-  });
-  await updateVersion(ctx.db, game.id, version, { status: 'passed' });
-  await updateCard(ctx, { messageId: handoffId, channelId, operatorId: nexconnUserId(AGENTS.glitch.id), metadata: { status: 'done' } }).catch(() => {});
-  await record(ctx, {
-    action: 'test.passed',
-    actor: { type: 'agent', agent: 'glitch' },
-    crewId: game.crewId,
-    gameId: game.id,
-    summary: `v${version} PASS ${total}/${total} (simulated: FAKE_AGENTS, real playtests arrive in Phase 4)`,
-  });
-  await ctx.agents.states.set(channelId, 'glitch', 'idle');
+  await ctx.agents.queue.enqueuePlaytest({ key: `${game.id}:v${version}:${buildCardId}`, gameId: game.id, version, channelId, handoffMessageId: handoffId });
 }
 
 // ---- change requests: Pixel writes a short spec delta, Forge builds the next version -------------

@@ -43,7 +43,7 @@ export async function getGameByRoom(db: Db, channelId: string): Promise<GameRow 
 export async function updateGame(
   db: Db,
   id: string,
-  patch: Partial<Pick<GameRow, 'title' | 'slug' | 'pitch' | 'status' | 'roomChannelId' | 'language' | 'remixOfGameId'>>,
+  patch: Partial<Pick<GameRow, 'title' | 'slug' | 'pitch' | 'status' | 'roomChannelId' | 'language' | 'remixOfGameId' | 'publishedVersion'>>,
 ): Promise<GameRow | null> {
   const [g] = await db.update(games).set(patch).where(eq(games.id, id)).returning();
   return g ?? null;

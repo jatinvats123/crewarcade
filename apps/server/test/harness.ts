@@ -7,6 +7,8 @@ import { migrate } from 'drizzle-orm/pglite/migrator';
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { createAgentServices } from '../src/agents';
 import { runBuildJob } from '../src/agents/forge-runtime';
+import { runPlaytestJob } from '../src/agents/glitch';
+import type { Playtester } from '../src/agents/smoke';
 import { createMemoryStorage } from '../src/storage';
 import { createMemoryQueue } from '../src/agents/queue';
 import { handleAgentJob } from '../src/agents/runtime';
@@ -38,6 +40,7 @@ export interface Harness {
   pg: PGlite;
   calls: NexconnCall[];
   storage: ReturnType<typeof createMemoryStorage>;
+  clips: ReturnType<typeof createMemoryStorage>;
   /** Make the next call to `path` fail with this business code. */
   failNext: (path: string, code: number) => void;
   /** Await background work (webhook processing). */
@@ -54,7 +57,7 @@ export interface Harness {
 }
 
 export async function createHarness(
-  opts: { nexconn?: boolean; agents?: boolean; builds?: boolean; ai?: AiClient | null; env?: Record<string, string> } = {},
+  opts: { nexconn?: boolean; agents?: boolean; builds?: boolean; playtester?: Playtester; ai?: AiClient | null; env?: Record<string, string> } = {},
 ): Promise<Harness> {
   const pg = new PGlite();
   const db = drizzle(pg, { schema, casing: 'snake_case' }) as unknown as Db;
@@ -109,6 +112,7 @@ export async function createHarness(
     ...opts.env,
   });
   const storage = createMemoryStorage();
+  const clips = createMemoryStorage('clips');
   const tasks: Promise<void>[] = [];
   const ctxRef: { current: Ctx | null } = { current: null };
   const silent = { info: () => {}, warn: () => {}, error: () => {} };
@@ -118,6 +122,7 @@ export async function createHarness(
         config,
         nexconn,
         ai: opts.ai === undefined ? createFakeAiClient({ speed: 0 }) : opts.ai,
+        ...(opts.playtester && { playtester: opts.playtester }),
         queue,
         ctxRef,
         log: silent,
@@ -133,6 +138,7 @@ export async function createHarness(
     agents,
     logger: false,
     storage,
+    clips,
     now: () => now.t,
     runInBackground: (_name, task) => void tasks.push(task()),
     onReady: c => (ctxRef.current = c),
@@ -141,6 +147,7 @@ export async function createHarness(
     const c = ctxRef.current;
     await queue.start(job => handleAgentJob({ ...c, agents }, job));
     if (opts.builds) await queue.startBuilds(job => runBuildJob({ ...c, agents }, job));
+    if (opts.playtester) await queue.startPlaytests(job => runPlaytestJob({ ...c, agents }, job));
   }
   let eventNo = 0;
   return {
@@ -149,6 +156,7 @@ export async function createHarness(
     pg,
     calls,
     storage,
+    clips,
     failNext: (p, code) => void failures.set(p, code),
     flush: async () => {
       await Promise.all(tasks.splice(0));
@@ -202,4 +210,35 @@ export async function signUp(h: Harness, name = 'Riya', ip = '10.0.0.1'): Promis
   });
   if (res.statusCode !== 201) throw new Error(`signup failed: ${res.statusCode} ${res.body}`);
   return { cookie: sessionFrom(res), id: res.json().user.id };
+}
+
+/** A browser-free playtester: every scenario expect passes (or every one fails with pass=false). */
+export function stubPlaytester(initial = true): Playtester & { runs: number; pass: boolean } {
+  const me = {
+    runs: 0,
+    pass: initial,
+    async playtest(input: Parameters<Playtester['playtest']>[0]) {
+      if (!input.only) me.runs++;
+      const pass = me.pass;
+      const expects = (input.scenario ?? []).flatMap(s => ('expect' in s ? [{ label: s.label ?? s.expect, pass, scenario: 'scenario' }] : []));
+      const checks = expects.map(e => ({ name: e.label, pass, detail: pass ? 'ok' : 'state {"x":0}', kind: 'scenario' as const }));
+      const failed = checks.filter(c => !c.pass);
+      return {
+        pass: failed.length === 0,
+        label: input.label ?? 'game',
+        seed: 42,
+        fps: 60,
+        controls: ['ArrowLeft'],
+        seconds: 1,
+        checks,
+        failed,
+        expects,
+        logs: [],
+        screenshot: Buffer.from('png'),
+        summary: '',
+      };
+    },
+    clip: async () => Buffer.from('GIF89a'),
+  };
+  return me;
 }

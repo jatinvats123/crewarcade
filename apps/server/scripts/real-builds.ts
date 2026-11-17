@@ -8,7 +8,7 @@ import path from 'node:path';
 import { launchBrowser, playtest, starterHtml } from '@crewarcade/engine';
 import { createAi } from '../src/agents';
 import { BuildCheckFailedError, runBuildLoop } from '../src/agents/forge';
-import { createSmoke, SMOKE_STEPS } from '../src/agents/smoke';
+import { createHeadless, SMOKE_STEPS } from '../src/agents/smoke';
 import { AiUnavailableError } from '../src/ai/claude';
 import { baseSlug, detectLanguage, normalizePlan, PixelPlanOutput } from '../src/agents/plan';
 import { PIXEL_SYSTEM, planRequest } from '../src/agents/prompts';
@@ -32,7 +32,7 @@ const outDir = path.resolve('.data/real-builds');
 await mkdir(outDir, { recursive: true });
 const browser = await launchBrowser();
 // Same as production (FORGE_SMOKE=1): Forge's loop plays each build before accepting it.
-const forgeSmoke = createSmoke();
+const forgeSmoke = createHeadless();
 
 interface Row {
   pitch: string;
@@ -94,7 +94,7 @@ for (const p of PITCHES) {
       version: 1,
       language: language.code,
       timeoutMs: config.BUILD_TIMEOUT_MS,
-      smoke: forgeSmoke.run,
+      smoke: forgeSmoke.smoke,
     });
     const buildS = (performance.now() - t0) / 1000;
     await writeFile(path.join(outDir, `${spec.slug}.html`), r.html);

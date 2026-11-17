@@ -36,14 +36,14 @@ export const BuildJobData = z.object({
   version: z.number().int().min(1),
   channelId: z.string(),
   handoffMessageId: z.string(),
-  /** First build, a change request, a remix's v1, or a retry after a failed build. */
-  reason: z.enum(['build', 'change', 'remix', 'retry']).default('build'),
+  /** First build, a change request, a remix's v1, a retry after a failed build, or a fix of failed playtest checks. */
+  reason: z.enum(['build', 'change', 'remix', 'retry', 'fix']).default('build'),
   /** DB user id of the human whose action led here (usage is charged to them). */
   requestedBy: z.string().optional(),
 });
 export type BuildJobData = z.infer<typeof BuildJobData>;
 
-/** Glitch's playtest queue. Phase 4 runs it; until then jobs wait (FAKE_AGENTS simulates a run). */
+/** Glitch's playtest queue: one job per built version, one playtest per room at a time. */
 export const PlaytestJobData = z.object({
   key: z.string(),
   gameId: z.string(),
@@ -64,6 +64,8 @@ export interface JobQueue {
   start(handler: (job: AgentJobData) => Promise<void>): Promise<void>;
   /** Starts processing build jobs (one per room at a time). */
   startBuilds(handler: (job: BuildJobData) => Promise<void>): Promise<void>;
+  /** Starts processing playtest jobs (one per room at a time). */
+  startPlaytests(handler: (job: PlaytestJobData) => Promise<void>): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -127,6 +129,22 @@ export function createPgBossQueue(
       );
       opts.log.info({}, 'build worker started (pg-boss)');
     },
+    async startPlaytests(handler) {
+      await ready();
+      await boss.work<PlaytestJobData>(
+        QUEUES.playtest,
+        {
+          localConcurrency: 1,
+          groupConcurrency: 1,
+          batchSize: 1,
+          ...(opts.pollingIntervalSeconds && { pollingIntervalSeconds: opts.pollingIntervalSeconds }),
+        },
+        async jobs => {
+          for (const j of jobs) await handler(PlaytestJobData.parse(j.data));
+        },
+      );
+      opts.log.info({}, 'playtest worker started (pg-boss)');
+    },
     async start(handler) {
       await ready();
       await boss.work<AgentJobData>(
@@ -158,7 +176,7 @@ export function createMemoryQueue(opts: {
   log?: QueueLog;
 }): JobQueue & { idle: () => Promise<void>; builds: BuildJobData[]; playtests: PlaytestJobData[] } {
   const seen = new Set<string>();
-  type Item = { kind: 'agent'; job: AgentJobData } | { kind: 'build'; job: BuildJobData };
+  type Item = { kind: 'agent'; job: AgentJobData } | { kind: 'build'; job: BuildJobData } | { kind: 'playtest'; job: PlaytestJobData };
   const pending: Item[] = [];
   const busyRooms = new Set<string>();
   const builds: BuildJobData[] = [];
@@ -166,7 +184,8 @@ export function createMemoryQueue(opts: {
   let running = 0;
   let handler: ((job: AgentJobData) => Promise<void>) | null = null;
   let buildHandler: ((job: BuildJobData) => Promise<void>) | null = null;
-  const handlerFor = (it: Item) => (it.kind === 'agent' ? handler : buildHandler);
+  let playtestHandler: ((job: PlaytestJobData) => Promise<void>) | null = null;
+  const handlerFor = (it: Item) => (it.kind === 'agent' ? handler : it.kind === 'build' ? buildHandler : playtestHandler);
   let waiters: Array<() => void> = [];
 
   const settleIdle = () => {
@@ -180,14 +199,14 @@ export function createMemoryQueue(opts: {
 
   const pump = () => {
     while (running < opts.concurrency) {
-      // One agent job and one build job per room at a time (as pg-boss groups per queue).
+      // One agent, one build and one playtest job per room at a time (as pg-boss groups per queue).
       const i = pending.findIndex(it => !!handlerFor(it) && !busyRooms.has(`${it.kind}|${it.job.channelId}`));
       if (i === -1) break;
       const it = pending.splice(i, 1)[0]!;
       const lock = `${it.kind}|${it.job.channelId}`;
       busyRooms.add(lock);
       running++;
-      const run = it.kind === 'agent' ? () => handler!(it.job) : () => buildHandler!(it.job);
+      const run = it.kind === 'agent' ? () => handler!(it.job) : it.kind === 'build' ? () => buildHandler!(it.job) : () => playtestHandler!(it.job);
       void (async () => {
         try {
           await run();
@@ -228,7 +247,10 @@ export function createMemoryQueue(opts: {
       const key = `playtest:${job.key}`;
       if (seen.has(key)) return false;
       seen.add(key);
-      playtests.push(PlaytestJobData.parse(job));
+      const parsed = PlaytestJobData.parse(job);
+      playtests.push(parsed);
+      pending.push({ kind: 'playtest', job: parsed });
+      pump();
       return true;
     },
     async start(h) {
@@ -239,9 +261,14 @@ export function createMemoryQueue(opts: {
       buildHandler = h;
       pump();
     },
+    async startPlaytests(h) {
+      playtestHandler = h;
+      pump();
+    },
     async stop() {
       handler = null;
       buildHandler = null;
+      playtestHandler = null;
     },
     idle: () =>
       new Promise<void>(resolve => {

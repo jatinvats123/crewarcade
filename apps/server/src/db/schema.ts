@@ -65,7 +65,7 @@ export const crewMembers = pgTable(
   ],
 );
 
-export const GAME_STATUSES = ['planning', 'building', 'testing', 'awaiting_approval', 'published', 'failed'] as const;
+export const GAME_STATUSES = ['planning', 'building', 'testing', 'awaiting_approval', 'published', 'failed', 'blocked'] as const;
 export const games = pgTable(
   'games',
   {

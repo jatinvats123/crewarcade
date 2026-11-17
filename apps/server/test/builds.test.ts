@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { channel, type AiClient, type StructuredCall } from '../src/ai/claude';
 import { createFakeAiClient } from '../src/ai/fake';
 import { cards, games, gameVersions, ledger } from '../src/db/schema';
-import { createHarness, signUp, WEB, type Harness, type NexconnCall } from './harness';
+import { createHarness, signUp, stubPlaytester, WEB, type Harness, type NexconnCall } from './harness';
 
 /** The fake client, plus: records Forge's prompts, and can be told to fail the next N builds. */
 function recordingAi(): AiClient & { forgePrompts: string[]; failNextBuilds: number } {
@@ -99,7 +99,7 @@ async function pitchAndApprove(text: string, channel = channelId, cookie = asha.
 
 beforeAll(async () => {
   ai = recordingAi();
-  h = await createHarness({ agents: true, builds: true, ai, env: { FAKE_AGENTS: '1', PUBLIC_API_ORIGIN: 'https://api.test' } });
+  h = await createHarness({ agents: true, builds: true, playtester: stubPlaytester(), ai, env: { FAKE_AGENTS: '1', PUBLIC_API_ORIGIN: 'https://api.test' } });
   asha = await signUp(h, 'Asha', '10.2.0.1');
   riya = await signUp(h, 'Riya', '10.2.0.2');
   sam = await signUp(h, 'Sam', '10.2.0.3');
@@ -149,7 +149,7 @@ describe('approve -> Forge builds v1', () => {
     expect(forgeStates.some(s => s.state === 'checking')).toBe(true);
     expect(forgeStates.at(-1).state).toBe('idle');
 
-    // Then Forge -> Glitch, and (FAKE) a simulated PASS card.
+    // Then Forge -> Glitch: the playtest job runs (stub playtester here) and posts a PASS card.
     const handoffs = sends(calls, CARD_MESSAGE_TYPES.handoff).map(c => JSON.parse(String(c.body.content)));
     expect(handoffs.at(-1)).toMatchObject({ from: 'forge', to: 'glitch', task: 'Test v1 against the acceptance list' });
     expect(h.agents!.queue.playtests).toHaveLength(1);

@@ -51,6 +51,9 @@ const BaseSchema = z.object({
   /** Development only: where game HTML is kept when Supabase Storage is not configured. Production
    *  refuses this (Render's disk is wiped on every deploy). */
   GAMES_LOCAL_DIR: z.string().min(1).default('.data/games'),
+  /** Public bucket for Glitch's GIFs and screenshots (served through GET /clips too). */
+  SUPABASE_CLIPS_BUCKET: z.string().min(3).max(63).default('clips'),
+  CLIPS_LOCAL_DIR: z.string().min(1).default('.data/clips'),
 
   ANTHROPIC_API_KEY: optionalSecret,
   ANTHROPIC_MODEL: z.string().default('claude-opus-5-5'),

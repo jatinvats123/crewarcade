@@ -2,9 +2,6 @@
 // whole pipeline (router -> job -> agent state -> stream -> card -> ledger) runs without Claude.
 // Used by e2e tests and as a demo safety net. Outputs are derived from the call's `hint` (the
 // structured inputs the agent also sends to Claude), so the same pitch always gives the same plan.
-import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-import path from 'node:path';
 import type { PlanCardContent } from '@crewarcade/shared';
 import { fakeBuildOutput } from './fake-game';
 import { channel, type AiClient, type AiUsage, type StructuredCall, type StructuredRun, type TextCall, type TextRun } from './claude';
@@ -102,13 +99,6 @@ function fakeExplain(hint: { question: string; plan: PlanCardContent; language: 
 
 const ZERO = (ms: number): AiUsage => ({ model: 'fake', tokensIn: 0, tokensOut: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0, ms, fellBack: false });
 
-/** Engine fixtures (test data) for Forge and Glitch fakes in later phases. */
-async function fixture(file: 'scenario.json'): Promise<string> {
-  const require = createRequire(import.meta.url);
-  const root = path.dirname(require.resolve('@crewarcade/engine/package.json'));
-  return readFile(path.join(root, 'fixtures', 'games', 'comet-dash', 'v1', file), 'utf8');
-}
-
 export function createFakeAiClient(o: FakeOptions = {}): AiClient {
   const speed = o.speed ?? 1;
   const sleep = o.sleep ?? realSleep;
@@ -140,10 +130,20 @@ export function createFakeAiClient(o: FakeOptions = {}): AiClient {
               raw = out;
               break;
             }
-            case 'glitch.scenario':
+            case 'glitch.scenario': {
+              // A generic scenario any working game passes: start, play 3 s, one labelled check per item.
               await wait(1500);
-              raw = { steps: JSON.parse(await fixture('scenario.json')) as unknown };
+              const items = ((call.hint ?? {}) as { acceptance?: Array<{ id: string; text: string }> }).acceptance ?? [];
+              raw = {
+                steps: [
+                  { call: 'start' },
+                  { mark: 'a' },
+                  { wait: 3000 },
+                  ...items.map(a => ({ expect: "state.scene === 'playing' || state.scene === 'over'", label: `${a.id} ${a.text}`.slice(0, 120) })),
+                ],
+              };
               break;
+            }
             case 'forge.build': {
               const h = (call.hint ?? {}) as Parameters<typeof fakeBuildOutput>[0];
               const out = fakeBuildOutput(h);

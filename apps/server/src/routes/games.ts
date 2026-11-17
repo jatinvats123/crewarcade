@@ -2,11 +2,23 @@
 //   POST /api/cards/:messageId/vote      {vote: yes|no}   any human crew member
 //   POST /api/cards/:messageId/approve                    owner or approver
 //   POST /api/cards/:messageId/change    {text}           any human crew member (plan: revise; build: next version)
+//   POST /api/cards/:messageId/publish   {decision}       owner or approver (Allow / Block); agents never
+//   POST /api/cards/:messageId/fix                        any human crew member ([Ask for fix] / [Try again] on a FAIL)
 //   GET  /api/rooms/:channelId                            which crew/game a channel is (members only)
 //   GET  /api/rooms/:channelId/agents                     live agent states in that room
 //   GET  /api/games/:id/ledger                            the game's Decision Ledger (members; public once published)
 //   GET  /api/crews/:id/agents/:agent/activity            an agent's last 5 ledger actions in a crew
-import { AGENTS, BUILTIN_MESSAGE_TYPES, ChangeRequestBody, LIMITS, nexconnUserId, VoteBody, type LedgerResponse, type RoomInfo } from '@crewarcade/shared';
+import {
+  AGENTS,
+  BUILTIN_MESSAGE_TYPES,
+  ChangeRequestBody,
+  LIMITS,
+  nexconnUserId,
+  PublishDecisionBody,
+  VoteBody,
+  type LedgerResponse,
+  type RoomInfo,
+} from '@crewarcade/shared';
 import { routeIncoming } from '../agents/runtime';
 import { logMessage } from '../repo/webhooks';
 import type { FastifyInstance } from 'fastify';
@@ -17,6 +29,7 @@ import { getCrew, getRole } from '../repo/crews';
 import { getCard, getGame, listLedgerForActor, listLedgerForGame, toGameSummary, toLedgerEntry } from '../repo/games';
 import { requestBuildChange } from '../services/builds';
 import { approvePlan, requestChange, votePlan } from '../services/plans';
+import { askForFix, decidePublish } from '../services/publish';
 import { resolveRoom } from '../services/rooms';
 import { fixedWindowLimiter, HttpError, optionalUser, rateLimit, requireUser } from './http';
 
@@ -70,6 +83,22 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx): void {
       return { messageId, metadata: {} };
     }
     return { messageId, metadata: await requestChange(agentsOf(ctx), user, messageId, text) };
+  });
+
+  app.post('/api/cards/:messageId/publish', async req => {
+    const user = await requireUser(ctx, req);
+    rateLimit(actionLimit, `user:${user.id}`);
+    const { messageId } = MessageParam.parse(req.params);
+    const { decision } = PublishDecisionBody.parse(req.body);
+    return { messageId, metadata: await decidePublish(agentsOf(ctx), user, messageId, decision) };
+  });
+
+  app.post('/api/cards/:messageId/fix', async req => {
+    const user = await requireUser(ctx, req);
+    rateLimit(actionLimit, `user:${user.id}`);
+    const { messageId } = MessageParam.parse(req.params);
+    const { version } = await askForFix(agentsOf(ctx), user, messageId);
+    return { messageId, version };
   });
 
   // Backup trigger for the agents: the app reports a text message it just sent, and the server

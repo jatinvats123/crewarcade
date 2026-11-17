@@ -3,7 +3,7 @@
 // starts, the score rises (or the run ends), and nothing throws. Problems go back to Forge as
 // numbered items, like static-check problems. Glitch's full playtest (Phase 4) still follows; this
 // only catches games that are dead on arrival (e.g. addScore(Math.round(dt * 10)) is always 0).
-import { launchBrowser, playtest } from '@crewarcade/engine';
+import { clip, launchBrowser, playtest, type PlaytestInput, type PlaytestResult } from '@crewarcade/engine';
 
 type Browser = Awaited<ReturnType<typeof launchBrowser>>;
 
@@ -31,15 +31,37 @@ export function smokeFindings(r: { checks: Array<{ name: string; pass: boolean; 
   return out;
 }
 
-/** One shared browser per process, launched on first use. */
-export function createSmoke(): { run: (html: string) => Promise<string[]>; close: () => Promise<void> } {
+/** Glitch's full playtest and clip, always in the sandboxed iframe (allow-scripts only), like the player. */
+export interface Playtester {
+  playtest(input: Omit<PlaytestInput, 'browser' | 'sandbox'>): Promise<PlaytestResult>;
+  /** A ~6 s GIF of the game being played (null when the clipper fails: the report still stands). */
+  clip(html: string, title: string): Promise<Buffer | null>;
+}
+
+/** One shared headless Chromium per process for Forge's smoke test and Glitch's playtests. */
+export function createHeadless(): { smoke: (html: string) => Promise<string[]>; playtester: Playtester; close: () => Promise<void> } {
   let browser: Promise<Browser> | null = null;
+  const get = async () => {
+    browser ??= launchBrowser();
+    const b = await browser;
+    if (b.isConnected()) return b;
+    browser = launchBrowser();
+    return browser;
+  };
   return {
-    async run(html) {
-      browser ??= launchBrowser();
-      const b = await browser;
-      const r = await playtest({ html, label: 'smoke', only: { name: 'smoke', steps: SMOKE_STEPS }, profile: 'fast', budgetMs: 30_000, browser: b });
+    async smoke(html) {
+      const r = await playtest({ html, label: 'smoke', only: { name: 'smoke', steps: SMOKE_STEPS }, profile: 'fast', budgetMs: 30_000, browser: await get() });
       return smokeFindings(r);
+    },
+    playtester: {
+      playtest: async input => playtest({ advisoryFps: true, ...input, sandbox: true, browser: await get() }),
+      async clip(html, title) {
+        try {
+          return (await clip({ kind: 'clip', title: title.slice(0, 40), game: { html, version: 1 }, sandbox: true, browser: await get() })).gif;
+        } catch {
+          return null;
+        }
+      },
     },
     async close() {
       if (browser) await (await browser).close().catch(() => {});

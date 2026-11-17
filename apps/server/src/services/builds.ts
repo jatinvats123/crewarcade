@@ -14,6 +14,7 @@ import { getGameBySlug, getVersion, listRemixes, listVersions, updateVersion, ty
 import { CrewRuleError, createCrew } from './crews';
 import { record } from './ledger';
 import { playUrl } from './play';
+import { clipUrl } from '../storage';
 
 type AgentCtx = Ctx & { agents: AgentServices };
 
@@ -164,6 +165,7 @@ export async function gamePage(ctx: Ctx, slug: string): Promise<GamePageResponse
     emoji: typeof look?.emoji === 'string' && look.emoji.length <= 16 ? look.emoji : '🎮',
     colors,
     publishedVersion: game.publishedVersion,
+    screenshotUrl: pub?.screenshotPath ? clipUrl(ctx.config.PUBLIC_API_ORIGIN, game.slug, pub.version, 'shot') : null,
     playUrl: pub?.htmlPath ? playUrl(ctx.config, { slug: game.slug, version: pub.version, published: true, now: ctx.now() }).url : null,
     orientation: pub ? orientationOf(pub) : 'any',
     crew: { name: crew?.name ?? 'A crew', members: members.map(m => ({ name: m.displayName, avatarEmoji: m.avatarEmoji, avatarColor: m.avatarColor })) },
