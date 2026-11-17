@@ -1,5 +1,6 @@
 // Link preview image for /g/<slug> (WhatsApp, iMessage, X, Discord...): 1200x630 PNG, a styled
-// title card in the game's own colours with its emoji. Phase 4 swaps in the playtest screenshot.
+// title card in the game's own colours: Glitch's mid-game playtest screenshot once the game is
+// published (the emoji tile before that, or when the screenshot cannot be fetched).
 // WhatsApp needs an absolute og:image URL (metadataBase), https, and a small file (PNG well under
 // 300 KB). next/og (satori) cannot shape Indic scripts (vowel signs and conjuncts come out in the
 // wrong order), so a title or crew name in those scripts is never drawn here: the card falls back to
@@ -32,6 +33,16 @@ export default async function Image({ params }: { params: Promise<{ slug: string
   const emoji = game?.emoji ?? '🎮';
   const [c1, c2] = game && game.colors.every(hexOk) ? game.colors : ['#7c5cff', '#ffb547'];
   const published = game?.publishedVersion !== null && game?.publishedVersion !== undefined;
+  // Inline the screenshot (satori would fetch it too, but a dead link must not break the preview).
+  let shot: string | null = null;
+  if (published && game?.screenshotUrl) {
+    try {
+      const res = await fetch(game.screenshotUrl, { next: { revalidate: 300 } });
+      if (res.ok && res.headers.get('content-type') === 'image/png') shot = `data:image/png;base64,${Buffer.from(await res.arrayBuffer()).toString('base64')}`;
+    } catch {
+      shot = null;
+    }
+  }
   const text = `${title}${line}`;
   const fonts: { name: string; data: ArrayBuffer; weight: 700; style: 'normal' }[] = [];
   const latin = await fontFor('Space Grotesk', `${text}▶ Play on CrewArcade Being built`);
@@ -56,21 +67,26 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         CrewArcade
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 48 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 240,
-            height: 240,
-            borderRadius: 56,
-            background: 'rgba(255,255,255,0.12)',
-            border: `6px solid ${c2}`,
-            fontSize: 150,
-          }}
-        >
-          {emoji}
-        </div>
+        {shot ? (
+          // eslint-disable-next-line @next/next/no-img-element -- satori renders plain <img>
+          <img src={shot} alt="" width={480} height={270} style={{ borderRadius: 28, border: `6px solid ${c2}`, objectFit: 'cover' }} />
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 240,
+              height: 240,
+              borderRadius: 56,
+              background: 'rgba(255,255,255,0.12)',
+              border: `6px solid ${c2}`,
+              fontSize: 150,
+            }}
+          >
+            {emoji}
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 18 }}>
           <div style={{ fontSize: title.length > 22 ? 64 : 84, lineHeight: 1.05, letterSpacing: -1 }}>{title}</div>
           <div style={{ fontSize: 30, opacity: 0.85 }}>{line}</div>

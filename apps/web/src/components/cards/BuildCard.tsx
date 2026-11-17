@@ -11,7 +11,7 @@ import { cn } from '@/lib/cn';
 import type { ChatMessage } from '@/lib/chat/types';
 import { useCardEnv } from './context';
 
-const REASON: Record<BuildCardContent['reason'], string> = { build: '', change: 'Change', remix: 'Remix', retry: 'Retry' };
+const REASON: Record<BuildCardContent['reason'], string> = { build: '', change: 'Change', remix: 'Remix', retry: 'Retry', fix: 'Fix' };
 
 function StepIcon({ s }: { s: BuildStep['s'] }) {
   if (s === 'done')

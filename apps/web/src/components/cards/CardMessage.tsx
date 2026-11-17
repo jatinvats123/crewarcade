@@ -1,8 +1,8 @@
 'use client';
 
 // One renderer per card type, all on the common CardShell (agent avatar + name + AI badge, title,
-// body, action row, status chip). Build and score cards are live (Phase 3); test, publish and bug
-// cards render their content and get their buttons with the flows that serve them.
+// body, action row, status chip). Build and score cards are live (Phase 3), test and publish cards
+// (Phase 4); bug cards render their content and get their buttons with the flows that serve them.
 import { AGENTS, parseCardMeta, type AnyCard } from '@crewarcade/shared';
 import Link from 'next/link';
 import { agentKeyOf } from '@/components/identity/MemberAvatar';
@@ -11,6 +11,8 @@ import type { ChatMessage } from '@/lib/chat/types';
 import { useCardEnv } from './context';
 import { BuildCard } from './BuildCard';
 import { PlanCard } from './PlanCard';
+import { PublishCard } from './PublishCard';
+import { TestCard } from './TestCard';
 
 export function CardMessage({ m }: { m: ChatMessage }) {
   const card = m.card;
@@ -90,55 +92,11 @@ function CardBody({ m, card }: { m: ChatMessage; card: AnyCard }) {
     case 'build':
       return <BuildCard m={m} build={card.content} />;
 
-    case 'test': {
-      const c = card.content;
-      return (
-        <CardShell
-          agent="glitch"
-          className="w-full"
-          title={`🧪 Playtest v${c.version}: ${c.pass ? 'PASS' : 'FAIL'}`}
-          meta={`${c.passed}/${c.total} checks · ${Math.round(c.fps)} fps`}
-          badges={<Badge tone={c.pass ? 'success' : 'danger'}>{c.pass ? 'PASS' : 'FAIL'}</Badge>}
-        >
-          {c.gifUrl && (
-            // eslint-disable-next-line @next/next/no-img-element -- playtest GIF from our clips bucket
-            <img src={c.gifUrl} alt={`Playtest of v${c.version}`} className="w-full rounded-2xl border border-border" loading="lazy" />
-          )}
-          {c.failures.length > 0 && (
-            <ul className="mt-2 flex flex-col gap-1">
-              {c.failures.map((f, i) => (
-                <li key={i}>
-                  ❌ <span className="font-semibold">{f.label}</span>: {f.detail}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardShell>
-      );
-    }
+    case 'test':
+      return <TestCard m={m} test={card.content} />;
 
-    case 'publish': {
-      const c = card.content;
-      const meta = parseCardMeta('publish', m.meta);
-      return (
-        <CardShell
-          agent={agent}
-          className="w-full"
-          title={`🚀 Publish v${c.version}?`}
-          badges={
-            <Badge tone={meta.status === 'approved' ? 'success' : meta.status === 'rejected' ? 'danger' : 'gold'}>
-              {meta.status === 'waiting'
-                ? 'Waiting for an approver'
-                : meta.status === 'approved'
-                  ? `Allowed by ${meta.decidedBy ?? 'an approver'}`
-                  : `Blocked by ${meta.decidedBy ?? 'an approver'}`}
-            </Badge>
-          }
-        >
-          <p className="text-dim">Nothing goes public until an approver taps Allow.</p>
-        </CardShell>
-      );
-    }
+    case 'publish':
+      return <PublishCard m={m} pub={card.content} />;
 
     case 'bug': {
       const c = card.content;

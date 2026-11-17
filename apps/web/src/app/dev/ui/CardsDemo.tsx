@@ -131,6 +131,77 @@ export function CardsDemo() {
       },
     ),
     {
+      ...base(
+        'DEMO-TEST-PASS',
+        {
+          kind: 'test',
+          content: {
+            v: 1,
+            gameId: 'gDemo',
+            version: 1,
+            pass: true,
+            passed: 18,
+            total: 18,
+            fps: 58,
+            failures: [],
+            regressions: [],
+            items: [
+              { id: 'A1', text: 'state().score rises while playing', pass: true },
+              { id: 'A2', text: 'Holding ArrowRight increases state().lane', pass: true },
+              { id: 'A3', text: "state().scene becomes 'over' when state().lives reaches 0", pass: true },
+            ],
+            round: 0,
+          },
+        },
+        { status: 'done', next: 'publish' },
+      ),
+      senderId: 'agentglitch',
+    },
+    {
+      ...base(
+        'DEMO-TEST-FAIL',
+        {
+          kind: 'test',
+          content: {
+            v: 1,
+            gameId: 'gDemo',
+            version: 2,
+            pass: false,
+            passed: 16,
+            total: 18,
+            fps: 55,
+            failures: [{ label: 'key Space has an effect', detail: 'no change to state or picture after 600 ms' }],
+            regressions: [],
+            items: [
+              { id: 'A1', text: 'state().score rises while playing', pass: true },
+              { id: 'A2', text: 'Pressing Space makes state().jumping true', pass: false, detail: 'state.jumping === true -> state {"jumping":false}' },
+            ],
+            round: 2,
+          },
+        },
+        { status: 'done', next: 'ask_crew' },
+      ),
+      senderId: 'agentglitch',
+    },
+    {
+      ...base(
+        'DEMO-PUBLISH',
+        {
+          kind: 'publish',
+          content: {
+            v: 1,
+            gameId: 'gDemo',
+            version: 1,
+            arcadeUrl: 'https://crewarcade.test/g/sample-scooter-run',
+            title: 'Sample Scooter Run',
+            slug: 'sample-scooter-run',
+          },
+        },
+        { status: 'waiting' },
+      ),
+      senderId: 'agentglitch',
+    },
+    {
       ...base('DEMO-SCORE', {
         kind: 'score',
         content: {
@@ -185,6 +256,12 @@ export function CardsDemo() {
             list.map(m => (m.messageId === id ? { ...m, meta: metaToStrings({ status: 'building', steps: [{ t: 'Reading the plan', s: 'doing' }] }) } : m)),
           );
           return { queued: true };
+        },
+        publish: (id, decision) =>
+          answer(id, { status: decision === 'allow' ? 'approved' : 'rejected', decidedBy: 'You', decidedAt: new Date().toISOString() }),
+        askForFix: async id => {
+          await answer(id, { next: 'asked' });
+          return { messageId: id, version: 3 };
         },
         play: (gameId, version, title) => player.open({ gameId, version, ...(title && { title }) }),
       },

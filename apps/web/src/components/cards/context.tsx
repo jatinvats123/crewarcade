@@ -13,6 +13,10 @@ export interface CardActions {
   requestChange: (messageId: string, text: string) => Promise<CardActionResponse>;
   /** [Try again] on a failed Build card. */
   retryBuild: (messageId: string) => Promise<unknown>;
+  /** Allow / Block on a publish request (owner or approver; the server checks). */
+  publish: (messageId: string, decision: 'allow' | 'block') => Promise<CardActionResponse>;
+  /** [Ask for fix] / [Try again] on a FAIL Test card. */
+  askForFix: (messageId: string) => Promise<unknown>;
   /** Opens the full-screen player. */
   play: (gameId: string, version: number | 'latest', title?: string) => void;
 }

@@ -154,6 +154,8 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
         approve: api.approve,
         requestChange: api.requestChange,
         retryBuild: api.retryBuild,
+        publish: api.publish,
+        askForFix: api.askForFix,
         play: (gameId, version, title) => player.open({ gameId, version, ...(title && { title }) }),
       },
       setMeta: (channelId, messageId, metadata, replace) => nx.store.dispatch({ type: 'message/metadata', channelId, messageId, metadata, replace }),

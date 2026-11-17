@@ -90,6 +90,10 @@ export const api = {
     request('POST', '/api/chat/relay', z.object({ routed: z.boolean() }), body),
   ledger: (gameId: string) => request('GET', `/api/games/${encodeURIComponent(gameId)}/ledger`, LedgerResponse),
   retryBuild: (messageId: string) => request('POST', `/api/cards/${encodeURIComponent(messageId)}/retry`, z.object({ queued: z.boolean() }), {}),
+  publish: (messageId: string, decision: 'allow' | 'block') =>
+    request('POST', `/api/cards/${encodeURIComponent(messageId)}/publish`, CardActionResponse, { decision }),
+  askForFix: (messageId: string) =>
+    request('POST', `/api/cards/${encodeURIComponent(messageId)}/fix`, z.object({ messageId: z.string(), version: z.number().int() }), {}),
   playUrl: (gameId: string, version: number | 'latest') => request('GET', `/api/games/${encodeURIComponent(gameId)}/versions/${version}/play`, PlayUrlResponse),
   versions: (gameId: string) => request('GET', `/api/games/${encodeURIComponent(gameId)}/versions`, GameVersionsResponse).then(r => r.versions),
   leaderboard: (gameId: string) => request('GET', `/api/games/${encodeURIComponent(gameId)}/leaderboard`, LeaderboardResponse),
