@@ -4,16 +4,16 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
 
 ## Phase checklist
 
-| Phase | Theme                       | Status                                                               |
-| ----- | --------------------------- | -------------------------------------------------------------------- |
-| 0     | Foundation                  | **Done** (branch `phase-0`)                                          |
-| 1     | Identity, crews, chat       | **Built** (branch `phase-1`); live Nexconn check pending keys        |
-| 2     | Pixel, cards, approval      | **Built** (branch `phase-2`); live Nexconn + Claude run pending keys |
-| 3     | Forge, builds, play, scores | **Built** (branch `phase-3`); live E2E_CHAT run pending              |
-| 4     | Glitch, playtest, publish   | **Built** (branch `phase-4`); live E2E_CHAT run pending (Docker)     |
-| 5     | Bugs, voice, languages      | —                                                                    |
-| 6     | Arcade and growth           | —                                                                    |
-| 7     | Polish and launch           | —                                                                    |
+| Phase | Theme                       | Status                                                                |
+| ----- | --------------------------- | --------------------------------------------------------------------- |
+| 0     | Foundation                  | **Done** (branch `phase-0`)                                           |
+| 1     | Identity, crews, chat       | **Built** (branch `phase-1`); live Nexconn check pending keys         |
+| 2     | Pixel, cards, approval      | **Built** (branch `phase-2`); live Nexconn + Claude run pending keys  |
+| 3     | Forge, builds, play, scores | **Built** (branch `phase-3`); live E2E_CHAT run pending               |
+| 4     | Glitch, playtest, publish   | **Built** (branch `phase-4`); live E2E_CHAT run pending (Docker)      |
+| 5     | Bugs, voice, languages      | **Built** (branch `phase-5`); live Sarvam + translation check pending |
+| 6     | Arcade and growth           | —                                                                     |
+| 7     | Polish and launch           | —                                                                     |
 
 ## Phase 2: built, waiting for Nexconn and Anthropic keys to verify live (branch `phase-2`)
 
@@ -174,6 +174,88 @@ Opus's minimum cacheable size, so expect `cache_read` ≈ 0 for Pixel until the 
    `pnpm --filter @crewarcade/server measure:pixel` for the real cost and time per plan (≈ $0.50 total).
 3. On Render: `JOBS_DATABASE_URL` = the Supabase **session** pooler URL (port 5432) for pg-boss, and
    optionally `FAKE_AGENTS=1` as a demo fallback.
+
+## Phase 5: built, live Sarvam / translation check pending (branch `phase-5`)
+
+Players report bugs, Glitch reproduces them on camera, Forge ships a hotfix that must pass every old
+repro, and it goes public only through Allow. Plus voice pitches (Sarvam) and tap-to-translate.
+
+### Done
+
+- **Bug intake:** [Report a bug] in the player (crew pages; text + optional phone screenshot) and
+  `bug: …` in a game room both call `reportBug` (`services/bugs.ts`). The screenshot is checked
+  (magic bytes, ≤ 4 MB), goes to the private `uploads` bucket and is served to crew members only
+  (`GET /api/bugs/:id/screenshot`). Glitch posts `CA:BugCard`, ledger `bug.reported`, repro queued.
+- **Repro (`agents/bugs.ts`):** these jobs share the playtest queue (one browser job per room).
+  The cheap model reads the report plus the screenshot (image input added to the Claude and Gemini
+  clients) and writes steps plus one `BUG <n>:` expect, validated with a repair round. The repro runs
+  alone (`only` mode). FAIL = reproduced: repro GIF on the BugCard, `bug.reproduced`, Forge's hotfix
+  starts. PASS = not reproduced: Glitch asks one follow-up question (`bug.not_reproduced`). A check
+  that throws counts as a broken repro, never the bug (one more draft).
+- **Hotfix:** `startFix` gained a hotfix mode. Version meta keeps `bugId` through the fix rounds
+  (max 2 automatic). The first note is `hotfix: <bug> (bug hunter: <name>)`. The playtest replays
+  every saved repro as hard checks (`hotfixPasses`: they must all run and pass; old scenarios stay
+  advisory). PASS → `clip({kind:'fix'})` side-by-side GIF → publish card with a `hotfix` block
+  (same Allow gate). Allow → bug `fixed`, BugCard turns green, `bugHunters` credited on `/g/:slug`.
+  Migration `0003_phase5_bugs` (bug number, card id, hotfix version, question).
+- **Voice pitches:** an HQ voice note with an agent mention (type `@pixel `, then hold the mic) or
+  any note in a solo crew → agent job → download (https, size cap; relayed URLs only from
+  `NEXCONN_MEDIA_HOSTS`) → Sarvam `saaras:v3` `mode=codemix` (≤ 30 s) → routed exactly like text.
+  No key or any failure → a friendly "type it instead" line (Hindi for Hindi users).
+- **Translate (tap only):** [Translate] under others' messages → `POST /api/translate/quota` (atomic,
+  `LIMITS.dailyTranslationChars` = 1,000 chars per user per day in `usage`) → Nexconn
+  `translateMessages` + `TranslateHandler`. Over the cap: "back tomorrow".
+
+### Verified locally (2026-11-17)
+
+- lint ✓, typecheck ✓, `pnpm test` 355 passing (1 skipped: the gated real-builds test), `pnpm eval:fast`
+  21/21 caught, 0 false FAILs, `pnpm e2e` 35 passed, 7 skipped (same skips as Phase 4; built first,
+  then Playwright against `next start`: the first build stopped on Next's advisory check again).
+- **Sarvam live** (owner's key, `saaras:v3` + `codemix`): a 8 s Hinglish pitch read by a Windows
+  English TTS voice came back in 1.1 s as "Pixel, EK Billy Wala game, Baneo Jo Chai K Cups…"
+  (`en-IN`); the router's leading "Pixel," makes it a pitch. A real Hindi speaker is still to try.
+- New tests: `test/bugs-unit.test.ts` covers repro mapping, repro format, the hotfix rule,
+  screenshots, the translation cap and the voice fallback, plus webhook voice → plan card. The
+  integration test `test/bugs.test.ts` uses real Chromium (~100 s): the penguin-slide
+  `collision-disabled` mutant as v1 → report with screenshot → reproduced → hotfix v2 passes the
+  repro → member 403, owner Allow → fixed + credited. `e2e/bugs.spec.ts` (FAKE demo) covers
+  BugCard → hotfix card → Allow.
+
+### Phone check (4 steps)
+
+1. In a game room, play v1 → 🐞 Report a bug → describe it (+ screenshot) → a BugCard appears;
+   it turns "Reproduced" with a GIF, or Glitch asks one question.
+2. A reproduced bug: Forge's hotfix build card, then a "🩹 Hotfix vN" card with the side-by-side GIF
+   and "Bug hunter: <you>". Only the owner/approver sees Allow; after Allow `/g/<slug>` lists the hunter.
+3. Type `@pixel `, hold the mic, say a Hinglish pitch → Pixel's plan card (needs `SARVAM_API_KEY`).
+4. Tap Translate under a friend's message → the translation appears; enable Console → Translation first.
+
+### Known issues
+
+- Not run live: Nexconn translation (needs the Console switch + the app key). Sarvam is checked live with a synthetic clip only.
+  The voice relay is off until `NEXCONN_MEDIA_HOSTS` lists Nexconn's file host, so the webhook is
+  the only trigger.
+- Voice notes in multi-human crews are transcribed only when they mention an agent (Sarvam bills per
+  second). Spoken "Pixel, …" without a typed mention isn't routed there.
+- In FAKE mode Glitch's repro is generic: a working game "doesn't reproduce" and Glitch asks a question.
+- The translated source language isn't shown (the SDK result gives only the target).
+
+### Render: free plan for now (2026-11-17)
+
+`render.yaml` now deploys `crewarcade-server` on **`plan: free`** (512 MB, 0.1 CPU, sleeps after 15
+min idle, ~1 min to wake, 750 h/month). Free has no pre-deploy step, so `dockerCommand` runs the
+migrations and then the server. Chromium can't fit in 512 MB, so `PLAYTESTS=false` and
+`FORGE_SMOKE=false`. Builds are playable, Glitch posts "playtests are switched off" (tested), and
+bug reports are saved but not replayed. **Nothing can be published** (Allow needs a passed playtest).
+Back to the full product: `plan: standard`, both flags `true`, `preDeployCommand: node dist/migrate.js`
+instead of `dockerCommand`.
+
+### Needed from the owner
+
+1. `SARVAM_API_KEY` on Render (it is in the local `apps/server/.env` now), and Console → Chat →
+   Chat settings → Messages → Translation switched on.
+2. Optional: Nexconn's media host in `NEXCONN_MEDIA_HOSTS` (the browser relay for voice).
+3. Still open from Phase 4: Docker/Postgres for the live E2E_CHAT run.
 
 ## Phase 4: built, live E2E_CHAT run pending (branch `phase-4`)
 
@@ -345,10 +427,9 @@ them; not re-measured).
 2. Render: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AI_PROVIDER=gemini`, `GEMINI_API_KEY`.
    Vercel: `NEXT_PUBLIC_SITE_URL` = the https URL.
 
-## Next: Phase 5
+## Next: Phase 6
 
-Bug reports with screenshots, Glitch repros (saved repros already run as hard checks), hotfix flow
-with side-by-side GIFs, voice pitches, built-in translation.
+Public Arcade, game pages, share links + OG images, remixes, classroom mode, judge mode, `/stats`.
 
 ## Phase 1: built, waiting for Nexconn keys to verify live (branch `phase-1`)
 

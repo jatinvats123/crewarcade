@@ -404,14 +404,30 @@ isCounted: false, isStatusMessage: true`), sent at most every 4 s while typing; 
   is disabled). Billed daily, and **a day with any usage is billed as at least 1,000 characters** → at
   most ~10 billable days on the free allowance. Translate on demand (tap to translate), batch per day,
   and track `usage.translations_chars`.
+- **Phase 5 (tap only, no auto-translate):** [Translate] under someone else's message first calls
+  `POST /api/translate/quota {chars}`, which reserves characters of `LIMITS.dailyTranslationChars` per
+  user per day in `usage.translations_chars` (one atomic upsert). Over the cap the user gets a friendly
+  "back tomorrow" message. Then `setTranslationLanguage(<user language>)` (once) and `translateMessages`
+  with the text. The result arrives on `NCEngine.addTranslateHandler(..., new TranslateHandler({
+onTranslationCompleted }))` (`results[].identifier` = messageId, `code === 0`, `translateInfo.translatedText`).
 
 ## Speech-to-text (voice pitches, Hindi/Hinglish)
 
-Nexconn's Web SDK has voice **messages** (`RC:HQVCMsg`) but no speech-to-text API (none in llms.txt),
-so we use **Sarvam AI**: `POST https://api.sarvam.ai/speech-to-text`, header `api-subscription-key`,
-multipart `file`, `model=saaras:v4` (default; `saaras:v3` still available), `mode=codemix` for
-Hinglish (or `transcribe` / `translate`). REST accepts ≤ 30 s of audio (WAV, MP3, AAC, FLAC, OGG,
-WEBM…). Server only (`SARVAM_API_KEY`).
+Nexconn's Web SDK has voice **messages** (`RC:HQVCMsg`). Its type definitions (26.2.1) also list a
+speech-to-text event for HQ voice (`SpeechToTextCompletedEvent`), but it isn't in llms.txt and it
+isn't built for Hinglish, so we use **Sarvam AI**: `POST https://api.sarvam.ai/speech-to-text`,
+header `api-subscription-key`, multipart `file`, `model`, `mode`, `language_code=unknown`. Live docs
+(checked 2026-11-17): models `saaras:v4` (default) and `saaras:v3`. **`mode` (`transcribe`,
+`translate`, `verbatim`, `translit`, `codemix`) is documented for `saaras:v3`**, so we send
+`saaras:v3` + `mode=codemix`. Response `{ transcript, language_code }`. REST is for clips under 30 s
+(WAV, MP3, AAC, M4A, OGG, OPUS, WebM…). Server only (`SARVAM_API_KEY`, `apps/server/src/ai/sarvam.ts`).
+
+**Voice pitch flow (Phase 5):** the composer sends an HQ voice note with `mentionedInfo` when the
+user typed `@pixel` (etc.) before recording. On `message:send` (or the browser relay, only for hosts
+in `NEXCONN_MEDIA_HOSTS`) the server queues an agent job. Only notes that mention an agent, or any
+note in a solo crew, are transcribed. The job downloads the file (https, ≤ 3 MB, ≤ 30 s), transcribes
+it and routes the transcript exactly like a text message. On any failure the agent posts a friendly
+"type it instead" line.
 
 ## Secret isolation (enforced)
 
