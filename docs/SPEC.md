@@ -242,7 +242,8 @@ waiting_approval, blocked; re-sent every 5 s while busy, clients drop busy state
 ## 6. Game lifecycle
 
 `games.status`: `planning → building → testing → awaiting_approval → published`, with `failed` when
-automatic fixes run out (the crew can ask again). Each build is a `game_versions` row (`version` 1, 2, …)
+automatic fixes run out (the crew can ask again) and `blocked` when an approver taps Block (Phase 4). The public
+page always plays `published_version`, also while newer versions are built, tested or waiting for Allow. Each build is a `game_versions` row (`version` 1, 2, …)
 with its spec, check result, scenario, playtest report, GIF, screenshot, timings, tokens and cost.
 `games.published_version` points at the live version; old versions stay playable from the room.
 

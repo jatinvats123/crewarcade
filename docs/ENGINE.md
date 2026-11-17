@@ -165,15 +165,21 @@ instead of hanging.
 
 ```ts
 checkHtml(html) → { pass, problems[], sizeBytes }
-playtest({ html, scenario, scenarioError?, repros?, previous?, only?, profile?, budgetMs?, browser? })
+playtest({ html, scenario, scenarioError?, repros?, previous?, only?, profile?, budgetMs?, browser?, sandbox?, onProgress? })
   → { pass, checks[{name, pass, detail, kind, advisory?}], failed[], expects[{label, pass, scenario}],
       fps, controls, seconds, logs[], screenshot: Buffer|null (PNG), summary }
-clip({ kind: 'clip', title, game }) | ({ kind: 'repro', title, game, repro }) | ({ kind: 'fix', title, before, after, repro })
+clip({ kind: 'clip', title, game, sandbox? }) | ({ kind: 'repro', title, game, repro }) | ({ kind: 'fix', title, before, after, repro })
   → { gif: Buffer, width, height, frames, seconds, speed, sides[{version, ok}], checkLabel?, summary }
 GameSpecSchema, acceptanceFor, specToMarkdown, parseScenario, ScenarioSchema, bugStepIndex,
 starterHtml, replaceGameRegion, gameRegion, nextVersion, readHotfix, slugify, isSlug,
 loadVersion / readScenarioFile / findRepro / createVersion (on-disk layout, CLIs and fixtures)
 ```
+
+`sandbox: true` (Phase 4, what the playtest worker always uses) loads the game inside
+`<iframe sandbox="allow-scripts">` on a host page, exactly like the player: opaque origin, no
+storage, no top navigation. Checks run in the game frame; keys go to the focused frame; the fake
+clock covers every frame; score messages land on the host. `onProgress(done, total)` reports the
+acceptance expects as they run (Glitch's `testing 5/8` agent state).
 
 GIFs: canvas only, 480×270 per side (fix clips are two sides), one frame per 80 ms of game time,
 time-lapsed to stay ≤ 10 s, ≤ 5 MB, `Math.random` seeded so the same run gives the same bytes.

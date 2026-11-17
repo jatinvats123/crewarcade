@@ -10,7 +10,7 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
 | 1     | Identity, crews, chat       | **Built** (branch `phase-1`); live Nexconn check pending keys        |
 | 2     | Pixel, cards, approval      | **Built** (branch `phase-2`); live Nexconn + Claude run pending keys |
 | 3     | Forge, builds, play, scores | **Built** (branch `phase-3`); live E2E_CHAT run pending              |
-| 4     | Glitch, playtest, publish   | —                                                                    |
+| 4     | Glitch, playtest, publish   | **Built** (branch `phase-4`); live E2E_CHAT run pending (Docker)     |
 | 5     | Bugs, voice, languages      | —                                                                    |
 | 6     | Arcade and growth           | —                                                                    |
 | 7     | Polish and launch           | —                                                                    |
@@ -175,6 +175,98 @@ Opus's minimum cacheable size, so expect `cache_read` ≈ 0 for Pixel until the 
 3. On Render: `JOBS_DATABASE_URL` = the Supabase **session** pooler URL (port 5432) for pg-boss, and
    optionally `FAKE_AGENTS=1` as a demo fallback.
 
+## Phase 4: built, live E2E_CHAT run pending (branch `phase-4`)
+
+Glitch playtests every build in the sandbox, failures go back to Forge automatically (max 2 rounds),
+and nothing goes public until an owner or approver taps Allow.
+
+### Done
+
+- **Carry-over (live E2E_CHAT):** not run. Docker Desktop crashed on start (a stale
+  `dockerInference` socket; worked around by renaming `%LOCALAPPDATA%/Docker/run` to `run.old-*`), then its WSL VM
+  (`docker-desktop`) never came up. No Postgres, so no live run.
+- **Sandboxed playtests (engine):** `playtest({ sandbox: true })` and `clip({ sandbox: true })` load the
+  game in `<iframe sandbox="allow-scripts">` on a host page, like the player. Checks run in the
+  frame, the fake clock and keys work through it, score messages land on the host. Same results as
+  unsandboxed on the 3 real builds. `onProgress(done, total)` drives Glitch's `testing n/total`.
+- **Glitch worker** (`agents/glitch.ts`): `glitch-playtest` jobs, one per room at a time (pg-boss
+  group + memory queue). Probe of `state()`, then a scenario from the cheap model as flat JSON steps,
+  validated (one action per step, engine schema, a start, exactly one `A<n> …` expect per acceptance
+  item, ≤ 90 s game time) with one repair round. Then `playtest()` with saved repros (hard) and
+  earlier scenarios (advisory), plus a GIF. Stored in `game_versions`: scenario, report, fps,
+  `test_ms`, GIF + screenshot paths (new `clips` storage: public Supabase bucket / `.data/clips` /
+  memory, served at `GET /clips/<slug>/v<N>/{play.gif,shot.png}`). Ledger `test.passed` / `test.failed`.
+  The FAKE simulated PASS is gone: FAKE_AGENTS now runs the real worker with a generic scenario.
+- **Test card:** PASS/FAIL, passed/total, fps, fix round, one row per acceptance item, ⚠ warnings, GIF, ▶ Play,
+  [Ask for fix] (members), [Try again] once automatic fixes are used up.
+- **Auto-fix loop:** FAIL → Glitch → Forge handoff with the failed checks → v+1 (`reason: fix`,
+  `meta.fixRound`) → retest. After 2 automatic rounds: game `failed`, Glitch asks the crew. A member's
+  fix starts at round 0. If Glitch can't write a valid scenario, nothing goes to Forge; Try again
+  re-runs the playtest.
+- **Publish gate:** PASS → `CA:PublishCard` (Play, GIF, Allow/Block), game `awaiting_approval` (a
+  published game keeps its status), ledger `publish.requested`. `POST /api/cards/:id/publish`
+  allows owner/approver only (agents never), claimed under the card row lock (2nd tap: 409).
+  Allow → `published_version`, version `published`, card turns into the published card with the
+  `/g` link + Share, Glitch announces it. Block → `blocked` (migration `0002_phase4_publish`).
+  Ledger `publish.approved` / `publish.blocked`.
+- **Public:** `/g/<slug>` plays the published version (Phase 3 page), `screenshotUrl` added; the OG
+  image draws Glitch's screenshot (emoji tile fallback).
+
+### Verified locally (2026-11-17)
+
+- lint ✓ (ESLint, Prettier, client secret check), typecheck ✓, `pnpm test` 340 passing (1 skipped:
+  the gated real-builds test), `pnpm eval:fast` 21/21 caught, 0 false FAILs.
+- `pnpm e2e` 33 passed, 7 skipped (6 E2E_CHAT specs + the phone copy of `publish.spec.ts`, which owns
+  the mock API port on desktop). Next 16.4.4's build stopped once inside Playwright's webServer with
+  a "security vulnerability, upgrade" notice; building and starting the app first, then running
+  Playwright against it, works.
+- New tests: `test/glitch.test.ts` (scenario validation, round limit, fps rule, publish permissions,
+  FAIL → 2 auto-fixes → Ask for fix → PASS → member 403 / owner Allow → public page + clip),
+  `test/real-playtests.test.ts`, `e2e/publish.spec.ts`. Builds tests now run the real worker with a
+  stub playtester.
+
+### Playtest metrics (3 saved real builds, `REAL_PLAYTESTS=1`)
+
+Real Chromium, sandboxed iframe, fake scenario writer, fake Forge for fixes (no new paid builds):
+`REAL_PLAYTESTS=1 pnpm --filter @crewarcade/server exec vitest run test/real-playtests.test.ts`.
+
+| Game                        | First try                | Auto-fix rounds | Playtest time | fps     | Result       |
+| --------------------------- | ------------------------ | --------------- | ------------- | ------- | ------------ |
+| Chai Scooter Dash           | PASS                     | 0               | 30 s          | 60      | published    |
+| Ice Delivery                | FAIL: Space does nothing | 1               | 33 s + 47 s   | 58 / 57 | published v2 |
+| दिवाली पटाखा बिल्ली (Hindi) | PASS                     | 0               | 30 s          | 60      | published    |
+
+Average playtest 35 s (probe + scenario + playtest + GIF), first-try pass rate 2/3, 1 auto-fix round
+in total. Earlier runs on the same laptop under load measured 10–34 fps for the same games (see Known
+issues).
+
+### Phone check (4 steps, after the Phase 3 ones)
+
+1. After Forge's Build card turns Ready, Glitch's strip shows `testing 1/5 … 5/5`, then a Test
+   card with a GIF and ✅ rows.
+2. As a member: the publish card shows Play only, no Allow. As the owner: Allow → "is live", the
+   `/g` link opens and plays.
+3. Ask Forge for a change that breaks something: a FAIL card, then Forge's fix build and a new
+   Test card without any tap.
+4. Paste `/g/<slug>` into WhatsApp: the preview shows the game screenshot.
+
+### Known issues
+
+- The live E2E_CHAT run (Phase 3 + 4) is still pending: Docker Desktop's VM won't start here.
+- **Frame rate is advisory in the worker** (decision this phase): the same game measured 58 fps,
+  then 28 fps, and in one loaded run every game failed fps (31 min run; fixes could never pass).
+  The worker passes `advisoryFps`: a low frame rate shows as ⚠ on the Test card and goes to Forge
+  along with real failures, but it never fails a version alone. The engine default and the eval
+  keep it hard. Phones are still the real test: the approver plays before Allow.
+- Ice Delivery's v1 really fails (Space does nothing); one automatic round fixes it.
+- A playtest takes ~30–50 s real time on top of the build (probe + scenario + playtest + GIF).
+- Next.js 16.4.4 reports a known security advisory on build (an upgrade is suggested; not done here).
+
+### Needed from the owner
+
+1. Fix Docker Desktop (it fails to start its WSL VM) or give a Postgres URL, for the live E2E_CHAT run.
+2. Render: nothing new; the `clips` bucket is created (public) on start with the Supabase keys.
+
 ## Phase 3: built, live E2E_CHAT run pending (branch `phase-3`)
 
 Forge builds games from approved plans, players play them in a sandboxed full-screen player, scores
@@ -219,11 +311,11 @@ live and give a 5-step phone check before merging.
 
 Plans `gemini-3.5-flash-lite`; builds `gemini-3.5-flash` (API reports `gemini-3.6-flash`). Free tier.
 
-| Game | Attempts | Build time | Tokens in / out | Smoke | Full playtest |
-| --- | --- | --- | --- | --- | --- |
-| Chai Scooter Dash | 1 | 57 s | 3.5 K / 6.6 K | PASS | PASS |
-| Ice Delivery | 2 | 85 s | 10.7 K / 18.9 K | PASS | Space key does nothing |
-| दिवाली पटाखा बिल्ली (Hindi) | 2 | 61 s | 9.7 K / 15.0 K | PASS | PASS |
+| Game                        | Attempts | Build time | Tokens in / out | Smoke | Full playtest          |
+| --------------------------- | -------- | ---------- | --------------- | ----- | ---------------------- |
+| Chai Scooter Dash           | 1        | 57 s       | 3.5 K / 6.6 K   | PASS  | PASS                   |
+| Ice Delivery                | 2        | 85 s       | 10.7 K / 18.9 K | PASS  | Space key does nothing |
+| दिवाली पटाखा बिल्ली (Hindi) | 2        | 61 s       | 9.7 K / 15.0 K  | PASS  | PASS                   |
 
 Average 68 s, retry rate 67 %, $0 per build. Both retries: redeclared engine globals (prompt now lists
 them; not re-measured).
@@ -253,10 +345,10 @@ them; not re-measured).
 2. Render: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `AI_PROVIDER=gemini`, `GEMINI_API_KEY`.
    Vercel: `NEXT_PUBLIC_SITE_URL` = the https URL.
 
-## Next: Phase 4
+## Next: Phase 5
 
-Glitch: sandboxed playtest worker for the queued `glitch-playtest` jobs, PASS/FAIL cards with GIFs,
-auto-fix loop, publish request + Allow/Block, screenshots for the OG image.
+Bug reports with screenshots, Glitch repros (saved repros already run as hard checks), hotfix flow
+with side-by-side GIFs, voice pitches, built-in translation.
 
 ## Phase 1: built, waiting for Nexconn keys to verify live (branch `phase-1`)
 
