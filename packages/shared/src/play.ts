@@ -137,6 +137,8 @@ export const GamePageResponse = z.object({
   remixOf: z.object({ slug: z.string(), title: z.string() }).nullable(),
   remixes: z.array(z.object({ slug: z.string(), title: z.string() })),
   versions: z.array(GameVersionSummary),
+  /** Players whose bug reports led to a hotfix in a published version (Phase 5). */
+  bugHunters: z.array(z.object({ name: z.string(), bug: z.string(), version: z.number().int() })).default([]),
   createdAt: z.string(),
 });
 export type GamePageResponse = z.infer<typeof GamePageResponse>;

@@ -184,6 +184,32 @@ export type ChangeRequestBody = z.input<typeof ChangeRequestBody>;
 /** Allow / Block on a publish request card (owner or approver only, checked on the server). */
 export const PublishDecisionBody = z.object({ decision: z.enum(['allow', 'block']) });
 export type PublishDecisionBody = z.infer<typeof PublishDecisionBody>;
+/**
+ * POST /api/games/:id/bugs (Phase 5): a player's bug report. The screenshot is a base64 data URL of
+ * a phone photo (PNG/JPEG/WebP, <= LIMITS.screenshotBytes decoded); it goes to the private uploads bucket.
+ */
+export const BugReportBody = z.object({
+  description: z
+    .string()
+    .transform(s => s.trim())
+    .pipe(z.string().min(3, 'Say what went wrong').max(LIMITS.bugChars, `Use at most ${LIMITS.bugChars} characters`)),
+  version: z.number().int().min(1).optional(),
+  screenshot: z
+    .string()
+    .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, 'Screenshot must be a PNG, JPEG or WebP image')
+    .max(Math.ceil((LIMITS.screenshotBytes * 4) / 3) + 40, 'Screenshot is too big (max 4 MB)')
+    .optional(),
+});
+export type BugReportBody = z.input<typeof BugReportBody>;
+export const BugReportResponse = z.object({ bugId: z.string(), messageId: z.string().nullable() });
+export type BugReportResponse = z.infer<typeof BugReportResponse>;
+
+/** POST /api/translate/quota: reserve characters of today's translation allowance before a tap-to-translate. */
+export const TranslateQuotaBody = z.object({ chars: z.number().int().min(1).max(LIMITS.chatTextChars) });
+export type TranslateQuotaBody = z.infer<typeof TranslateQuotaBody>;
+export const TranslateQuotaResponse = z.object({ ok: z.boolean(), used: z.number().int(), limit: z.number().int() });
+export type TranslateQuotaResponse = z.infer<typeof TranslateQuotaResponse>;
+
 /** The card's metadata after the action (what every client will also receive live). */
 export const CardActionResponse = z.object({ messageId: z.string(), metadata: z.record(z.string(), z.string()) });
 export type CardActionResponse = z.infer<typeof CardActionResponse>;

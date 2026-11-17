@@ -74,7 +74,7 @@ export const BuildCardContent = z.object({
   title: z.string().min(1).max(60),
   version,
   /** Why this build exists: first build, a change request, a remix, or a retry after a failure. */
-  reason: z.enum(['build', 'change', 'remix', 'retry', 'fix']).default('build'),
+  reason: z.enum(['build', 'change', 'remix', 'retry', 'fix', 'hotfix']).default('build'),
   /** Short summary of the change request (change builds only). */
   change: z.string().max(300).optional(),
 });
@@ -114,6 +114,16 @@ export const PublishCardContent = z.object({
   slug: z.string().min(3).max(30).optional(),
   gifUrl: url.optional(),
   screenshotUrl: url.optional(),
+  /** Set when this version is a hotfix (Phase 5): the bug, its hunter and the side-by-side GIF. */
+  hotfix: z
+    .object({
+      bugId: id,
+      bug: z.string().min(1).max(120),
+      hunter: z.string().min(1).max(64),
+      fromVersion: version,
+      fixGifUrl: url.optional(),
+    })
+    .optional(),
 });
 export type PublishCardContent = z.infer<typeof PublishCardContent>;
 
@@ -122,8 +132,12 @@ export const BugCardContent = z.object({
   bugId: id,
   gameId: id,
   reporterId: id,
+  reporterName: z.string().max(64).optional(),
   description: z.string().min(3).max(1000),
+  /** Members-only screenshot route (private `uploads` bucket). */
   screenshotUrl: url.optional(),
+  /** The version the player was on. */
+  version: version.optional(),
 });
 export type BugCardContent = z.infer<typeof BugCardContent>;
 
@@ -234,7 +248,15 @@ export const PublishCardMeta = z.object({
 });
 export const BugCardMeta = z.object({
   status: z.enum(['open', 'reproduced', 'not_reproduced', 'fixed']).catch('open'),
+  /** Glitch is writing / running the repro. */
+  phase: z.enum(['queued', 'repro', 'done', 'hotfix']).catch('queued'),
   reproClipUrl: z.string().max(1024).optional(),
+  /** The BUG check label of the repro. */
+  check: z.string().max(200).optional(),
+  reproducedOnVersion: z.coerce.number().int().optional().catch(undefined),
+  /** Not reproduced: Glitch's one follow-up question. */
+  question: z.string().max(300).optional(),
+  hotfixVersion: z.coerce.number().int().optional().catch(undefined),
   fixedInVersion: z.coerce.number().int().optional().catch(undefined),
 });
 const NoMeta = z.object({});
@@ -327,7 +349,9 @@ export function cardPreview(card: AnyCard): string {
     case 'test':
       return `🧪 Playtest v${card.content.version}: ${card.content.pass ? 'PASS' : 'FAIL'}`;
     case 'publish':
-      return `🚀 Publish request v${card.content.version}`;
+      return card.content.hotfix
+        ? `🩹 Hotfix v${card.content.version}: ${card.content.hotfix.bug.slice(0, 50)}`
+        : `🚀 Publish request v${card.content.version}`;
     case 'bug':
       return `🐞 Bug: ${card.content.description.slice(0, 60)}`;
     case 'score':

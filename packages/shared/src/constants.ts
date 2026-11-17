@@ -146,7 +146,11 @@ export const LIMITS = {
   chatTextChars: 1500,
   gameBytes: 150 * 1024,
   dailyBuildsPerUser: 5,
-  dailyTranslationChars: 500,
+  dailyTranslationChars: 1000,
+  /** Phase 5: bug reports, screenshots, voice pitches. */
+  bugChars: 600,
+  screenshotBytes: 4 * 1024 * 1024,
+  voiceSeconds: 30,
 } as const;
 
 export const CREW_ROLES = ['owner', 'approver', 'member'] as const;
