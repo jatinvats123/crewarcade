@@ -65,6 +65,8 @@ export interface HtmlServer {
   origin: string;
   /** URL of a page by key, e.g. url('v1') -> http://127.0.0.1:PORT/v1/ */
   url(key: string): string;
+  /** A host page that loads that game in <iframe sandbox="allow-scripts">, like the real player. */
+  hostUrl(key: string): string;
   close(): Promise<void>;
 }
 
@@ -75,7 +77,8 @@ export interface HtmlServer {
 export async function serveHtml(pages: Record<string, string>): Promise<HtmlServer> {
   const srv = http.createServer((req, res) => {
     const key = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname).replace(/^\/|\/$/g, '');
-    const html = pages[key];
+    const hostOf = key.endsWith('/host') ? key.slice(0, -5) : null;
+    const html = hostOf !== null && pages[hostOf] !== undefined ? sandboxHost(`/${hostOf}/`) : pages[key];
     if (html === undefined) return void res.writeHead(404).end('Not found');
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }).end(html);
   });
@@ -84,8 +87,37 @@ export async function serveHtml(pages: Record<string, string>): Promise<HtmlServ
   return {
     origin,
     url: key => `${origin}/${key}/`,
+    hostUrl: key => `${origin}/${key}/host/`,
     close: () => new Promise<void>(r => srv.close(() => r())),
   };
+}
+
+/**
+ * The sandbox host: the game in an iframe with `sandbox="allow-scripts"` only (opaque origin, no
+ * storage, no top navigation, no popups), exactly how players and the playtest worker run games.
+ */
+export const sandboxHost = (src: string): string =>
+  `<!doctype html><meta charset="utf-8"><style>html,body{margin:0;height:100%;overflow:hidden;background:#000}iframe{border:0;display:block;width:100%;height:100%}</style><iframe sandbox="allow-scripts" src="${src}" title="game"></iframe>`;
+
+/**
+ * A Page whose evaluate() runs inside the sandboxed game frame; keyboard, clock, close and
+ * mainFrame() stay on the host page (keys reach the focused iframe, the fake clock covers all frames).
+ */
+export async function gameView(p: Page): Promise<Page> {
+  const el = await p.waitForSelector('iframe', { state: 'attached' });
+  const frame = await el.contentFrame();
+  if (!frame) throw new Error('the game frame did not load');
+  await frame.waitForLoadState('load');
+  await el.focus();
+  await frame.evaluate(() => window.focus());
+  return new Proxy(p, {
+    get(target, prop) {
+      if (prop === 'evaluate') return frame.evaluate.bind(frame);
+      if (prop === 'gameFrame') return frame;
+      const v: unknown = Reflect.get(target, prop, target);
+      return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+    },
+  });
 }
 
 // On the paused clock a busy loop that waits on performance.now()/Date.now() never ends, which
@@ -122,17 +154,20 @@ export const readState = (p: Page): Promise<GameState> => p.evaluate(() => windo
 export interface FreshPageOptions {
   watch?: (p: Page) => void;
   seed?: number;
+  /** url is a sandbox host page (HtmlServer.hostUrl); the returned page evaluates in the game frame. */
+  sandbox?: boolean;
 }
 
 /** A fresh page on the fake clock, seeded and on the title screen. */
-export async function freshPage(ctx: BrowserContext, url: string, { watch, seed = SEED }: FreshPageOptions = {}): Promise<Page> {
-  const p = await ctx.newPage();
-  watch?.(p);
-  await p.clock.install({ time: 0 });
+export async function freshPage(ctx: BrowserContext, url: string, { watch, seed = SEED, sandbox = false }: FreshPageOptions = {}): Promise<Page> {
+  const host = await ctx.newPage();
+  watch?.(host);
+  await host.clock.install({ time: 0 });
   // Paused: otherwise real time keeps flowing into the fake clock, so a slow machine (CI) sees
   // extra game time and timing-tight checks differ between machines. Only run() moves time now.
-  await p.clock.pauseAt(1000);
-  await p.goto(url, { waitUntil: 'load' });
+  await host.clock.pauseAt(1000);
+  await host.goto(url, { waitUntil: 'load' });
+  const p = sandbox ? await gameView(host) : host;
   const ok = await p.evaluate(() => !!(window.__crew && window.__crew.state));
   if (!ok) throw new Error('window.__crew is missing');
   // Load time still depends on machine speed and fake frames fire on a 16 ms grid, so jump to the

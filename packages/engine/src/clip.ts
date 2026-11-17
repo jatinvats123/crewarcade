@@ -27,10 +27,12 @@ export interface ClipSide {
   version: number;
 }
 
-export type ClipInput =
+/** sandbox: run each side in <iframe sandbox="allow-scripts"> like the real player. */
+export type ClipInput = (
   | { kind: 'clip'; title: string; game: ClipSide; browser?: Browser }
   | { kind: 'repro'; title: string; game: ClipSide; repro: { name: string; steps: Scenario }; browser?: Browser }
-  | { kind: 'fix'; title: string; before: ClipSide; after: ClipSide; repro: { name: string; steps: Scenario }; browser?: Browser };
+  | { kind: 'fix'; title: string; before: ClipSide; after: ClipSide; repro: { name: string; steps: Scenario }; browser?: Browser }
+) & { sandbox?: boolean };
 
 export interface ClipResult {
   gif: Buffer;
@@ -86,6 +88,8 @@ export async function clip(input: ClipInput): Promise<ClipResult> {
   const browser = input.browser ?? (await launchBrowser());
   // Zero network: only the private server.
   const ctx = await gameContext(browser, srv.origin);
+  const sandbox = !!input.sandbox;
+  const sideUrl = (k: string) => (sandbox ? srv.hostUrl(k) : srv.url(k));
   try {
     // Cosmetics (particles, stars, shake) use Math.random, so seed it (mulberry32) for
     // byte-identical clips; game logic already uses __crew.seed.
@@ -103,7 +107,7 @@ export async function clip(input: ClipInput): Promise<ClipResult> {
     // The plain clip plays like the playtest's screenshot step for ~6 s: hold a control, pause,
     // next; after a game over it waits 700 ms and starts again.
     if (input.kind === 'clip') {
-      const probe = await freshPage(ctx, srv.url('side0'));
+      const probe = await freshPage(ctx, sideUrl('side0'), { sandbox });
       const keys = (await probe.evaluate(() => (Array.isArray(window.__crew.controls) ? window.__crew.controls : []))).filter(k => KEYBOARD.test(k));
       await probe.close();
       steps = [{ call: 'start' }];
@@ -117,7 +121,7 @@ export async function clip(input: ClipInput): Promise<ClipResult> {
     // ---- play each side, capturing frames on the same game-time grid (so the sides stay in sync)
     const results: SideResult[] = [];
     for (const [i, side] of sidesIn.entries()) {
-      const p = await freshPage(ctx, srv.url(`side${i}`));
+      const p = await freshPage(ctx, sideUrl(`side${i}`), { sandbox });
       const frames: Buffer[] = [await grab(p)];
       let acc = 0;
       let res: { ok: boolean; err?: string } | null = null;

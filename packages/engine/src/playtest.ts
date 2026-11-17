@@ -7,7 +7,7 @@
 //   Regression: every saved bug repro must pass (hard); earlier versions' scenarios are advisory.
 // Game time runs on Playwright's fake clock, so runs are deterministic (seed 42) and a 60 s game
 // takes a few real seconds. `only` runs a single scenario (a repro or a probe) and nothing else.
-import type { Browser, BrowserContext, Page } from 'playwright';
+import type { Browser, BrowserContext, Frame, Page } from 'playwright';
 import { checkHtml } from './check';
 import { KEYBOARD, type Scenario } from './scenario';
 import {
@@ -15,6 +15,7 @@ import {
   SEED,
   freshPage as openPage,
   gameContext,
+  gameView,
   hold,
   launchBrowser,
   playSteps,
@@ -66,6 +67,15 @@ export interface PlaytestInput {
   profile?: 'full' | 'fast';
   /** Reuse a launched browser (the eval runs many playtests). Not closed by playtest(). */
   browser?: Browser;
+  /** Run the game in <iframe sandbox="allow-scripts"> like the real player (the playtest worker does). */
+  sandbox?: boolean;
+  /**
+   * Report the FPS check without failing on it. The playtest worker sets this: on a shared, loaded
+   * server the measured FPS reflects the machine as much as the game (the eval keeps it hard).
+   */
+  advisoryFps?: boolean;
+  /** Acceptance progress: called with (expects done, expects in the scenario) as each one runs. */
+  onProgress?: (done: number, total: number) => void;
 }
 
 export interface PlaytestResult {
@@ -115,7 +125,8 @@ export const pixDiff = (a: number[], b: number[]): number =>
 export const stateDiff = (a: GameState, b: GameState): string[] =>
   Object.keys({ ...a, ...b }).filter(k => !['time', 'frame'].includes(k) && JSON.stringify(a[k]) !== JSON.stringify(b[k]));
 
-const hostMessages = (p: Page) => p.evaluate(() => window.__crewHost ?? []);
+// Score messages go to the host window (the page itself, or the sandbox host page around the game frame).
+const hostMessages = (p: Page) => p.mainFrame().evaluate(() => window.__crewHost ?? []);
 
 export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
   const T0 = Date.now();
@@ -138,7 +149,10 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
   }
 
   const srv = await serveHtml({ game: input.html });
-  const gameUrl = srv.url('game');
+  const sandbox = !!input.sandbox;
+  const gameUrl = sandbox ? srv.hostUrl('game') : srv.url('game');
+  const scenarioExpects = (input.scenario ?? []).filter(st => 'expect' in st).length;
+  let expectsDone = 0;
   const ownBrowser = !input.browser;
   const browser = input.browser ?? (await launchBrowser());
   let ctx: BrowserContext | null = null;
@@ -167,7 +181,7 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
       });
     });
     const c = ctx;
-    const freshPage = () => openPage(c, gameUrl, { watch });
+    const freshPage = () => openPage(c, gameUrl, { watch, sandbox });
 
     /** Runs one scenario on a fresh page. Each expect becomes a check named `<tag> <label>`. */
     const runScenario = async (steps: Scenario, tag: string, kind: CheckKind, advisory = false) => {
@@ -188,6 +202,7 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
           const name = pre + (s.label ?? s.expect);
           add(name, res.ok, res.err ? `error in "${s.expect}": ${res.err}` : `${s.expect} -> state ${brief}`, kind, advisory);
           expects.push({ label: s.label ?? s.expect, pass: res.ok, scenario: tag || 'scenario' });
+          if (kind === 'scenario') input.onProgress?.(++expectsDone, scenarioExpects);
         },
       });
       await p.close();
@@ -202,9 +217,10 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
       await runRef(input.only, 'only');
     } else {
       // 1. Real-time load: errors, hook, title, FPS.
-      const live = await c.newPage();
-      watch(live);
-      await live.goto(gameUrl, { waitUntil: 'load' });
+      const liveHost = await c.newPage();
+      watch(liveHost);
+      await liveHost.goto(gameUrl, { waitUntil: 'load' });
+      const live = sandbox ? await gameView(liveHost) : liveHost;
       await live.waitForTimeout(400);
       const hook = await live.evaluate(() => {
         const j = window.__crew as Partial<Window['__crew']> | undefined;
@@ -225,7 +241,9 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
       await live.evaluate(() => window.__crew.start());
       // Measure while the CPU is throttled like a mid-range phone: a game that only reaches 60 fps
       // on a fast desktop is not playable on the phones our players use.
-      const cdp = await c.newCDPSession(live);
+      // A sandboxed frame may run in its own renderer process: throttle that one when it does.
+      const gameFrame = (live as Page & { gameFrame?: Frame }).gameFrame;
+      const cdp = gameFrame ? await c.newCDPSession(gameFrame).catch(() => c.newCDPSession(liveHost)) : await c.newCDPSession(live);
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: PHONE_CPU_THROTTLE });
       fps = await live.evaluate(
         () =>
@@ -240,8 +258,15 @@ export async function playtest(input: PlaytestInput): Promise<PlaytestResult> {
             requestAnimationFrame(tick);
           }),
       );
-      add('frame rate >= 30 fps', fps >= 30, `${fps} fps in headless Chromium at ${PHONE_CPU_THROTTLE}x CPU throttle (phone-class)`);
-      await live.close();
+      if (scenarioExpects) input.onProgress?.(0, scenarioExpects);
+      add(
+        'frame rate >= 30 fps',
+        fps >= 30,
+        `${fps} fps in headless Chromium at ${PHONE_CPU_THROTTLE}x CPU throttle (phone-class)`,
+        'generic',
+        !!input.advisoryFps,
+      );
+      await liveHost.close();
 
       // 2. title -> playing, the start hook fires, and the screen moves.
       let p = await freshPage();
