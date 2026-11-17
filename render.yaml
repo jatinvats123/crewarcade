@@ -5,11 +5,17 @@ services:
     name: crewarcade-server
     runtime: docker
     region: singapore # next to Nexconn SG and Supabase ap-southeast-1
-    plan: standard # 2 GB RAM: headless Chromium needs >= 2 GB
+    # FREE FOR NOW (512 MB, 0.1 CPU, sleeps after 15 min idle, 750 h/month): chat, Pixel, Forge
+    # builds, play, scores, bug reports and voice work; headless Chromium does not fit, so Glitch's
+    # playtests / repros and Forge's smoke test are off (PLAYTESTS=false, FORGE_SMOKE=false) and
+    # nothing can be published. Full product: plan: standard (2 GB), set both back to 'true', and
+    # move the migration back to `preDeployCommand: node dist/migrate.js` (paid plans only).
+    plan: free
     dockerfilePath: ./apps/server/Dockerfile
     dockerContext: .
     healthCheckPath: /health
-    preDeployCommand: node dist/migrate.js
+    # Free plans have no pre-deploy step: migrate, then start (the Dockerfile's CMD otherwise).
+    dockerCommand: /bin/sh -c "node dist/migrate.js && exec node --enable-source-maps dist/index.js"
     autoDeploy: true
     buildFilter:
       paths:
@@ -30,7 +36,13 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: DATABASE_POOL_MAX
-        value: '10'
+        value: '5'
+      - key: AGENT_CONCURRENCY
+        value: '2'
+      - key: PLAYTESTS
+        value: 'false'
+      - key: FORGE_SMOKE
+        value: 'false'
       - key: NEXCONN_APP_KEY
         sync: false
       - key: NEXCONN_APP_SECRET
