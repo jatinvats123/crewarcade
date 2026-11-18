@@ -6,13 +6,14 @@ import { useState } from 'react';
 import { ThemeToggle } from '@/components/brand/ThemeToggle';
 import { ProfileForm, type ProfileValues } from '@/components/identity/ProfileForm';
 import { Button, Sheet, useToast } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, ApiRequestError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 
 export function SettingsView() {
   const { user, setUser, signOut } = useSession();
   const toast = useToast();
   const [confirm, setConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   if (!user) return null;
   const initial: ProfileValues = {
     displayName: user.displayName,
@@ -66,9 +67,29 @@ export function SettingsView() {
             <Button variant="danger" onClick={() => setConfirm(true)}>
               Sign out
             </Button>
+            <p className="mt-3 text-xs break-all text-dim">
+              Your user id: <code className="select-all">{user.id}</code>
+            </p>
+          </section>
+          <section aria-labelledby="privacy-h" className="rounded-card border border-border bg-surface p-4">
+            <h2 id="privacy-h" className="font-semibold">
+              Privacy
+            </h2>
+            <p className="mb-3 text-sm text-dim">
+              What we store and for how long is on the{' '}
+              <Link href="/privacy" className="font-semibold text-brand underline">
+                privacy page
+              </Link>
+              . Deleting your account removes your profile, scores and chat logs. Crews you own pass to another member.
+            </p>
+            <Button variant="danger" onClick={() => setDeleting(true)} data-testid="delete-account">
+              Delete my account
+            </Button>
           </section>
         </div>
       </div>
+      <DeleteAccountSheet open={deleting} onClose={() => setDeleting(false)} />
+
       <Sheet
         open={confirm}
         onClose={() => setConfirm(false)}
@@ -96,5 +117,55 @@ export function SettingsView() {
         <p className="text-sm text-dim">Guest accounts have no password, so you won't be able to sign back in as {user.displayName}.</p>
       </Sheet>
     </div>
+  );
+}
+
+/** Type DELETE to confirm; then the account is gone and the app reloads signed out. */
+function DeleteAccountSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const toast = useToast();
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ok = typed.trim().toUpperCase() === 'DELETE';
+  const go = async () => {
+    setBusy(true);
+    try {
+      await api.deleteAccount();
+      window.location.replace(window.location.origin);
+    } catch (e) {
+      toast(e instanceof ApiRequestError ? e.message : "Couldn't delete the account. Try again.", 'danger');
+      setBusy(false);
+    }
+  };
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Delete your account?"
+      footer={
+        <>
+          <Button variant="danger" block loading={busy} disabled={!ok} onClick={() => void go()} data-testid="delete-account-confirm">
+            Delete for good
+          </Button>
+          <Button variant="secondary" block onClick={onClose}>
+            Keep my account
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-dim">
+        This can&apos;t be undone. Your profile, scores and chat logs are deleted. Crews you own pass to another member; a crew with only you in it is deleted with
+        its games. Games you helped make in other crews stay, credited to &ldquo;Deleted player&rdquo;.
+      </p>
+      <label htmlFor="delete-confirm" className="mt-4 block text-sm font-semibold">
+        Type DELETE to confirm
+      </label>
+      <input
+        id="delete-confirm"
+        value={typed}
+        onChange={e => setTyped(e.target.value)}
+        autoComplete="off"
+        className="mt-2 w-full rounded-2xl border border-border bg-surface-2 p-3 text-base outline-none focus:border-brand"
+      />
+    </Sheet>
   );
 }

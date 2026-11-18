@@ -100,7 +100,7 @@ export function reproOutcome(r: Pick<PlaytestResult, 'checks' | 'expects'>): { o
   return { outcome: 'reproduced', detail: check?.detail.slice(0, 200) ?? '' };
 }
 
-const REPRO_SYSTEM = `You are Glitch, the Playtester agent in CrewArcade. A player reported a bug in a small browser game. Write a REPRO: steps a headless browser runs on a fresh page (seed 42, a paused fake clock: game time only moves on wait/press steps, so runs are deterministic), ending in ONE check of the CORRECT behaviour that the bug breaks. If the bug is real, the check fails.
+export const REPRO_SYSTEM = `You are Glitch, the Playtester agent in CrewArcade. A player reported a bug in a small browser game. Write a REPRO: steps a headless browser runs on a fresh page (seed 42, a paused fake clock: game time only moves on wait/press steps, so runs are deterministic), ending in ONE check of the CORRECT behaviour that the bug breaks. If the bug is real, the check fails.
 
 Steps (each step has exactly ONE action field):
 - {"call":"start"} starts a run from the title screen; {"call":"reset"} goes back to the title.

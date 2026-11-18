@@ -94,7 +94,15 @@ export default function Landing() {
         </CardShell>
       </section>
 
-      <footer className="pb-safe mt-auto border-t border-border py-6 text-sm text-faint">Built with the Nexconn Chat SDK · Nexconn Build Challenge 2026</footer>
+      <footer className="pb-safe mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border py-6 text-sm text-dim">
+        <span>Built with the Nexconn Chat SDK · Nexconn Build Challenge 2026</span>
+        <Link href="/arcade" className="inline-flex min-h-11 items-center font-semibold underline">
+          Arcade
+        </Link>
+        <Link href="/privacy" className="inline-flex min-h-11 items-center font-semibold underline">
+          Privacy
+        </Link>
+      </footer>
     </main>
   );
 }

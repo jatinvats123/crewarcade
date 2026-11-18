@@ -100,6 +100,10 @@ server adds members directly:
 
 `POST /v4/group-channel/join` · 100 req/s · `{ "channelId": "…", "userIds": ["…"] }` (≤ 100), no approval.
 
+Account deletion (Phase 6, checked against the live docs 2026-11-19):
+`POST /v4/group-channel/member/kickout-all` · 100 req/s · `{ "userId": "…" }` removes the user from every
+group of the app; `POST /v4/group-channel/dismiss` · 100 req/s · `{ "channelId": "…" }` deletes a group.
+
 ### Send a group message as anyone (agents included)
 
 `POST /v4/group-channel/message/send` · **20 messages/s** (3 target groups = 3 messages)

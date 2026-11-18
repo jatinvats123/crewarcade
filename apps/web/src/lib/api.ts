@@ -43,7 +43,7 @@ export class ApiRequestError extends Error {
   }
 }
 
-async function request<S extends z.ZodType>(method: 'GET' | 'POST' | 'PATCH', path: string, schema: S, body?: unknown): Promise<z.infer<S>> {
+async function request<S extends z.ZodType>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, schema: S, body?: unknown): Promise<z.infer<S>> {
   const send = () =>
     fetch(path, {
       method,
@@ -87,6 +87,8 @@ export const api = {
   signUp: (body: GuestSignupBody) => request('POST', '/api/auth/guest', z.object({ user: Profile }), body).then(r => r.user),
   updateMe: (patch: ProfilePatch) => request('PATCH', '/api/me', z.object({ user: Profile }), patch).then(r => r.user),
   signOut: () => request('POST', '/api/auth/logout', z.unknown()),
+  /** Deletes the guest account for good (the server needs this exact confirmation text). */
+  deleteAccount: () => request('DELETE', '/api/me', z.object({ deleted: z.literal(true) }), { confirm: 'delete my account' }),
   nexconnToken: (refresh = false) => request('POST', '/api/nexconn/token', NexconnTokenResponse, { refresh }),
   crews: () => request('GET', '/api/crews', z.object({ crews: z.array(CrewSummary) })).then(r => r.crews),
   crew: (id: string) => request('GET', `/api/crews/${encodeURIComponent(id)}`, z.object({ crew: CrewDetail })).then(r => r.crew),

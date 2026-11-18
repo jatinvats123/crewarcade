@@ -74,6 +74,16 @@ export async function joinGroup(c: NexconnClient, input: z.input<typeof JoinGrou
   await c.post('/v4/group-channel/join', JoinGroupInput.parse(input), z.object({ code: z.literal(0) }).passthrough());
 }
 
+/** POST /v4/group-channel/member/kickout-all (100/s): removes a user from every group (account deletion). */
+export async function kickOutOfAllGroups(c: NexconnClient, input: { userId: string }): Promise<void> {
+  await c.post('/v4/group-channel/member/kickout-all', z.object({ userId: nexconnId }).parse(input), Ok);
+}
+
+/** POST /v4/group-channel/dismiss (100/s): deletes a group channel and removes all members. */
+export async function dismissGroup(c: NexconnClient, input: { channelId: string }): Promise<void> {
+  await c.post('/v4/group-channel/dismiss', z.object({ channelId: nexconnId }).parse(input), Ok);
+}
+
 // ---- messages -------------------------------------------------------------------------------
 
 const MessageBase = z.object({

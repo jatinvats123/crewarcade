@@ -6,7 +6,7 @@
 //   memory:   a Map (tests).
 // Keys look like "<slug>/v<N>/index.html"; the stored path (game_versions.html_path) is
 // "<bucket>/<key>", e.g. "games/chai-dash/v1/index.html".
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Config } from '../config';
 
@@ -18,6 +18,8 @@ export interface ObjectStorage {
   get(key: string): Promise<Buffer | null>;
   /** Creates the private bucket when missing (idempotent). */
   ensureBucket(): Promise<void>;
+  /** Deletes an object; a missing one is fine (account deletion). */
+  remove(key: string): Promise<void>;
 }
 
 /** "<slug>/v<N>/index.html" for one game version. */
@@ -87,6 +89,11 @@ export function createSupabaseStorage(o: { url: string; serviceKey: string; buck
       // 200 created; 400/409 "already exists".
       if (res.status >= 300 && res.status !== 400 && res.status !== 409) throw new StorageError(`bucket check failed (${res.status})`);
     },
+    async remove(key) {
+      assertKey(key);
+      const res = await doFetch(`${base}/object/${o.bucket}/${key}`, { method: 'DELETE', headers: auth });
+      if (res.status >= 300 && res.status !== 404 && res.status !== 400) throw new StorageError(`storage delete failed (${res.status})`);
+    },
   };
 }
 
@@ -118,6 +125,9 @@ export function createLocalStorage(o: { dir: string; bucket: string }): ObjectSt
     async ensureBucket() {
       await mkdir(root, { recursive: true });
     },
+    async remove(key) {
+      await rm(file(key), { force: true });
+    },
   };
 }
 
@@ -137,6 +147,10 @@ export function createMemoryStorage(bucket = 'games'): ObjectStorage & { objects
       return objects.get(key) ?? null;
     },
     async ensureBucket() {},
+    async remove(key) {
+      assertKey(key);
+      objects.delete(key);
+    },
   };
 }
 

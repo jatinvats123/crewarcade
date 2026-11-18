@@ -1,6 +1,7 @@
 // Owner dashboard queries (/admin): ledger stages, cost, signups by referrer.
 import { sql, type SQL } from 'drizzle-orm';
 import type { Db } from '../db/types';
+import { DELETED_USER_ID } from '../services/account';
 
 /** Ledger actions per stage. Latency uses every row of the stage that has `ms`. */
 export const STAGE_ACTIONS = {
@@ -53,12 +54,12 @@ export async function signupStats(db: Db, since: Date) {
   const [tot] = await rows<{ total: number; recent: number }>(
     db,
     sql`select count(*)::int as total, count(*) filter (where created_at >= ${since.toISOString()})::int as recent
-        from users where is_agent = false`,
+        from users where is_agent = false and id <> ${DELETED_USER_ID}`,
   );
   const by = await rows<{ referrer: string; users: number }>(
     db,
     sql`select coalesce(referrer, 'direct') as referrer, count(*)::int as users
-        from users where is_agent = false group by 1 order by 2 desc, 1 limit 30`,
+        from users where is_agent = false and id <> ${DELETED_USER_ID} group by 1 order by 2 desc, 1 limit 30`,
   );
   return { total: Number(tot?.total ?? 0), last30: Number(tot?.recent ?? 0), byReferrer: by.map(r => ({ referrer: r.referrer, users: Number(r.users) })) };
 }

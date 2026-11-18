@@ -6,6 +6,7 @@ import { createAgentServices, createAi, createQueue, startAgentWorker } from './
 import { createClipStorage, createGameStorage, createUploadStorage } from './storage';
 import { createHeadless } from './agents/smoke';
 import { createSarvamStt } from './ai/sarvam';
+import { purgeExpired } from './repo/retention';
 import { buildApp } from './app';
 import { ConfigError, integrations, loadConfig } from './config';
 import type { Ctx } from './context';
@@ -99,6 +100,11 @@ try {
 } catch (e) {
   server.log.error({ err: e }, 'could not upsert the agent users (is the database migrated?)');
 }
+
+// Retention: message logs and connection events older than 30 days (see repo/retention.ts).
+const purge = () => purgeExpired(database.db, Date.now()).catch(e => server.log.error({ err: e }, 'retention purge failed'));
+void purge();
+setInterval(() => void purge(), 6 * 3_600_000).unref();
 
 if (config.RUN_WORKERS && ctxRef.current)
   await startAgentWorker(ctxRef.current).catch(e => server.log.error({ err: e }, 'agent worker failed to start (is the job database reachable?)'));

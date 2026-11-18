@@ -19,6 +19,8 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
 
 - **Arcade:** public `/arcade` (Newest / Top by plays then best score) from `GET /api/public/arcade`; published games only, fixture slugs never listed (tested).
 - **Referrers + admin:** `?ref=` (first touch, localStorage) → `users.referrer` at sign-up (migration `0005_users_referrer`); invite links carry `?ref=invite`. Owner-only `/admin` (`ADMIN_USER_IDS`, 404 for others, tested): stage OK/failed + p50/p95 from the ledger, cost per day, queue depth, signups by referrer.
+- **Security:** `docs/SECURITY.md`. Hostile-game test (21 attacks, all blocked; sandbox loosened = 13 leaks). Fixed: games could navigate their own frame (checker rule + player stop), client-secret check missed `GEMINI_API_KEY`/`SESSION_SECRET`/`JOBS_DATABASE_URL`. Prompt injection: 10/10 resisted on live `gemini-3.5-flash-lite`. Open: `X-Forwarded-For` trust on direct Render calls.
+- **Privacy:** public `/privacy`; Settings → Delete my account (`DELETE /api/me`: crews pass on or go, rows credited to "Deleted player", Nexconn kickout-all + dismiss, screenshots removed; tested). Fixed: the 30-day message-log retention never ran; `purgeExpired()` now runs at startup and every 6 h (tested).
 
 ## Phase 2: built, waiting for Nexconn and Anthropic keys to verify live (branch `phase-2`)
 
