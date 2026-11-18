@@ -7,14 +7,15 @@
 //   POST /api/scores {gameId, version, score, timeMs}   signed in; rate limited; plausibility checks
 //   GET  /api/games/:id/leaderboard               top 20, my best, my rank
 //   GET  /api/public/games/:slug                  the public game page (drafts: teaser)
+//   GET  /api/public/arcade?sort=new|top&limit=   published games (never fixtures)
 //   POST /api/games/:slug/remix {crewId|newCrewName, idea}   signed in; published games only
-import { RemixBody, ScoreBody } from '@crewarcade/shared';
+import { ArcadeQuery, RemixBody, ScoreBody } from '@crewarcade/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AgentServices } from '../agents/runtime-deps';
 import type { Ctx } from '../context';
 import { getGameBySlug, getVersion } from '../repo/versions';
-import { gamePage, playLink, retryBuild, startRemix, versionsOf } from '../services/builds';
+import { arcade, gamePage, playLink, retryBuild, startRemix, versionsOf } from '../services/builds';
 import { frameAncestors, gameHeaders, verifyPlayToken } from '../services/play';
 import { leaderboard, submitScore } from '../services/scores';
 import { gameHtmlKey } from '../storage';
@@ -124,6 +125,13 @@ export function registerPlayRoutes(app: FastifyInstance, ctx: Ctx): void {
     // Short public cache: the page changes when a version is published or remixed.
     reply.header('cache-control', 'public, max-age=30');
     return page;
+  });
+
+  app.get('/api/public/arcade', async (req, reply) => {
+    rateLimit(playLimit, `ip:${req.ip}`);
+    const q = ArcadeQuery.parse(req.query);
+    reply.header('cache-control', 'public, max-age=60');
+    return arcade(ctx, q);
   });
 
   app.post('/api/games/:slug/remix', async req => {

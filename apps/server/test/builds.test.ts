@@ -392,6 +392,22 @@ describe('public game page and remix', () => {
     expect((await post('/api/scores', sam.cookie, { gameId, version: 2, score: 10, timeMs: 5000 })).statusCode).toBe(200);
   });
 
+  it('the Arcade lists published games only, never fixture slugs, with plays and best score', async () => {
+    const [g] = await h.db.select().from(games).where(eq(games.id, gameId));
+    // A fixture-named game marked published (should never happen; the Arcade still hides it).
+    await h.db.insert(games).values({ id: 'gfixture1', slug: 'comet-dash', crewId: g!.crewId, title: 'Comet', pitch: 'x', createdBy: g!.createdBy, status: 'published', publishedVersion: 1 });
+    await h.db.insert(gameVersions).values({ id: 'vfixture1', gameId: 'gfixture1', version: 1, spec: {}, htmlPath: 'games/comet-dash/v1/index.html', status: 'published' });
+    for (const sort of ['new', 'top']) {
+      const res = await get(`/api/public/arcade?sort=${sort}`);
+      expect(res.statusCode).toBe(200);
+      const list = res.json().games as Array<{ slug: string; plays: number; bestScore: number | null }>;
+      expect(list.map(x => x.slug)).toEqual([slug]);
+      expect(list[0]!.plays).toBeGreaterThan(0);
+      expect(list[0]!.bestScore).toBeGreaterThanOrEqual(10);
+    }
+    expect((await get('/api/public/arcade?sort=hot')).statusCode).toBe(400);
+  });
+
   it('Remix this: a new crew, Pixel plans the remix, and v1 starts from the original published code', async () => {
     expect(
       (await h.app.inject({ method: 'POST', url: `/api/games/${slug}/remix`, headers: { origin: WEB }, payload: { newCrewName: 'Remixers' } })).statusCode,

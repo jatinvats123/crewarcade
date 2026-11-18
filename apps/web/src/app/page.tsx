@@ -40,10 +40,10 @@ export default function Landing() {
             Start a crew
           </Link>
           <Link
-            href="/dev/ui"
+            href="/arcade"
             className="inline-flex min-h-13 items-center justify-center rounded-2xl border border-border bg-surface-2 px-6 text-lg font-semibold hover:bg-surface-3"
           >
-            See the UI kit
+            Play the Arcade
           </Link>
         </div>
       </section>

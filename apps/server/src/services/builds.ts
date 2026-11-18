@@ -3,7 +3,7 @@
 //   requestBuildChange: [Change] on a Build card -> Pixel's delta + Forge's next version
 //   playLink:           a URL the player iframe can load (signed for unpublished versions)
 //   versionsOf / gamePage / startRemix
-import { type GamePageResponse, type GameVersionSummary, type PlayUrlResponse } from '@crewarcade/shared';
+import { type ArcadeQuery, type ArcadeResponse, type GamePageResponse, type GameVersionSummary, type PlayUrlResponse } from '@crewarcade/shared';
 import type { AgentServices } from '../agents/runtime-deps';
 import type { BuildCardState } from '../agents/forge-runtime';
 import type { Ctx } from '../context';
@@ -16,6 +16,7 @@ import { record } from './ledger';
 import { playUrl } from './play';
 import { clipUrl } from '../storage';
 import { bugHunters } from '../repo/bugs';
+import { listArcade } from '../repo/arcade';
 
 type AgentCtx = Ctx & { agents: AgentServices };
 
@@ -143,6 +144,35 @@ export async function versionsOf(ctx: Ctx, user: UserRow | null, gameId: string)
 const DEFAULT_COLORS: [string, string] = ['#7c5cff', '#ffb547'];
 
 /** The public /g/:slug page. Drafts get a teaser (no play link, no versions). */
+/** The emoji and two theme colours from a version's meta (the plan's look and feel), with defaults. */
+export function lookOf(meta: Record<string, unknown> | undefined): { emoji: string; colors: [string, string] } {
+  const look = meta as { emoji?: unknown; colors?: unknown } | undefined;
+  const colors =
+    Array.isArray(look?.colors) && look.colors.length === 2 && look.colors.every(c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c))
+      ? (look.colors as [string, string])
+      : DEFAULT_COLORS;
+  return { emoji: typeof look?.emoji === 'string' && look.emoji.length <= 16 ? look.emoji : '🎮', colors };
+}
+
+/** The public Arcade (published games only; never fixtures). */
+export async function arcade(ctx: Ctx, q: ArcadeQuery): Promise<ArcadeResponse> {
+  const rows = await listArcade(ctx.db, q);
+  return {
+    sort: q.sort,
+    games: rows.map(r => ({
+      slug: r.slug,
+      title: r.title,
+      pitch: r.pitch,
+      ...lookOf(r.meta),
+      crewName: r.crewName,
+      screenshotUrl: r.screenshotPath ? clipUrl(ctx.config.PUBLIC_API_ORIGIN, r.slug, r.version, 'shot') : null,
+      plays: r.plays,
+      bestScore: r.bestScore,
+      publishedAt: new Date(r.publishedAt).toISOString(),
+    })),
+  };
+}
+
 export async function gamePage(ctx: Ctx, slug: string): Promise<GamePageResponse> {
   const game = await getGameBySlug(ctx.db, slug);
   if (!game) throw new CrewRuleError(404, 'not_found', 'Game not found');
@@ -150,11 +180,7 @@ export async function gamePage(ctx: Ctx, slug: string): Promise<GamePageResponse
   const members = crew ? (await listMembers(ctx.db, crew.id)).filter(m => !m.isAgent).slice(0, 12) : [];
   const versions = await listVersions(ctx.db, game.id);
   const pub = game.publishedVersion ? (versions.find(v => v.version === game.publishedVersion) ?? null) : null;
-  const look = (pub ?? versions.find(v => v.htmlPath) ?? null)?.meta as { emoji?: unknown; colors?: unknown } | undefined;
-  const colors =
-    Array.isArray(look?.colors) && look.colors.length === 2 && look.colors.every(c => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c))
-      ? (look.colors as [string, string])
-      : DEFAULT_COLORS;
+  const { emoji, colors } = lookOf((pub ?? versions.find(v => v.htmlPath) ?? null)?.meta);
   const source = game.remixOfGameId ? await getGame(ctx.db, game.remixOfGameId) : null;
   return {
     id: game.id,
@@ -163,7 +189,7 @@ export async function gamePage(ctx: Ctx, slug: string): Promise<GamePageResponse
     pitch: game.pitch,
     status: game.status,
     language: game.language,
-    emoji: typeof look?.emoji === 'string' && look.emoji.length <= 16 ? look.emoji : '🎮',
+    emoji,
     colors,
     publishedVersion: game.publishedVersion,
     screenshotUrl: pub?.screenshotPath ? clipUrl(ctx.config.PUBLIC_API_ORIGIN, game.slug, pub.version, 'shot') : null,

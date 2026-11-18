@@ -156,3 +156,34 @@ export type RemixBody = z.infer<typeof RemixBody>;
 /** Pixel's remix plan then appears in this crew's chat. */
 export const RemixResponse = z.object({ crewId: z.string(), channelId: z.string() });
 export type RemixResponse = z.infer<typeof RemixResponse>;
+
+/**
+ * Slugs of the engine's test fixtures (packages/engine/fixtures/games). They are test data and must
+ * never be listed as CrewArcade games, even if one somehow ends up in the database.
+ */
+export const FIXTURE_GAME_SLUGS = ['cat-vs-cucumbers', 'comet-dash', 'penguin-slide'] as const;
+
+export const ARCADE_SORTS = ['new', 'top'] as const;
+export const ArcadeQuery = z.object({
+  sort: z.enum(ARCADE_SORTS).default('new'),
+  limit: z.coerce.number().int().min(1).max(48).default(24),
+});
+export type ArcadeQuery = z.infer<typeof ArcadeQuery>;
+
+/** GET /api/public/arcade: published games only, newest or top (plays, then best score). */
+export const ArcadeGame = z.object({
+  slug: z.string(),
+  title: z.string(),
+  pitch: z.string(),
+  emoji: z.string(),
+  colors: z.tuple([z.string(), z.string()]),
+  crewName: z.string(),
+  screenshotUrl: z.string().url().nullable(),
+  /** Finished runs (score rows) across all versions. */
+  plays: z.number().int(),
+  bestScore: z.number().int().nullable(),
+  publishedAt: z.string(),
+});
+export type ArcadeGame = z.infer<typeof ArcadeGame>;
+export const ArcadeResponse = z.object({ sort: z.enum(ARCADE_SORTS), games: z.array(ArcadeGame) });
+export type ArcadeResponse = z.infer<typeof ArcadeResponse>;

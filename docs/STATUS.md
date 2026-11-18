@@ -4,16 +4,16 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
 
 ## Phase checklist
 
-| Phase | Theme                       | Status                                                                |
-| ----- | --------------------------- | --------------------------------------------------------------------- |
-| 0     | Foundation                  | **Done** (branch `phase-0`)                                           |
-| 1     | Identity, crews, chat       | **Built** (branch `phase-1`); live Nexconn check pending keys         |
-| 2     | Pixel, cards, approval      | **Built** (branch `phase-2`); live Nexconn + Claude run pending keys  |
-| 3     | Forge, builds, play, scores | **Built** (branch `phase-3`); live E2E_CHAT run pending               |
-| 4     | Glitch, playtest, publish   | **Built** (branch `phase-4`); live E2E_CHAT run pending (Docker)      |
-| 5     | Bugs, voice, languages      | **Built** (branch `phase-5`); live Sarvam + translation check pending |
-| 6     | Arcade and growth           | —                                                                     |
-| 7     | Polish and launch           | —                                                                     |
+| Phase | Theme                       | Status                                                               |
+| ----- | --------------------------- | -------------------------------------------------------------------- |
+| 0     | Foundation                  | **Done** (branch `phase-0`)                                          |
+| 1     | Identity, crews, chat       | **Built** (branch `phase-1`); live Nexconn check pending keys        |
+| 2     | Pixel, cards, approval      | **Built** (branch `phase-2`); live Nexconn + Claude run pending keys |
+| 3     | Forge, builds, play, scores | **Built** (branch `phase-3`); live E2E_CHAT run pending              |
+| 4     | Glitch, playtest, publish   | **Built** (branch `phase-4`); live E2E_CHAT run pending (Docker)     |
+| 5     | Bugs, voice, languages      | **Built** (branch `phase-5`); live on the free plan (no playtests)   |
+| 6     | Arcade and growth           | —                                                                    |
+| 7     | Polish and launch           | —                                                                    |
 
 ## Phase 2: built, waiting for Nexconn and Anthropic keys to verify live (branch `phase-2`)
 
@@ -175,7 +175,7 @@ Opus's minimum cacheable size, so expect `cache_read` ≈ 0 for Pixel until the 
 3. On Render: `JOBS_DATABASE_URL` = the Supabase **session** pooler URL (port 5432) for pg-boss, and
    optionally `FAKE_AGENTS=1` as a demo fallback.
 
-## Phase 5: built, live Sarvam / translation check pending (branch `phase-5`)
+## Phase 5: built, deployed live on free hosting (branch `phase-5`)
 
 Players report bugs, Glitch reproduces them on camera, Forge ships a hotfix that must pass every old
 repro, and it goes public only through Allow. Plus voice pitches (Sarvam) and tap-to-translate.
@@ -240,37 +240,56 @@ repro, and it goes public only through Allow. Plus voice pitches (Sarvam) and ta
 - In FAKE mode Glitch's repro is generic: a working game "doesn't reproduce" and Glitch asks a question.
 - The translated source language isn't shown (the SDK result gives only the target).
 
-### Live deploy (2026-11-18)
+### Live deploy (2026-11-18/19)
 
 - Web: **https://crewarcade.vercel.app** (Vercel project `crewarcade`, root `apps/web`, production
-  branch `phase-5`).
-- Server: **https://crewarcade-server.onrender.com** (Render free web service, created by hand, not by
-  Blueprint; `/health` gives `db: up`). `MIGRATE_ON_START=true` applies migrations at startup: Render's
-  Docker Command keeps literal quotes, so `sh -c "a && b"` failed with exit 127. Agents run on Gemini's
-  free tier.
-- Database: Supabase (Tokyo, `ap-northeast-1`) through the transaction pooler (6543). The direct
-  string is IPv6-only and Render can't reach it.
-- Still to do: the Nexconn Console webhook (`/webhooks/nexconn`), a live sign-in + chat check, and
-  rotating the DB password and `service_role` key (both were shared in chat).
+  branch `phase-5`; env `NEXT_PUBLIC_API_ORIGIN`, `NEXT_PUBLIC_SITE_URL`).
+- Server: **https://crewarcade-server.onrender.com** (Render **free** web service, created by hand, not
+  by Blueprint; `/health` gives `db: up`). Agents on Gemini's free tier (`AI_PROVIDER=gemini`).
+- Database and storage: Supabase (Tokyo, `ap-northeast-1`) through the transaction pooler (6543).
+  The direct string is IPv6-only and Render can't reach it. About 70-440 ms per query from Singapore.
+- Nexconn Console: webhook `https://crewarcade-server.onrender.com/webhooks/nexconn` with
+  `message:send` and `user:connection_status`. "Include Server API Messaging" is on. Translation is off.
 
-### Render plan (2026-11-17): free, no card
+**Checked live (2026-11-19):** guest sign-in, a crew, `@pixel` pitch → plan card → Approve → game
+room → handoff → Forge built Chai Paws v1 (▶ Play) → Glitch: "playtests are switched off".
 
-The owner doesn't want a card on file, and Render asks for one for any paid instance (even with the
-$50 hackathon credit). So `render.yaml` deploys `crewarcade-server` on **`plan: free`** (512 MB,
-0.1 CPU, sleeps after 15 min idle, about 1 min to wake, 750 h/month). Migrations run in
-`dockerCommand` (free has no pre-deploy step). `PLAYTESTS=false` and `FORGE_SMOKE=false`, because
-Chromium needs about 2 GB. Builds are playable, Glitch says playtests are off (tested), bug reports
-are saved but not replayed, and **nothing can be published**.
+**Why free:** the owner doesn't want a card on file, and Render asks for one for any paid instance
+(even with the $50 hackathon credit). Free is 512 MB, 0.1 CPU, sleeps after 15 min idle (about 1 min
+to wake), 750 h/month. Chromium needs about 2 GB, so `PLAYTESTS=false` and `FORGE_SMOKE=false`: builds
+are playable, bug reports are saved but not replayed, and **nothing can be published**. Checked and
+rejected: Hugging Face Docker Spaces need the paid PRO plan and block outbound Postgres ports.
+Full product: `plan: standard`, both flags `true`, `preDeployCommand: node dist/migrate.js`, and
+drop `MIGRATE_ON_START`.
 
-Checked and rejected: Hugging Face Docker Spaces need the paid PRO plan and block outbound
-Postgres ports. Full product: `plan: standard`, both flags `true`, `preDeployCommand: node dist/migrate.js`.
+### Deploy fixes (found while going live)
+
+- **Migrations at startup** (`MIGRATE_ON_START=true`, `src/db/migrations.ts`): the free plan has no
+  pre-deploy step, and Render's Docker Command keeps literal quotes (`sh -c "a && b"` exited 127).
+  A failure prints the driver cause (e.g. `ECONNREFUSED 127.0.0.1:5432`) and exits.
+- **Waking server** (web `src/lib/wake.ts`): Vercel's proxy answers 502 before a sleeping Render
+  instance wakes (58 s measured). The API client now shows "Waking up the server…", pings `/api/me`
+  until it answers, and retries the request once; real errors are never retried.
+- **Gemini busy answers** (`src/ai/gemini.ts`): the free tier returned "503 high demand" mid-stream
+  (Pixel's plan) and through every retry (Forge's build). Busy answers now retry 3 times (2/6/15 s)
+  even mid-stream without repeating shown text, then fall back to the other model
+  (`gemini-3.5-flash` ↔ `gemini-3.5-flash-lite`; the ledger marks `fellBack`).
+- **Game status `built`** ("Ready to play", migration `0004_game_status_built`): with playtests off a
+  built game no longer sits at "testing", and the Forge → Glitch handoff closes. The side panel
+  refreshes the game status when the room's cards or agent posts change.
+- **Claude Haiku 5.5 support** (price, no server-side fallback) for a cheaper Claude setup later.
 
 ### Needed from the owner
 
-1. `SARVAM_API_KEY` on Render (it is in the local `apps/server/.env` now), and Console → Chat →
-   Chat settings → Messages → Translation switched on.
-2. Optional: Nexconn's media host in `NEXCONN_MEDIA_HOSTS` (the browser relay for voice).
-3. Still open from Phase 4: Docker/Postgres for the live E2E_CHAT run.
+1. **Rotate the Supabase database password and the `service_role` key** (both were shared in chat),
+   then update `DATABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on Render.
+2. To see bug repros, hotfixes and publishing live: Render Standard (2 GB; a card on file, paid from
+   the hackathon credit) and the three changes under "Why free".
+3. Optional: Nexconn Console → Chat settings → Messages → Translation (billed after 10,000 free
+   characters), and a real voice pitch in the app (type `@pixel `, hold the mic).
+4. Optional: Nexconn's media host in `NEXCONN_MEDIA_HOSTS` (the browser relay for voice).
+5. Nexconn pre-messaging webhooks (the safety shield) need its Pro plan; on Free they can't be selected.
+6. Merge `phase-5` (the owner merges).
 
 ## Phase 4: built, live E2E_CHAT run pending (branch `phase-4`)
 
