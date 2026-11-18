@@ -95,7 +95,8 @@ describe('Gemini busy-retry', () => {
     server = createServer((req, res) => {
       hits++;
       req.resume();
-      const a = answers.shift() ?? 'ok';
+      // A model that is always busy (the fallback test): answers without using up `answers`.
+      const a = req.url?.includes('gemini-busy') ? 'busy' : (answers.shift() ?? 'ok');
       if (a === 'busy')
         return res
           .writeHead(503, { 'content-type': 'application/json' })
@@ -169,6 +170,19 @@ describe('Gemini busy-retry', () => {
     expect((await run.done).value).toEqual({ intro: 'Planning Chai Pounce now!', ok: true });
     expect(hits).toBe(2);
     expect(pieces.join('')).toBe('Planning Chai Pounce now!');
+  });
+
+  it('falls back to the other model when one stays busy, and marks the usage as a fallback', async () => {
+    answers = ['ok'];
+    hits = 0;
+    const ai = createGeminiClient({ apiKey: 'k', model: 'gemini-busy', fallbackModels: ['gemini-test'], baseUrl: base, sleep: async () => {}, retries: 1 });
+    const r = await ai.structured(call).done;
+    expect(r.value).toEqual({ ok: true });
+    expect(hits).toBe(3); // busy, busy (1 retry), then the fallback model
+    expect(r.usage.fellBack).toBe(true);
+    // Without a fallback the busy error still surfaces.
+    const lone = createGeminiClient({ apiKey: 'k', model: 'gemini-busy', baseUrl: base, sleep: async () => {}, retries: 1 });
+    await expect(lone.structured(call).done).rejects.toThrow(/high demand|503|UNAVAILABLE/);
   });
 
   it('the replay guard passes on only what is new', () => {

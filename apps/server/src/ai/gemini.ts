@@ -32,6 +32,8 @@ export interface GeminiOptions {
   prices?: { input: number; output: number };
   baseUrl?: string;
   log?: { debug(obj: object, msg: string): void };
+  /** Models tried in order when the previous one stays busy after its retries (e.g. the other tier). */
+  fallbackModels?: string[];
   /** Extra tries on "busy" answers (503 UNAVAILABLE / 429 RESOURCE_EXHAUSTED), also mid-stream. Default 3. */
   retries?: number;
   /** Backoff before retry n (1-based); default 2 s, 6 s, 15 s (+ jitter). */
@@ -75,19 +77,33 @@ export function createGeminiClient(o: GeminiOptions): AiClient {
    */
   async function run(call: TextCall, json: Record<string, unknown> | null, newAttempt: () => (t: string) => void): Promise<{ text: string; usage: AiUsage }> {
     const tries = 1 + (o.retries ?? 3);
-    for (let n = 1; ; n++) {
-      try {
-        return await runOnce(call, json, newAttempt());
-      } catch (e) {
-        if (!(e instanceof AiUnavailableError) || n >= tries || !isBusyError(e.message)) throw e;
-        o.log?.debug({ purpose: call.purpose, attempt: n }, 'gemini: model busy, retrying');
-        await sleep(delay(n));
+    const models = [o.model, ...(o.fallbackModels ?? []).filter(m => m && m !== o.model)];
+    for (let m = 0; ; m++) {
+      const model = models[m]!;
+      for (let n = 1; ; n++) {
+        try {
+          return await runOnce(call, json, newAttempt(), model);
+        } catch (e) {
+          if (!(e instanceof AiUnavailableError) || !isBusyError(e.message)) throw e;
+          if (n >= tries) {
+            if (m + 1 >= models.length) throw e;
+            o.log?.debug({ purpose: call.purpose, from: model, to: models[m + 1] }, 'gemini: model stays busy, falling back');
+            break;
+          }
+          o.log?.debug({ purpose: call.purpose, model, attempt: n }, 'gemini: model busy, retrying');
+          await sleep(delay(n));
+        }
       }
     }
   }
 
   /** One streamed request; `onText` gets every text delta. Checks block/finish reasons before returning. */
-  async function runOnce(call: TextCall, json: Record<string, unknown> | null, onText: (t: string) => void): Promise<{ text: string; usage: AiUsage }> {
+  async function runOnce(
+    call: TextCall,
+    json: Record<string, unknown> | null,
+    onText: (t: string) => void,
+    model: string = o.model,
+  ): Promise<{ text: string; usage: AiUsage }> {
     const t0 = performance.now();
     const timeoutMs = call.timeoutMs ?? o.timeoutMs ?? 120_000;
     const abort = new AbortController();
@@ -98,7 +114,7 @@ export function createGeminiClient(o: GeminiOptions): AiClient {
     let last: GenerateContentResponse | null = null;
     try {
       const stream = await ai.models.generateContentStream({
-        model: o.model,
+        model,
         contents: [{ role: 'user', parts: [...(call.images ?? []).map(i => ({ inlineData: { mimeType: i.mediaType, data: i.data } })), { text: call.user }] }],
         config: {
           systemInstruction: call.system,
@@ -125,7 +141,7 @@ export function createGeminiClient(o: GeminiOptions): AiClient {
       clearTimeout(timer);
       call.signal?.removeEventListener('abort', onOuterAbort);
     }
-    const usage = usageOf(last, performance.now() - t0);
+    const usage = { ...usageOf(last, performance.now() - t0), ...(model !== o.model && { fellBack: true }), model: last?.modelVersion ?? model };
     const block = last?.promptFeedback?.blockReason;
     const finish = last?.candidates?.[0]?.finishReason;
     if (block || (finish && REFUSAL_REASONS.has(String(finish)))) throw new AiRefusalError(String(block ?? finish).toLowerCase(), usage);

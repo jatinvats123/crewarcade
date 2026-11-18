@@ -41,7 +41,14 @@ export function createAi(config: AiConfig, log?: QueueLog & { debug(o: object, m
   const timeoutMs = build ? config.BUILD_TIMEOUT_MS : config.AI_TIMEOUT_MS;
   if (config.AI_PROVIDER === 'gemini')
     return config.GEMINI_API_KEY
-      ? createGeminiClient({ apiKey: config.GEMINI_API_KEY, model: build ? config.GEMINI_BUILD_MODEL : config.GEMINI_MODEL, timeoutMs, ...(log && { log }) })
+      ? createGeminiClient({
+          apiKey: config.GEMINI_API_KEY,
+          model: build ? config.GEMINI_BUILD_MODEL : config.GEMINI_MODEL,
+          // The free tier's models are busy at different times: when one stays busy, use the other.
+          fallbackModels: [build ? config.GEMINI_MODEL : config.GEMINI_BUILD_MODEL],
+          timeoutMs,
+          ...(log && { log }),
+        })
       : null;
   if (!config.ANTHROPIC_API_KEY) return null;
   return createClaudeClient({
