@@ -55,10 +55,12 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: ANTHROPIC_API_KEY
+      # Agents on Google's free Gemini tier (no card). For Claude instead: AI_PROVIDER=anthropic,
+      # ANTHROPIC_API_KEY, ANTHROPIC_MODEL=claude-haiku-5-5, ANTHROPIC_BUILD_MODEL=claude-sonnet-5-5.
+      - key: AI_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
         sync: false
-      - key: ANTHROPIC_MODEL
-        value: claude-opus-5-5
       - key: SARVAM_API_KEY
         sync: false
       - key: TOKEN_ENCRYPTION_KEY
