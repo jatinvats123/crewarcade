@@ -2,6 +2,7 @@
 import type { GameSummary } from '@crewarcade/shared';
 import { useSyncExternalStore } from 'react';
 import { createStore } from './chat/store';
+import type { ChatMessage } from './chat/types';
 
 export interface ActiveRoom {
   crewId: string;
@@ -20,3 +21,18 @@ export function useActiveRoom(): ActiveRoom | null {
 
 export const roomHref = (crewId: string, channelId: string, crewChannelId: string): string =>
   channelId === crewChannelId ? `/crews/${crewId}` : `/crews/${crewId}/rooms/${channelId}`;
+
+/**
+ * What changes when the game's status may have changed (pure; tested): a card arriving or changing
+ * state (build ready, test done, publish decided), or an agent posting. The room refreshes its game
+ * when this changes, so the side panel's status chip follows along live.
+ */
+export function roomActivitySignature(messages: readonly Pick<ChatMessage, 'kind' | 'messageId' | 'senderId' | 'meta' | 'card'>[]): string {
+  let agentPosts = 0;
+  const cards: string[] = [];
+  for (const m of messages) {
+    if (m.kind === 'card' && m.card) cards.push(`${m.card.kind}:${m.messageId ?? ''}:${m.meta?.status ?? ''}:${m.meta?.next ?? ''}`);
+    else if (m.senderId.startsWith('agent')) agentPosts++;
+  }
+  return `${cards.join('|')}#${agentPosts}`;
+}

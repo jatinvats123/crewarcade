@@ -10,7 +10,7 @@ import { z } from 'zod';
 import type { AiImage, AiUsage } from '../ai/claude';
 import type { Ctx } from '../context';
 import { getBug, updateBug, type BugRow } from '../repo/bugs';
-import { getGame, type GameRow } from '../repo/games';
+import { getGame, updateGame, type GameRow } from '../repo/games';
 import { getVersion } from '../repo/versions';
 import { postText, updateCard } from '../services/chat';
 import { record } from '../services/ledger';
@@ -34,6 +34,15 @@ export async function runGlitchJob(ctx: AgentCtx, job: PlaytestJobData): Promise
 /** PLAYTESTS=false (Render's free plan): no headless browser, so Glitch says so (nothing is faked as tested). */
 export async function playtestsOff(ctx: AgentCtx, job: PlaytestJobData): Promise<void> {
   ctx.log.warn({ key: job.key }, 'playtest job skipped: PLAYTESTS is off on this server');
+  if (!job.bugId) {
+    // The version is playable but untested: the game shows "Ready to play" (a published game stays
+    // published), and Forge's handoff card stops saying "Glitch will start soon".
+    const game = await getGame(ctx.db, job.gameId);
+    if (game && !game.publishedVersion) await updateGame(ctx.db, game.id, { status: 'built' });
+    await updateCard(ctx, { messageId: job.handoffMessageId, channelId: job.channelId, operatorId: glitchOperator, metadata: { status: 'done' } }).catch(
+      () => {},
+    );
+  }
   await postText(
     ctx,
     job.channelId,

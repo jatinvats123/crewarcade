@@ -3,7 +3,7 @@
 // pitch fallback (Sarvam fails or no key -> "type it instead"; a transcript routes like text).
 import { CARD_MESSAGE_TYPES, LIMITS, type PlanCardContent } from '@crewarcade/shared';
 import { and, eq } from 'drizzle-orm';
-import { cards, gameVersions } from '../src/db/schema';
+import { cards, games, gameVersions } from '../src/db/schema';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { hotfixNote, reproOutcome, runGlitchJob, validateRepro } from '../src/agents/bugs';
 import { hotfixPasses } from '../src/agents/glitch';
@@ -229,6 +229,14 @@ describe('playtests switched off (Render free plan)', () => {
     expect(texts.some(t => /Playtests are switched off/.test(t))).toBe(true);
     const [v1] = await h.db.select().from(gameVersions).where(eq(gameVersions.gameId, plan.gameId));
     expect(v1!.status).toBe('testing');
+    // The game shows "Ready to play" (built, untested) and the Forge -> Glitch handoff is closed.
+    expect((await h.db.select().from(games).where(eq(games.id, plan.gameId)))[0]!.status).toBe('built');
+    const [handoff] = await h.db
+      .select()
+      .from(cards)
+      .where(and(eq(cards.gameId, plan.gameId), eq(cards.cardType, 'handoff'), eq(cards.version, 1)));
+    const handoffMeta = h.calls.filter(c => c.path === '/v4/channel-type/message/metadata/set' && c.body.messageId === handoff?.nexconnMessageId);
+    expect(handoffMeta.at(-1)?.body.metadata).toMatchObject({ status: 'done' });
     expect(sends(CARD_MESSAGE_TYPES.publish)).toHaveLength(0);
   }, 60_000);
 });

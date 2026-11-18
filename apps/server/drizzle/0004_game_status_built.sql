@@ -1,0 +1,2 @@
+ALTER TABLE "games" DROP CONSTRAINT "games_status_check";--> statement-breakpoint
+ALTER TABLE "games" ADD CONSTRAINT "games_status_check" CHECK ("games"."status" in ('planning', 'building', 'testing', 'built', 'awaiting_approval', 'published', 'failed', 'blocked'));

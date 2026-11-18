@@ -65,7 +65,8 @@ export const crewMembers = pgTable(
   ],
 );
 
-export const GAME_STATUSES = ['planning', 'building', 'testing', 'awaiting_approval', 'published', 'failed', 'blocked'] as const;
+/** `built`: playable but not playtested (the server runs without playtests, e.g. Render's free plan). */
+export const GAME_STATUSES = ['planning', 'building', 'testing', 'built', 'awaiting_approval', 'published', 'failed', 'blocked'] as const;
 export const games = pgTable(
   'games',
   {

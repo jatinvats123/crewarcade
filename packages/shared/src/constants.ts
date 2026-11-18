@@ -156,7 +156,8 @@ export const LIMITS = {
 export const CREW_ROLES = ['owner', 'approver', 'member'] as const;
 export type CrewRole = (typeof CREW_ROLES)[number];
 
-export const GAME_STATUSES = ['planning', 'building', 'testing', 'awaiting_approval', 'published', 'failed', 'blocked'] as const;
+/** `built`: playable but not playtested (the server runs without playtests, e.g. Render's free plan). */
+export const GAME_STATUSES = ['planning', 'building', 'testing', 'built', 'awaiting_approval', 'published', 'failed', 'blocked'] as const;
 export type GameStatus = (typeof GAME_STATUSES)[number];
 
 export const BUG_STATUSES = ['open', 'reproduced', 'not_reproduced', 'fixed'] as const;

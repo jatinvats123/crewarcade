@@ -19,7 +19,7 @@ import { useChannelState, usePresence } from '@/lib/chat/store';
 import type { MentionTarget } from '@/lib/chat/text';
 import { useCrews } from '@/lib/crews';
 import { useNexconn } from '@/lib/nexconn/NexconnProvider';
-import { activeRoomStore, roomHref } from '@/lib/room';
+import { activeRoomStore, roomActivitySignature, roomHref } from '@/lib/room';
 import { useSession } from '@/lib/session';
 import { inviteUrl, shareInvite } from '@/lib/share';
 import { ChatComposer } from './ChatComposer';
@@ -107,6 +107,22 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
     }
   }, [channel, detail, crewId, loadDetail]);
   useEffect(() => setStoryKey(k => k + 1), [cardCount]);
+
+  // In a game room, the game's status (side panel chip) follows the room's activity: refresh the
+  // crew's games shortly after a card arrives or changes, or an agent posts.
+  const activity = roomChannelId && channel ? roomActivitySignature(channel.messages) : '';
+  const lastActivity = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activity) return;
+    if (lastActivity.current === null) {
+      lastActivity.current = activity; // the first render already has fresh data
+      return;
+    }
+    if (lastActivity.current === activity) return;
+    lastActivity.current = activity;
+    const t = setTimeout(() => void loadDetail(crewId, true), 1500);
+    return () => clearTimeout(t);
+  }, [activity, crewId, loadDetail]);
 
   // This is the open channel: incoming messages here are read, not unread.
   useEffect(() => {

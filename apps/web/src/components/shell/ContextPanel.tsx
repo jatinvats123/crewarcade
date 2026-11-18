@@ -19,9 +19,11 @@ const STATUS: Record<string, string> = {
   planning: 'Planning',
   building: 'Building',
   testing: 'Testing',
+  built: 'Ready to play',
   awaiting_approval: 'Waiting for Allow',
   published: 'Published',
   failed: 'Needs help',
+  blocked: 'Blocked',
 };
 
 export function ContextPanel() {
