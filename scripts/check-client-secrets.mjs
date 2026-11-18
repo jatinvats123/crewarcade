@@ -13,12 +13,15 @@ const SECRET_NAMES = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'SUPABASE_SERVICE_KEY',
   'ANTHROPIC_API_KEY',
+  'GEMINI_API_KEY',
+  'SESSION_SECRET',
+  'JOBS_DATABASE_URL',
   'SARVAM_API_KEY',
   'TOKEN_ENCRYPTION_KEY',
   'DATABASE_URL',
 ];
 // A NEXT_PUBLIC_ name containing any of these words is treated as a leaked secret.
-const SECRETY = /SECRET|SERVICE_ROLE|SERVICE_KEY|PRIVATE|PASSWORD|ANTHROPIC|SARVAM|DATABASE|TOKEN_ENCRYPTION/;
+const SECRETY = /SECRET|SERVICE_ROLE|SERVICE_KEY|PRIVATE|PASSWORD|ANTHROPIC|GEMINI|SARVAM|DATABASE|TOKEN_ENCRYPTION/;
 const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', 'test-results', 'playwright-report', 'coverage']);
 const EXTS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json', '.css', '.html', '.md', '.example', '.local', '.yml', '.yaml']);
 
