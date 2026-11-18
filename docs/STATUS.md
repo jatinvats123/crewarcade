@@ -240,6 +240,19 @@ repro, and it goes public only through Allow. Plus voice pitches (Sarvam) and ta
 - In FAKE mode Glitch's repro is generic: a working game "doesn't reproduce" and Glitch asks a question.
 - The translated source language isn't shown (the SDK result gives only the target).
 
+### Live deploy (2026-11-18)
+
+- Web: **https://crewarcade.vercel.app** (Vercel project `crewarcade`, root `apps/web`, production
+  branch `phase-5`).
+- Server: **https://crewarcade-server.onrender.com** (Render free web service, created by hand, not by
+  Blueprint; `/health` gives `db: up`). `MIGRATE_ON_START=true` applies migrations at startup: Render's
+  Docker Command keeps literal quotes, so `sh -c "a && b"` failed with exit 127. Agents run on Gemini's
+  free tier.
+- Database: Supabase (Tokyo, `ap-northeast-1`) through the transaction pooler (6543). The direct
+  string is IPv6-only and Render can't reach it.
+- Still to do: the Nexconn Console webhook (`/webhooks/nexconn`), a live sign-in + chat check, and
+  rotating the DB password and `service_role` key (both were shared in chat).
+
 ### Render plan (2026-11-17): free, no card
 
 The owner doesn't want a card on file, and Render asks for one for any paid instance (even with the
