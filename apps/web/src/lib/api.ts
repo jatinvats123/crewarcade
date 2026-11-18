@@ -29,6 +29,7 @@ import {
   type ProfilePatch,
 } from '@crewarcade/shared';
 import { z } from 'zod';
+import { isWakeStatus, pingServer, waitForServer } from './wake';
 
 export class ApiRequestError extends Error {
   constructor(
@@ -42,17 +43,30 @@ export class ApiRequestError extends Error {
 }
 
 async function request<S extends z.ZodType>(method: 'GET' | 'POST' | 'PATCH', path: string, schema: S, body?: unknown): Promise<z.infer<S>> {
-  let res: Response;
-  try {
-    res = await fetch(path, {
+  const send = () =>
+    fetch(path, {
       method,
       credentials: 'same-origin',
       cache: 'no-store',
       headers: body === undefined ? {} : { 'content-type': 'application/json' },
       ...(body !== undefined && { body: JSON.stringify(body) }),
     });
+  let res: Response | null = null;
+  try {
+    res = await send();
   } catch {
-    throw new ApiRequestError(0, 'network', "Can't reach CrewArcade. Check your connection.");
+    // Offline: fail at once. Online: the server may be waking up (handled below).
+    if (typeof navigator !== 'undefined' && !navigator.onLine) throw new ApiRequestError(0, 'network', "Can't reach CrewArcade. Check your connection.");
+  }
+  // The free server sleeps when idle: wait for it (banner: "Waking up the server…"), then retry once.
+  if (!res || isWakeStatus(res.status)) {
+    const awake = await waitForServer({ ping: pingServer });
+    if (!awake) throw new ApiRequestError(res?.status ?? 0, 'unavailable', 'The server is taking too long to wake up. Try again in a minute.');
+    try {
+      res = await send();
+    } catch {
+      throw new ApiRequestError(0, 'network', "Can't reach CrewArcade. Check your connection.");
+    }
   }
   const json: unknown = res.status === 204 ? {} : await res.json().catch(() => null);
   if (!res.ok) {

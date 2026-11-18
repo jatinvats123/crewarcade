@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import type { ReactNode } from 'react';
+import { WakeBanner } from '@/components/shell/WakeBanner';
 import { ToastProvider } from '@/components/ui';
 import { publicEnv } from '@/env';
 import './globals.css';
@@ -38,7 +39,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="antialiased">
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <WakeBanner />
+          {children}
+        </ToastProvider>
       </body>
     </html>
   );
