@@ -117,7 +117,12 @@ export const PRICES: Readonly<Record<string, Price>> = {
   'claude-opus-5': { input: 5, output: 25, cacheWrite: 6.25, cacheRead: 0.5 },
   'claude-opus-4-8': { input: 5, output: 25, cacheWrite: 6.25, cacheRead: 0.5 },
   'claude-sonnet-5-5': { input: 2, output: 10, cacheWrite: 2.5, cacheRead: 0.1 },
+  // Prompts up to 100K tokens (all of ours); cache write 1.25x, read 0.1x of input.
+  'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheWrite: 0.125, cacheRead: 0.01 },
 };
+
+/** Haiku has no server-side refusal fallback: the request is sent without it (a refusal stays a refusal). */
+export const supportsServerFallback = (model: string): boolean => !model.startsWith('claude-haiku');
 
 /** Cost of one call. input_tokens excludes cached tokens, which are billed separately. */
 export function costUsd(model: string, u: { input: number; output: number; cacheRead: number; cacheWrite: number }): number {
@@ -257,8 +262,7 @@ export function createClaudeClient(o: ClaudeOptions): AiClient {
       {
         model: o.model,
         max_tokens: call.maxTokens,
-        betas: [FALLBACK_BETA],
-        fallbacks: 'default',
+        ...(supportsServerFallback(o.model) && { betas: [FALLBACK_BETA], fallbacks: 'default' as const }),
         system: [{ type: 'text', text: call.system, cache_control: { type: 'ephemeral' } }],
         messages: [
           {

@@ -10,7 +10,7 @@ import { limitLines } from '../src/agents/pixel';
 import { addMemory, baseSlug, detectLanguage, normalizePlan, pickSlug, PlanShapeError, PixelPlanOutput } from '../src/agents/plan';
 import { createMemoryQueue, jobUuid, type AgentJobData } from '../src/agents/queue';
 import { createAgentStates } from '../src/agents/states';
-import { AiOutputError, AiRefusalError, costUsd, createClaudeClient, outputJsonSchema } from '../src/ai/claude';
+import { AiOutputError, AiRefusalError, costUsd, createClaudeClient, outputJsonSchema, supportsServerFallback } from '../src/ai/claude';
 import { createFakeAiClient, fakePlanOutput, fakeTitle } from '../src/ai/fake';
 import { streamJsonStringField } from '../src/ai/json-stream';
 import { NexconnClient, type FetchLike } from '../src/nexconn';
@@ -468,6 +468,14 @@ describe('Claude wrapper', () => {
     expect(costUsd('claude-opus-5-5', { input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0 })).toBe(4);
     expect(costUsd('claude-opus-5-5', { input: 0, output: 1_000_000, cacheRead: 0, cacheWrite: 0 })).toBe(20);
     expect(costUsd('claude-opus-4-8', { input: 0, output: 1_000_000, cacheRead: 0, cacheWrite: 0 })).toBe(25);
+    expect(costUsd('claude-sonnet-5-5', { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 })).toBe(12);
+    expect(costUsd('claude-haiku-5-5', { input: 1_000_000, output: 1_000_000, cacheRead: 0, cacheWrite: 0 })).toBeCloseTo(0.6);
+    // Haiku has no server-side refusal fallback; Opus and Sonnet send fallbacks: "default".
+    expect([supportsServerFallback('claude-haiku-5-5'), supportsServerFallback('claude-sonnet-5-5'), supportsServerFallback('claude-opus-5-5')]).toEqual([
+      false,
+      true,
+      true,
+    ]);
     expect(costUsd('unknown-model', { input: 1_000_000, output: 0, cacheRead: 0, cacheWrite: 0 })).toBe(4);
   });
 
