@@ -25,6 +25,8 @@ export const users = pgTable('users', {
   nexconnTokenEncrypted: text(),
   isAgent: boolean().notNull().default(false),
   isJudge: boolean().notNull().default(false),
+  /** Referrer code from the link the user signed up through (`?ref=`), for /admin. */
+  referrer: text(),
 });
 
 export const CREW_KINDS = ['crew', 'classroom'] as const;

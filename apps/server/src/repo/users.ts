@@ -6,7 +6,7 @@ import { users } from '../db/schema';
 
 export type UserRow = typeof users.$inferSelect;
 
-export async function createGuestUser(db: Db, input: { displayName: string; avatarEmoji: string; avatarColor: string; language: string }): Promise<UserRow> {
+export async function createGuestUser(db: Db, input: { displayName: string; avatarEmoji: string; avatarColor: string; language: string; referrer?: string | null }): Promise<UserRow> {
   const [row] = await db
     .insert(users)
     .values({ id: newId('user'), ...input, lastSeenAt: new Date() })

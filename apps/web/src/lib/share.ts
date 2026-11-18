@@ -1,7 +1,7 @@
 // Invite sharing: the native share sheet on phones (WhatsApp-ready text), clipboard on desktop.
 
 export function inviteUrl(origin: string, code: string): string {
-  return `${origin.replace(/\/+$/, '')}/i/${code}`;
+  return `${origin.replace(/\/+$/, '')}/i/${code}?ref=invite`;
 }
 
 /** One message that reads well in WhatsApp (the link goes in the text: some apps drop `url`). */

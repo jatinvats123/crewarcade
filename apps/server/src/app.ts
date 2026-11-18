@@ -7,6 +7,7 @@ import type { NexconnClient } from './nexconn/client';
 import { registerAuthRoutes } from './routes/auth';
 import type { AgentServices } from './agents/runtime-deps';
 import { registerCrewRoutes } from './routes/crews';
+import { registerAdminRoutes } from './routes/admin';
 import { registerGameRoutes } from './routes/games';
 import { registerPlayRoutes } from './routes/play';
 import { installApiPlumbing } from './routes/http';
@@ -99,6 +100,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     registerCrewRoutes(app, ctx);
     registerGameRoutes(app, ctx);
     registerPlayRoutes(app, ctx);
+    registerAdminRoutes(app, ctx);
     registerWebhookRoutes(app, ctx);
     deps.onReady?.(ctx);
   }

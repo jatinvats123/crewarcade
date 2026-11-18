@@ -12,8 +12,13 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
 | 3     | Forge, builds, play, scores | **Built** (branch `phase-3`); live E2E_CHAT run pending              |
 | 4     | Glitch, playtest, publish   | **Built** (branch `phase-4`); live E2E_CHAT run pending (Docker)     |
 | 5     | Bugs, voice, languages      | **Built** (branch `phase-5`); live on the free plan (no playtests)   |
-| 6     | Arcade and growth           | —                                                                    |
+| 6     | Polish, harden, launch prep | **In progress** (branch `phase-6`)                                   |
 | 7     | Polish and launch           | —                                                                    |
+
+## Phase 6: polish, harden, launch prep (branch `phase-6`)
+
+- **Arcade:** public `/arcade` (Newest / Top by plays then best score) from `GET /api/public/arcade`; published games only, fixture slugs never listed (tested).
+- **Referrers + admin:** `?ref=` (first touch, localStorage) → `users.referrer` at sign-up (migration `0005_users_referrer`); invite links carry `?ref=invite`. Owner-only `/admin` (`ADMIN_USER_IDS`, 404 for others, tested): stage OK/failed + p50/p95 from the ledger, cost per day, queue depth, signups by referrer.
 
 ## Phase 2: built, waiting for Nexconn and Anthropic keys to verify live (branch `phase-2`)
 

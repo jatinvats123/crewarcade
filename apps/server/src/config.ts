@@ -68,6 +68,17 @@ const BaseSchema = z.object({
         .filter(Boolean),
     ),
 
+  /** CrewArcade user ids (comma list) that may open /admin. Empty: nobody. */
+  ADMIN_USER_IDS: z
+    .string()
+    .default('')
+    .transform(s =>
+      s
+        .split(',')
+        .map(h => h.trim())
+        .filter(Boolean),
+    ),
+
   ANTHROPIC_API_KEY: optionalSecret,
   ANTHROPIC_MODEL: z.string().default('claude-opus-5-5'),
   /** Model for Forge's game building (the heaviest call). */

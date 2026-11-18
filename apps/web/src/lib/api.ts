@@ -2,6 +2,7 @@
 // Render server by a Next.js rewrite (next.config.ts), so the session cookie is first-party.
 // Every response is parsed with the shared zod schemas.
 import {
+  AdminStats,
   AgentStateMessage,
   BugReportResponse,
   CardActionResponse,
@@ -129,6 +130,7 @@ export const api = {
   },
   publicGame: (slug: string) => request('GET', `/api/public/games/${encodeURIComponent(slug)}`, GamePageResponse),
   remix: (slug: string, body: RemixBody) => request('POST', `/api/games/${encodeURIComponent(slug)}/remix`, RemixResponse, body),
+  adminStats: () => request('GET', '/api/admin/stats', AdminStats),
   agentActivity: (crewId: string, agent: 'pixel' | 'forge' | 'glitch') =>
     request('GET', `/api/crews/${encodeURIComponent(crewId)}/agents/${agent}/activity`, z.object({ agent: z.string(), entries: z.array(LedgerEntry) })).then(
       r => r.entries,

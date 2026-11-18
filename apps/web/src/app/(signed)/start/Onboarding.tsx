@@ -8,6 +8,7 @@ import { ProfileForm, randomProfile } from '@/components/identity/ProfileForm';
 import { Skeleton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { safeNext } from '@/lib/nav';
+import { signupRef } from '@/lib/ref';
 import { useSession } from '@/lib/session';
 
 export function Onboarding() {
@@ -43,7 +44,7 @@ export function Onboarding() {
             initial={initial}
             submitLabel="Let's go"
             onSubmit={async v => {
-              const user = await api.signUp(v);
+              const user = await api.signUp({ ...v, referrer: signupRef(next.startsWith('/i/')) });
               setUser(user);
               router.replace(next);
             }}

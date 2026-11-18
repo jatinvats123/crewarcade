@@ -64,6 +64,8 @@ services:
         sync: false
       - key: SARVAM_API_KEY
         sync: false
+      - key: ADMIN_USER_IDS
+        sync: false
       - key: TOKEN_ENCRYPTION_KEY
         sync: false
       # Signs session cookies. Render generates a random value once and keeps it.

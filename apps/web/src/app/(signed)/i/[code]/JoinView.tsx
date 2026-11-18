@@ -11,6 +11,7 @@ import { MemberAvatar } from '@/components/identity/MemberAvatar';
 import { ProfileForm, randomProfile } from '@/components/identity/ProfileForm';
 import { Button, ErrorState, Skeleton } from '@/components/ui';
 import { api, ApiRequestError } from '@/lib/api';
+import { signupRef } from '@/lib/ref';
 import { useSession } from '@/lib/session';
 
 export function JoinView({ code }: { code: string }) {
@@ -114,7 +115,7 @@ export function JoinView({ code }: { code: string }) {
                   initial={initial}
                   submitLabel="Join crew"
                   onSubmit={async v => {
-                    setUser(await api.signUp(v));
+                    setUser(await api.signUp({ ...v, referrer: signupRef(true) }));
                     await join();
                   }}
                 />

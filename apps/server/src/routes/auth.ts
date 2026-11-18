@@ -23,6 +23,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx): void {
       avatarEmoji: body.avatarEmoji,
       avatarColor: body.avatarColor,
       language: body.language ?? 'en',
+      referrer: body.referrer ?? null,
     });
     setSession(reply, user.id, ctx.session);
     ctx.log.info({ userId: user.id }, 'guest signed up');

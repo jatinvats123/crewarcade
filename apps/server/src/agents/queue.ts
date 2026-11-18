@@ -78,7 +78,11 @@ export interface JobQueue {
   /** Starts processing playtest jobs (one per room at a time). */
   startPlaytests(handler: (job: PlaytestJobData) => Promise<void>): Promise<void>;
   stop(): Promise<void>;
+  /** Jobs waiting and running per queue (/admin). */
+  depth(): Promise<QueueDepth>;
 }
+
+export type QueueDepth = Record<'agent' | 'build' | 'playtest', { queued: number; active: number }>;
 
 /** pg-boss ids are UUIDs: derive one deterministically from the idempotency key. */
 export function jobUuid(key: string): string {
@@ -174,6 +178,14 @@ export function createPgBossQueue(
     },
     async stop() {
       if (started) await boss.stop({ graceful: true, timeout: 20_000 });
+    },
+    async depth() {
+      await ready();
+      const one = async (name: string) => {
+        const q = await boss.getQueue(name);
+        return { queued: q?.queuedCount ?? 0, active: q?.activeCount ?? 0 };
+      };
+      return { agent: await one(QUEUES.agent), build: await one(QUEUES.build), playtest: await one(QUEUES.playtest) };
     },
   };
 }
@@ -280,6 +292,10 @@ export function createMemoryQueue(opts: {
       handler = null;
       buildHandler = null;
       playtestHandler = null;
+    },
+    async depth() {
+      const count = (kind: Item['kind']) => ({ queued: pending.filter(it => it.kind === kind).length, active: [...busyRooms].filter(l => l.startsWith(`${kind}|`)).length });
+      return { agent: count('agent'), build: count('build'), playtest: count('playtest') };
     },
     idle: () =>
       new Promise<void>(resolve => {

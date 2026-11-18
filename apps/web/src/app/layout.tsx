@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
 import type { ReactNode } from 'react';
+import { RefCapture } from '@/components/shell/RefCapture';
 import { WakeBanner } from '@/components/shell/WakeBanner';
 import { ToastProvider } from '@/components/ui';
 import { publicEnv } from '@/env';
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="antialiased">
         <ToastProvider>
           <WakeBanner />
+          <RefCapture />
           {children}
         </ToastProvider>
       </body>

@@ -52,11 +52,20 @@ export const AvatarEmoji = z.enum(AVATAR_EMOJIS);
 export const AvatarColorSchema = z.enum(AVATAR_COLORS);
 export const LanguageCodeSchema = z.enum(LANGUAGE_CODES);
 
+/** Referrer code on invite and share links (`?ref=wa`, `?ref=invite`, `?ref=linkedin`). Counted in /admin. */
+export const RefCode = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
+
 export const GuestSignupBody = z.object({
   displayName: DisplayName,
   avatarEmoji: AvatarEmoji,
   avatarColor: AvatarColorSchema,
   language: LanguageCodeSchema.default('en'),
+  /** Where the user came from (`?ref=` on an invite or share link); a bad code is dropped, never an error. */
+  referrer: RefCode.optional().catch(undefined),
 });
 export type GuestSignupBody = z.input<typeof GuestSignupBody>;
 
@@ -245,3 +254,25 @@ export type LedgerResponse = z.infer<typeof LedgerResponse>;
 
 export const ApiError = z.object({ error: z.string(), message: z.string() });
 export type ApiError = z.infer<typeof ApiError>;
+
+/** GET /api/admin/stats (owner-only, ADMIN_USER_IDS): last 30 days unless noted. */
+export const ADMIN_STAGES = ['plan', 'build', 'test'] as const;
+export const AdminStats = z.object({
+  windowDays: z.number().int(),
+  stages: z.array(
+    z.object({
+      stage: z.enum(ADMIN_STAGES),
+      ok: z.number().int(),
+      failed: z.number().int(),
+      p50Ms: z.number().nullable(),
+      p95Ms: z.number().nullable(),
+    }),
+  ),
+  /** Newest first, last 14 days. */
+  costPerDay: z.array(z.object({ day: z.string(), costUsd: z.number(), steps: z.number().int() })),
+  /** null when the agents don't run on this server. */
+  queue: z.record(z.string(), z.object({ queued: z.number().int(), active: z.number().int() })).nullable(),
+  signups: z.object({ total: z.number().int(), last30: z.number().int(), byReferrer: z.array(z.object({ referrer: z.string(), users: z.number().int() })) }),
+  games: z.object({ total: z.number().int(), published: z.number().int(), plays: z.number().int() }),
+});
+export type AdminStats = z.infer<typeof AdminStats>;
