@@ -28,6 +28,17 @@ const NETWORK: ReadonlyArray<readonly [RegExp, string]> = [
   [/<(?:iframe|object|embed)\b/gi, 'embedded frame/object'],
 ];
 
+/** Leaving the game page (the sandbox can't stop a frame navigating itself; the player also closes
+ *  a game whose frame loads a second page). Reading location (e.g. location.pathname) is fine. */
+const NAVIGATION: ReadonlyArray<readonly [RegExp, string]> = [
+  [/\blocation\s*=(?!=)/g, 'location assignment'],
+  [/\blocation\s*\.\s*(?:href|pathname|search|host|hostname|origin|protocol|port)\s*=(?!=)/g, 'location assignment'],
+  [/\blocation\s*\.\s*(?:assign|replace)\s*\(/g, 'location.assign/replace'],
+  [/\bwindow\s*\.\s*open\s*\(/g, 'window.open()'],
+  [/<meta\b[^>]*http-equiv\s*=\s*["']?refresh/gi, '<meta> refresh'],
+  [/<form\b/gi, '<form>'],
+];
+
 const HOOK_MEMBERS = ['state()', 'start()', 'reset()', 'seed(', 'controls'] as const;
 
 export function checkHtml(html: string): CheckResult {
@@ -38,6 +49,8 @@ export function checkHtml(html: string): CheckResult {
   const lineOf = (i: number) => html.slice(0, i).split('\n').length;
   for (const [re, what] of NETWORK)
     for (const m of html.matchAll(re)) problems.push(`Network/external asset (${what}) at line ${lineOf(m.index ?? 0)}: ${m[0].trim().slice(0, 80)}`);
+  for (const [re, what] of NAVIGATION)
+    for (const m of html.matchAll(re)) problems.push(`Page navigation (${what}) at line ${lineOf(m.index ?? 0)}: ${m[0].trim().slice(0, 80)}`);
 
   const hasHook = html.includes('window.__crew');
   if (!hasHook) problems.push('window.__crew test hook is missing (keep the starter engine).');

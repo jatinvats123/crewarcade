@@ -187,3 +187,11 @@ export const ArcadeGame = z.object({
 export type ArcadeGame = z.infer<typeof ArcadeGame>;
 export const ArcadeResponse = z.object({ sort: z.enum(ARCADE_SORTS), games: z.array(ArcadeGame) });
 export type ArcadeResponse = z.infer<typeof ArcadeResponse>;
+
+/**
+ * The web player's iframe attributes, in one place: scripts and pointer lock only. Never
+ * allow-same-origin, allow-top-navigation, allow-popups, allow-forms or allow-modals. The server's
+ * hostile-game test (apps/server/test/sandbox.test.ts) runs games with exactly these.
+ */
+export const GAME_SANDBOX = 'allow-scripts allow-pointer-lock';
+export const GAME_ALLOW = 'fullscreen; gamepad';

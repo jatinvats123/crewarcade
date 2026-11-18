@@ -21,6 +21,5 @@ export function acceptHostMessage(e: HostMessageEvent, frame: unknown, gameOrigi
   return parseGameHostMessage(e.data);
 }
 
-/** The iframe attributes, in one place (tested): scripts and pointer lock only, nothing else. */
-export const GAME_SANDBOX = 'allow-scripts allow-pointer-lock';
-export const GAME_ALLOW = 'fullscreen; gamepad';
+/** The iframe attributes live in @crewarcade/shared (the server's hostile-game test uses them too). */
+export { GAME_ALLOW, GAME_SANDBOX } from '@crewarcade/shared';

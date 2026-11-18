@@ -38,6 +38,24 @@ describe('checkHtml', () => {
     expect(res.problems.join('\n')).toMatch(/Network\/external asset/);
   });
 
+  it.each([
+    ['location =', "window.location = 'https://evil.example';"],
+    ['top.location.href =', "top.location.href = '/x';"],
+    ['location.assign', "location.assign('/x');"],
+    ['location.replace', "location.replace('/x');"],
+    ['window.open', "window.open('/x');"],
+    ['meta refresh', "document.head.innerHTML += '<meta http-equiv=\"refresh\" content=\"0;url=/x\">';"],
+    ['form', "document.body.innerHTML += '<form action=\"/x\"></form>';"],
+  ])('flags page navigation: %s', (_name, code) => {
+    const res = checkHtml(inject(code));
+    expect(res.pass).toBe(false);
+    expect(res.problems.join('\n')).toMatch(/Page navigation/);
+  });
+
+  it('allows reading location and comparing it', () => {
+    expect(checkHtml(inject("const here = location.pathname; if (location.hash === '#x') {}")).pass).toBe(true);
+  });
+
   it('flags external scripts, stylesheets, images and CSS urls', () => {
     const html = starter
       .replace('</head>', '<link rel="stylesheet" href="https://fonts.example/a.css"><style>body{background:url(//x.example/a.png)}</style></head>')

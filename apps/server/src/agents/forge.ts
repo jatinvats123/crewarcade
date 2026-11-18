@@ -140,6 +140,7 @@ ${GLOBALS}
 
 ## Rules (a static check enforces them; Glitch then plays the game)
 - No network or external assets: no fetch, XMLHttpRequest, WebSocket, Worker, images, fonts, URLs, iframes, CSS url(). Art = canvas shapes, gradients and emoji; sound = beep().
+- Never leave the page: no location changes, window.open, forms or meta refresh.
 - No storage: no localStorage, sessionStorage, indexedDB or cookies (the player's sandbox blocks them; the engine already tracks the best score).
 - Keep the code under 60 KB. Write clear code; no minification.
 - Never redeclare a name the engine already declares (a syntax error): ${taken.join(', ')}. Use your own names (e.g. playerScore, myStars) or the engine's helpers.
