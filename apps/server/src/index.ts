@@ -28,7 +28,21 @@ if (config.MIGRATE_ON_START) {
     console.log('Migrations applied (MIGRATE_ON_START)');
   } catch (e) {
     // Fail fast: a server on an unmigrated (or unreachable) database would only half work.
-    console.error('Migrations failed:', e instanceof Error ? `${e.message} ${(e as { code?: string }).code ?? ''}` : e);
+    // Drizzle wraps the driver error: print the cause too (code + message; never the URL).
+    const cause = (e as { cause?: { code?: string; message?: string; errors?: Array<{ code?: string; address?: string; port?: number }> } }).cause;
+    const parts = [
+      e instanceof Error ? (e.message.split('\n')[0] ?? '') : String(e),
+      cause?.code,
+      cause?.message,
+      ...(cause?.errors ?? []).map(x => `${x.code} ${x.address}:${x.port}`),
+    ];
+    console.error(
+      'Migrations failed:',
+      parts
+        .filter(Boolean)
+        .join(' | ')
+        .replace(/postgres(ql)?:\/\/\S+/g, '[db url]'),
+    );
     process.exit(1);
   }
 }
