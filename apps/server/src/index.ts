@@ -10,6 +10,7 @@ import { buildApp } from './app';
 import { ConfigError, integrations, loadConfig } from './config';
 import type { Ctx } from './context';
 import { createDb } from './db/client';
+import { runMigrations } from './db/migrations';
 import { seedAgents } from './db/seed-agents';
 import { createNexconnClient } from './nexconn';
 
@@ -19,6 +20,17 @@ try {
 } catch (e) {
   console.error(e instanceof ConfigError ? e.message : e);
   process.exit(1);
+}
+
+if (config.MIGRATE_ON_START) {
+  try {
+    await runMigrations(config.DATABASE_URL);
+    console.log('Migrations applied (MIGRATE_ON_START)');
+  } catch (e) {
+    // Fail fast: a server on an unmigrated (or unreachable) database would only half work.
+    console.error('Migrations failed:', e instanceof Error ? `${e.message} ${(e as { code?: string }).code ?? ''}` : e);
+    process.exit(1);
+  }
 }
 
 const database = createDb(config.DATABASE_URL, { max: config.DATABASE_POOL_MAX });

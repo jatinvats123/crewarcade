@@ -100,6 +100,8 @@ const BaseSchema = z.object({
   DAILY_BUDGET_USD: z.coerce.number().min(0).default(25),
   /** Run the pg-boss job workers in this process (one Render service runs API + workers). */
   RUN_WORKERS: bool(true),
+  /** Apply pending migrations at startup (hosts without a pre-deploy step, e.g. Render's free plan). */
+  MIGRATE_ON_START: bool(false),
   /** pg-boss needs session-level features: use a direct or session-pooler URL (Supabase port 5432)
    *  here when DATABASE_URL is the transaction pooler (port 6543). Defaults to DATABASE_URL. */
   JOBS_DATABASE_URL: z

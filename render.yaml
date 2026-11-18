@@ -9,13 +9,11 @@ services:
     # builds, play, scores, bug reports and voice work; headless Chromium does not fit, so Glitch's
     # playtests / repros and Forge's smoke test are off (PLAYTESTS=false, FORGE_SMOKE=false) and
     # nothing can be published. Full product: plan: standard (2 GB), set both back to 'true', and
-    # move the migration back to `preDeployCommand: node dist/migrate.js` (paid plans only).
+    # move the migration back to `preDeployCommand: node dist/migrate.js` (paid plans only) and drop MIGRATE_ON_START.
     plan: free
     dockerfilePath: ./apps/server/Dockerfile
     dockerContext: .
     healthCheckPath: /health
-    # Free plans have no pre-deploy step: migrate, then start (the Dockerfile's CMD otherwise).
-    dockerCommand: /bin/sh -c "node dist/migrate.js && exec node --enable-source-maps dist/index.js"
     autoDeploy: true
     buildFilter:
       paths:
@@ -39,6 +37,9 @@ services:
         value: '5'
       - key: AGENT_CONCURRENCY
         value: '2'
+      # Free plans have no pre-deploy step: the server applies migrations itself at startup.
+      - key: MIGRATE_ON_START
+        value: 'true'
       - key: PLAYTESTS
         value: 'false'
       - key: FORGE_SMOKE
