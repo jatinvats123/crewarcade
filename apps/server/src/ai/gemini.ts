@@ -32,9 +32,9 @@ export interface GeminiOptions {
   prices?: { input: number; output: number };
   baseUrl?: string;
   log?: { debug(obj: object, msg: string): void };
-  /** Extra tries on "busy" answers (503 UNAVAILABLE / 429 RESOURCE_EXHAUSTED) before any text arrived. */
+  /** Extra tries on "busy" answers (503 UNAVAILABLE / 429 RESOURCE_EXHAUSTED), also mid-stream. Default 3. */
   retries?: number;
-  /** Backoff before retry n (1-based); default 2 s, 6 s (+ jitter). */
+  /** Backoff before retry n (1-based); default 2 s, 6 s, 15 s (+ jitter). */
   retryDelayMs?: (n: number) => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -66,20 +66,20 @@ export function createGeminiClient(o: GeminiOptions): AiClient {
   }
 
   const sleep = o.sleep ?? ((ms: number) => new Promise<void>(r => setTimeout(r, ms)));
-  const delay = o.retryDelayMs ?? ((n: number) => (n === 1 ? 2000 : 6000) + Math.floor(Math.random() * 500));
+  const delay = o.retryDelayMs ?? ((n: number) => [2000, 6000, 15000][Math.min(n, 3) - 1]! + Math.floor(Math.random() * 500));
 
-  /** Retries busy answers, but only while nothing has been streamed (a reply never repeats). */
-  async function run(call: TextCall, json: Record<string, unknown> | null, onText: (t: string) => void): Promise<{ text: string; usage: AiUsage }> {
-    const tries = 1 + (o.retries ?? 2);
-    let emitted = false;
+  /**
+   * Retries busy answers, also when they arrive mid-stream (the free tier drops streams at peaks).
+   * `newAttempt` gives each try a fresh text sink: the caller suppresses what it already showed, so a
+   * retried reply never repeats on screen.
+   */
+  async function run(call: TextCall, json: Record<string, unknown> | null, newAttempt: () => (t: string) => void): Promise<{ text: string; usage: AiUsage }> {
+    const tries = 1 + (o.retries ?? 3);
     for (let n = 1; ; n++) {
       try {
-        return await runOnce(call, json, t => {
-          emitted = true;
-          onText(t);
-        });
+        return await runOnce(call, json, newAttempt());
       } catch (e) {
-        if (!(e instanceof AiUnavailableError) || emitted || n >= tries || !isBusyError(e.message)) throw e;
+        if (!(e instanceof AiUnavailableError) || n >= tries || !isBusyError(e.message)) throw e;
         o.log?.debug({ purpose: call.purpose, attempt: n }, 'gemini: model busy, retrying');
         await sleep(delay(n));
       }
@@ -138,10 +138,15 @@ export function createGeminiClient(o: GeminiOptions): AiClient {
     model: o.model,
     structured<T>(call: StructuredCall<T>): StructuredRun<T> {
       const field = channel<string>();
-      const extractor = call.streamField ? streamJsonStringField(call.streamField, field.push) : null;
+      const shown = replayGuard(field.push);
       const done = (async () => {
         try {
-          const { text, usage } = await run(call, outputJsonSchema(call.schema), t => extractor?.(t));
+          // Each attempt parses its own JSON from the start; the guard skips the part already shown.
+          const { text, usage } = await run(call, outputJsonSchema(call.schema), () => {
+            const sink = shown.attempt();
+            const extractor = call.streamField ? streamJsonStringField(call.streamField, sink) : null;
+            return t => extractor?.(t);
+          });
           let json: unknown;
           try {
             json = JSON.parse(text);
@@ -162,13 +167,35 @@ export function createGeminiClient(o: GeminiOptions): AiClient {
       const chunks = channel<string>();
       const done = (async () => {
         try {
-          return await run(call, null, chunks.push);
+          const shown = replayGuard(chunks.push);
+          return await run(call, null, () => shown.attempt());
         } finally {
           chunks.end();
         }
       })();
       done.catch(() => {});
       return { chunks: chunks.iterable, done };
+    },
+  };
+}
+
+/**
+ * Streams the same reply across retries without repeating it (pure; tested): each attempt's text is
+ * passed on only past the length already shown. A retry's wording can differ slightly from the first
+ * attempt's; the seam stays invisible in practice because busy errors cut streams early.
+ */
+export function replayGuard(push: (t: string) => void): { attempt: () => (t: string) => void } {
+  let shown = 0;
+  return {
+    attempt() {
+      let seen = 0;
+      return (t: string) => {
+        const start = seen;
+        seen += t.length;
+        if (seen <= shown) return;
+        push(t.slice(Math.max(0, shown - start)));
+        shown = seen;
+      };
     },
   };
 }

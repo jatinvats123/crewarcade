@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { channel, type AiClient, type StructuredCall } from '../src/ai/claude';
 import { fakeBuildOutput } from '../src/ai/fake-game';
-import { createGeminiClient, isBusyError } from '../src/ai/gemini';
+import { createGeminiClient, isBusyError, replayGuard } from '../src/ai/gemini';
 import { insertCode, runBuildLoop } from '../src/agents/forge';
 import { createHeadless, smokeFindings } from '../src/agents/smoke';
 
@@ -89,7 +89,7 @@ describe('Forge smoke playtest', () => {
 describe('Gemini busy-retry', () => {
   let server: Server;
   let base = '';
-  let answers: Array<'busy' | 'ok' | 'bad'> = [];
+  let answers: Array<'busy' | 'ok' | 'bad' | 'partial' | 'intro'> = [];
   let hits = 0;
   beforeAll(async () => {
     server = createServer((req, res) => {
@@ -104,6 +104,24 @@ describe('Gemini busy-retry', () => {
         return res
           .writeHead(400, { 'content-type': 'application/json' })
           .end(JSON.stringify({ error: { code: 400, message: 'invalid argument', status: 'INVALID_ARGUMENT' } }));
+      const sse = (text: string, finish?: string) =>
+        `data: ${JSON.stringify({
+          candidates: [{ content: { role: 'model', parts: [{ text }] }, ...(finish && { finishReason: finish }) }],
+          usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 4 },
+          modelVersion: 'gemini-test',
+        })}
+
+`;
+      // Mid-stream "high demand": some text, then the error (what the free tier did live, 2026-11-18).
+      if (a === 'partial')
+        return res.writeHead(200, { 'content-type': 'text/event-stream' }).end(
+          sse('{"intro":"Planning Chai Pou') +
+            `data: ${JSON.stringify({ error: { code: 503, message: 'This model is currently experiencing high demand.', status: 'UNAVAILABLE' } })}
+
+`,
+        );
+      if (a === 'intro')
+        return res.writeHead(200, { 'content-type': 'text/event-stream' }).end(sse('{"intro":"Planning Chai Po') + sse('unce now!","ok":true}', 'STOP'));
       const chunk = {
         candidates: [{ content: { role: 'model', parts: [{ text: '{"ok":true}' }] }, finishReason: 'STOP' }],
         usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 4 },
@@ -139,6 +157,31 @@ describe('Gemini busy-retry', () => {
     hits = 0;
     await expect(ai.structured(call).done).rejects.toThrow();
     expect(hits).toBe(1);
+  });
+
+  it('retries a busy answer that cuts the stream mid-reply, without repeating the shown text', async () => {
+    answers = ['partial', 'intro'];
+    hits = 0;
+    const ai = createGeminiClient({ apiKey: 'k', model: 'gemini-test', baseUrl: base, sleep: async () => {}, retryDelayMs: () => 1 });
+    const run = ai.structured({ ...call, schema: z.object({ intro: z.string(), ok: z.boolean() }), streamField: 'intro' });
+    const pieces: string[] = [];
+    for await (const p of run.fieldChunks) pieces.push(p);
+    expect((await run.done).value).toEqual({ intro: 'Planning Chai Pounce now!', ok: true });
+    expect(hits).toBe(2);
+    expect(pieces.join('')).toBe('Planning Chai Pounce now!');
+  });
+
+  it('the replay guard passes on only what is new', () => {
+    const out: string[] = [];
+    const g = replayGuard(t => out.push(t));
+    const a = g.attempt();
+    a('Planning ');
+    a('Chai');
+    const b = g.attempt();
+    b('Planning Ch');
+    b('ai Pounce');
+    b('!');
+    expect(out.join('')).toBe('Planning Chai Pounce!');
   });
 
   it('knows a busy answer when it sees one', () => {
