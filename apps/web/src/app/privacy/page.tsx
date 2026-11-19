@@ -19,7 +19,7 @@ export default function PrivacyPage() {
       </header>
       <main className="pb-safe mx-auto flex max-w-2xl flex-col gap-6 px-4 pb-12">
         <div>
-          <h1 className="font-display text-3xl font-bold">Privacy</h1>
+          <h1 className="font-poster text-4xl tracking-wide uppercase">Privacy</h1>
           <p className="mt-1 text-dim">Short version: guest accounts, no email or password, the least data we need to run the game chat.</p>
         </div>
 
@@ -60,16 +60,16 @@ export default function PrivacyPage() {
 
         <Section title="Published games">
           <p>
-            A game goes public only after a crew approver taps Allow. Public game pages show the game, its leaderboard (display names and scores) and the crew&apos;s
-            display names.
+            A game goes public only after a crew approver taps Allow. Public game pages show the game, its leaderboard (display names and scores) and the
+            crew&apos;s display names.
           </p>
         </Section>
 
         <Section title="Delete your account">
           <p>
-            Settings → Privacy → <strong>Delete my account</strong>. Your profile, scores, sign-in and chat logs are deleted at once and you are removed from your
-            chats. Crews you own pass to another member; a crew with only you in it is deleted with its games. Games you helped make in other crews stay, credited
-            to &ldquo;Deleted player&rdquo;. Messages already sent stay in the crew&apos;s chat history.
+            Settings → Privacy → <strong>Delete my account</strong>. Your profile, scores, sign-in and chat logs are deleted at once and you are removed from
+            your chats. Crews you own pass to another member; a crew with only you in it is deleted with its games. Games you helped make in other crews stay,
+            credited to &ldquo;Deleted player&rdquo;. Messages already sent stay in the crew&apos;s chat history.
           </p>
         </Section>
 

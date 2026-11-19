@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Space_Grotesk } from 'next/font/google';
+import { Anton, Inter, Space_Grotesk } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { RefCapture } from '@/components/shell/RefCapture';
 import { WakeBanner } from '@/components/shell/WakeBanner';
@@ -8,6 +8,7 @@ import { publicEnv } from '@/env';
 import './globals.css';
 
 const display = Space_Grotesk({ subsets: ['latin'], variable: '--font-space-grotesk', display: 'swap', weight: ['500', '700'] });
+const poster = Anton({ subsets: ['latin'], variable: '--font-anton', display: 'swap', weight: '400' });
 const body = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 
 export const metadata: Metadata = {
@@ -24,18 +25,15 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   // Android Chrome: the on-screen keyboard resizes the layout, so the composer stays above it.
   interactiveWidget: 'resizes-content',
-  themeColor: [
-    { media: '(prefers-color-scheme: dark)', color: '#0b0a16' },
-    { media: '(prefers-color-scheme: light)', color: '#faf8ff' },
-  ],
+  themeColor: '#0a0a0a',
 };
 
-// Applies a saved theme choice before paint (no flash). Default follows the OS (dark-first tokens).
+// Applies a saved theme choice before paint (no flash). Dark is the default; light only when chosen.
 const themeScript = `try{var t=localStorage.getItem('crewarcade:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${display.variable} ${poster.variable} ${body.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

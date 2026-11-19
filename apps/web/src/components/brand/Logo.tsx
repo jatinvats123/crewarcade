@@ -1,25 +1,24 @@
 import { cn } from '@/lib/cn';
+import { DpadMark, PlayA } from './marks';
 
-/** The CrewArcade wordmark: a joystick-dot mark + "Crew" / "Arcade" in the display font. */
-export function Logo({ className, showMark = true }: { className?: string; showMark?: boolean }) {
+/**
+ * The CrewArcade logo: the D-pad "+3" icon and the wordmark "CREW▲RCADE" in the poster font, whose
+ * A of ARCADE is a play triangle. Size it with font-size (e.g. text-xl).
+ */
+export function Logo({ className }: { className?: string }) {
   return (
-    <span className={cn('inline-flex items-center gap-2 font-display font-bold tracking-tight', className)} role="img" aria-label="CrewArcade">
-      {showMark && <LogoMark className="size-[1.3em]" />}
-      <span aria-hidden>
-        Crew<span className="text-brand">Arcade</span>
+    <span className={cn('inline-flex items-center gap-[0.45em]', className)} role="img" aria-label="CrewArcade">
+      <DpadMark className="h-[1.15em] w-auto shrink-0" />
+      <span aria-hidden className="inline-flex items-baseline font-poster leading-none tracking-wide uppercase">
+        Crew
+        <PlayA className="mx-[0.06em] h-[0.74em] w-auto" />
+        rcade
       </span>
     </span>
   );
 }
 
-/** Square mark: three agent-coloured dots (Pixel, Forge, Glitch) on an arcade button. */
+/** The icon alone (footer, favicon, avatars): the D-pad "+3". */
 export function LogoMark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden>
-      <rect x="1" y="1" width="30" height="30" rx="9" fill="var(--brand)" />
-      <circle cx="10" cy="12" r="3.4" fill="var(--pixel)" stroke="#fff" strokeWidth="1.4" />
-      <circle cx="22" cy="12" r="3.4" fill="var(--forge)" stroke="#fff" strokeWidth="1.4" />
-      <circle cx="16" cy="21.5" r="3.4" fill="var(--glitch)" stroke="#fff" strokeWidth="1.4" />
-    </svg>
-  );
+  return <DpadMark className={cn('h-auto', className)} />;
 }

@@ -1,22 +1,23 @@
 @import 'tailwindcss';
 
-/* CrewArcade design tokens (docs/DESIGN.md). Dark-first; light via prefers-color-scheme or
-   data-theme="light" on <html>. Components use the Tailwind names below (bg-surface, text-dim,
-   text-pixel...), never raw hex. */
+/* CrewArcade design tokens (docs/DESIGN.md). Components use the Tailwind names below
+   (bg-surface, text-dim, text-pixel...), never raw hex. */
 
+/* Dark is the default (black + lime); light only when the user picks it with the theme toggle.
+   Any element with a data-theme attribute re-scopes the tokens for its subtree (the landing forces dark). */
 :root,
-:root[data-theme='dark'] {
+[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0b0a16;
-  --surface: #15132a;
-  --surface-2: #1e1b3a;
-  --surface-3: #28244b;
-  --border: #2e2a55;
-  --text: #f4f1ff;
-  --dim: #a39dcc;
-  --faint: #8e89ba;
-  --brand: #ff4d8d;
-  --brand-ink: #1a0610;
+  --bg: #0a0a0a;
+  --surface: #121212;
+  --surface-2: #1a1a1a;
+  --surface-3: #242424;
+  --border: #2b2b2b;
+  --text: #f4f4ef;
+  --dim: #a8a8a1;
+  --faint: #8f8f88;
+  --brand: #c5f82a;
+  --brand-ink: #0a0a0a;
   --gold: #ffd166;
   --pixel: #a78bfa;
   --forge: #f5b83d;
@@ -24,56 +25,31 @@
   --success: #34d399;
   --danger: #f87171;
   --warning: #fbbf24;
-  --overlay: rgb(5 4 14 / 0.66);
-  --shadow: 0 12px 32px -12px rgb(0 0 0 / 0.6);
+  --overlay: rgb(0 0 0 / 0.7);
+  --shadow: 0 12px 32px -12px rgb(0 0 0 / 0.7);
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) {
-    color-scheme: light;
-    --bg: #faf8ff;
-    --surface: #ffffff;
-    --surface-2: #f1eefb;
-    --surface-3: #e6e1f7;
-    --border: #ddd7f0;
-    --text: #17142b;
-    --dim: #5e5880;
-    --faint: #68628a;
-    --brand: #e11d74;
-    --brand-ink: #ffffff;
-    --gold: #b7791f;
-    --pixel: #7c3aed;
-    --forge: #b45309;
-    --glitch: #0e7490;
-    --success: #059669;
-    --danger: #dc2626;
-    --warning: #b45309;
-    --overlay: rgb(23 20 43 / 0.45);
-    --shadow: 0 12px 32px -16px rgb(23 20 43 / 0.25);
-  }
-}
-
-:root[data-theme='light'] {
+[data-theme='light'] {
   color-scheme: light;
-  --bg: #faf8ff;
+  --bg: #f5f5f0;
   --surface: #ffffff;
-  --surface-2: #f1eefb;
-  --surface-3: #e6e1f7;
-  --border: #ddd7f0;
-  --text: #17142b;
-  --dim: #5e5880;
-  --faint: #68628a;
-  --brand: #e11d74;
+  --surface-2: #ecece5;
+  --surface-3: #e1e1d8;
+  --border: #d4d4ca;
+  --text: #0a0a0a;
+  --dim: #4b4b46;
+  --faint: #5c5c56;
+  --brand: #4a7a0c;
   --brand-ink: #ffffff;
-  --gold: #b7791f;
-  --pixel: #7c3aed;
-  --forge: #b45309;
-  --glitch: #0e7490;
-  --success: #059669;
-  --danger: #dc2626;
-  --warning: #b45309;
-  --overlay: rgb(23 20 43 / 0.45);
-  --shadow: 0 12px 32px -16px rgb(23 20 43 / 0.25);
+  --gold: #865709;
+  --pixel: #6d28d9;
+  --forge: #9a4407;
+  --glitch: #0b6377;
+  --success: #04694c;
+  --danger: #b91c1c;
+  --warning: #9a4407;
+  --overlay: rgb(10 10 10 / 0.45);
+  --shadow: 0 12px 32px -16px rgb(10 10 10 / 0.25);
 }
 
 @theme inline {
@@ -96,14 +72,16 @@
   --color-warning: var(--warning);
   --color-overlay: var(--overlay);
   --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-poster: var(--font-anton), Impact, 'Arial Narrow', sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --shadow-card: var(--shadow);
-  --radius-card: 1.25rem;
+  --radius-card: 0.875rem;
   --ease-snappy: cubic-bezier(0.2, 0.9, 0.3, 1.2);
   --animate-slide-up: slide-up 220ms var(--ease-snappy) both;
   --animate-fade-in: fade-in 180ms ease-out both;
   --animate-pop: pop 200ms var(--ease-snappy) both;
   --animate-float-up: float-up 1600ms ease-out forwards;
+  --animate-marquee: marquee 22s linear infinite;
 }
 
 @keyframes slide-up {
@@ -130,6 +108,45 @@
   }
   100% {
     transform: none;
+  }
+}
+@keyframes drift {
+  from {
+    transform: translate(-6%, -4%) scale(1);
+  }
+  to {
+    transform: translate(6%, 5%) scale(1.12);
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+@keyframes scene-x {
+  to {
+    transform: translateX(-400px);
+  }
+}
+@keyframes scene-hop {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-16px);
+  }
+}
+@keyframes scroll-cue {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(300%);
+  }
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
   }
 }
 @keyframes float-up {

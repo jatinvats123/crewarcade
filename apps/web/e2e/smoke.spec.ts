@@ -4,7 +4,9 @@ test('landing page renders the pitch and the three agents', async ({ page }) => 
   await page.goto('/');
   await expect(page).toHaveTitle(/CrewArcade/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('3 AI agents');
-  for (const name of ['Pixel · Designer', 'Forge · Builder', 'Glitch · Playtester']) await expect(page.getByText(name).first()).toBeVisible();
+  // Agent cards show the name and the role on separate lines.
+  for (const role of ['Designer', 'Builder', 'Playtester']) await expect(page.getByText(role, { exact: true }).first()).toBeAttached();
+  for (const name of ['pixel', 'forge', 'glitch']) await expect(page.getByText(new RegExp(`^${name}$`, 'i')).first()).toBeAttached();
 });
 
 test('no horizontal scroll at phone width', async ({ page }) => {
@@ -23,8 +25,9 @@ test('UI kit: sheet opens and closes with Escape, toasts appear', async ({ page 
   await expect(page.getByRole('status').getByText('Plan approved')).toBeVisible();
 });
 
+// The landing is always dark; the toggle lives on /arcade and in Settings.
 test('theme toggle switches to light and remembers it', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/arcade');
   const html = page.locator('html');
   await page.getByRole('button', { name: /Switch to (light|dark) mode/ }).click();
   const theme = await html.getAttribute('data-theme');

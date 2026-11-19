@@ -33,12 +33,16 @@ describe('design system', () => {
   });
   it('defines every colour token for dark and light themes', () => {
     const css = fs.readFileSync(path.join(WEB, 'src', 'app', 'globals.css'), 'utf8');
-    const blocks = css.split(/:root\[data-theme='light'\]/);
+    const blocks = css.split(/\[data-theme='light'\]/);
     for (const token of ['--bg', '--surface', '--text', '--dim', '--brand', '--pixel', '--forge', '--glitch', '--success', '--danger']) {
       expect(blocks[0]).toContain(`${token}:`);
       expect(blocks[1]).toContain(`${token}:`);
     }
     expect(css).toContain('prefers-reduced-motion');
+  });
+  it('defaults to the dark theme whatever the OS prefers', () => {
+    const css = fs.readFileSync(path.join(WEB, 'src', 'app', 'globals.css'), 'utf8');
+    expect(css).not.toContain('prefers-color-scheme');
   });
   it('serves an avatar for every agent', () => {
     for (const a of Object.values(AGENTS)) expect(fs.existsSync(path.join(WEB, 'public', a.avatarPath))).toBe(true);

@@ -8,8 +8,7 @@ const KEY = 'crewarcade:theme';
 
 function current(): Theme {
   const set = document.documentElement.dataset.theme;
-  if (set === 'light' || set === 'dark') return set;
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  return set === 'light' ? 'light' : 'dark'; // dark is the default theme
 }
 
 export function ThemeToggle() {
