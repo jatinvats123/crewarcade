@@ -29,9 +29,9 @@ test.describe('Forge: approve to play (FAKE_AGENTS=1)', () => {
     const page = await (await browser.newContext()).newPage();
     await page.goto('/start');
     await page.getByLabel('Your name').fill('Asha');
-    await page.getByRole('button', { name: "Let's go" }).click();
+    await page.getByRole('button', { name: 'Start playing' }).click();
     await page.waitForURL(/\/crews$/);
-    await page.getByRole('button', { name: 'Start a solo crew' }).click();
+    await page.getByRole('button', { name: 'Start a solo crew' }).first().click();
     await page.waitForURL(/\/crews\/c[A-Za-z0-9]{16}$/);
     await expect(composer(page)).toBeEnabled({ timeout: 20_000 });
 

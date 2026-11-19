@@ -19,7 +19,7 @@ test.describe('two-user chat on Nexconn', () => {
     const t0 = Date.now();
     await page.goto(path);
     await page.getByLabel('Your name').fill(name);
-    await page.getByRole('button', { name: path.startsWith('/i/') ? 'Join crew' : "Let's go" }).click();
+    await page.getByRole('button', { name: path.startsWith('/i/') ? 'Join crew' : 'Start playing' }).click();
     await page.waitForURL(path.startsWith('/i/') ? /\/crews\/c[A-Za-z0-9]{16}$/ : /\/crews$/);
     test.info().annotations.push({ type: 'sign-in', description: `${name}: ${Date.now() - t0} ms` });
     return page;
