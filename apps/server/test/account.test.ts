@@ -60,16 +60,14 @@ describe('DELETE /api/me', () => {
     await h.ctx().uploads.put('asha-game/bugs/b1.png', Buffer.from('png'), 'image/png');
     await h.db.insert(bugs).values({ id: 'b1', gameId: 'gAshaGame', reporterId: asha.id, description: 'stuck', screenshotPath: 'asha-game/bugs/b1.png' });
     await h.db.insert(scores).values({ id: 's1', gameId: 'gAshaGame', version: 1, userId: asha.id, score: 5, timeMs: 5000 });
-    await h.db
-      .insert(messagesLog)
-      .values({
-        nexconnMessageId: 'm1',
-        channelId: shared.groupChannelId,
-        channelType: 3,
-        fromUserId: nexconnUserId(asha.id),
-        messageType: 'text',
-        text: 'hi',
-      });
+    await h.db.insert(messagesLog).values({
+      nexconnMessageId: 'm1',
+      channelId: shared.groupChannelId,
+      channelType: 3,
+      fromUserId: nexconnUserId(asha.id),
+      messageType: 'text',
+      text: 'hi',
+    });
 
     const before = h.calls.length;
     const res = await del(asha.cookie, { confirm: 'delete my account' });

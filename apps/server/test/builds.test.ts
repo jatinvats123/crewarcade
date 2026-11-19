@@ -395,18 +395,16 @@ describe('public game page and remix', () => {
   it('the Arcade lists published games only, never fixture slugs, with plays and best score', async () => {
     const [g] = await h.db.select().from(games).where(eq(games.id, gameId));
     // A fixture-named game marked published (should never happen; the Arcade still hides it).
-    await h.db
-      .insert(games)
-      .values({
-        id: 'gfixture1',
-        slug: 'comet-dash',
-        crewId: g!.crewId,
-        title: 'Comet',
-        pitch: 'x',
-        createdBy: g!.createdBy,
-        status: 'published',
-        publishedVersion: 1,
-      });
+    await h.db.insert(games).values({
+      id: 'gfixture1',
+      slug: 'comet-dash',
+      crewId: g!.crewId,
+      title: 'Comet',
+      pitch: 'x',
+      createdBy: g!.createdBy,
+      status: 'published',
+      publishedVersion: 1,
+    });
     await h.db
       .insert(gameVersions)
       .values({ id: 'vfixture1', gameId: 'gfixture1', version: 1, spec: {}, htmlPath: 'games/comet-dash/v1/index.html', status: 'published' });
