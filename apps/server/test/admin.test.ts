@@ -9,7 +9,13 @@ beforeAll(async () => {
 afterAll(async () => h.app.close());
 
 const guest = (name: string, referrer: unknown, ip: string) =>
-  h.app.inject({ method: 'POST', url: '/api/auth/guest', headers: { origin: WEB }, remoteAddress: ip, payload: { displayName: name, avatarEmoji: '🦊', avatarColor: 'pink', referrer } });
+  h.app.inject({
+    method: 'POST',
+    url: '/api/auth/guest',
+    headers: { origin: WEB },
+    remoteAddress: ip,
+    payload: { displayName: name, avatarEmoji: '🦊', avatarColor: 'pink', referrer },
+  });
 
 describe('/api/admin/stats', () => {
   it('stores a valid referrer, drops a bad one without failing sign-up', async () => {
@@ -29,7 +35,12 @@ describe('/api/admin/stats', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.stages.map((s: { stage: string }) => s.stage)).toEqual(['plan', 'build', 'test']);
-    expect(body.signups.byReferrer).toEqual(expect.arrayContaining([{ referrer: 'wa', users: 1 }, { referrer: 'direct', users: 4 }]));
+    expect(body.signups.byReferrer).toEqual(
+      expect.arrayContaining([
+        { referrer: 'wa', users: 1 },
+        { referrer: 'direct', users: 4 },
+      ]),
+    );
     expect(body.signups.total).toBe(5);
   });
 });

@@ -13,8 +13,10 @@ beforeAll(async () => {
 });
 afterAll(async () => h.app.close());
 
-const post = (url: string, cookie: string, payload?: unknown) => h.app.inject({ method: 'POST', url, headers: { cookie, origin: WEB }, payload: payload ?? {} });
-const del = (cookie: string, payload?: unknown, origin = WEB) => h.app.inject({ method: 'DELETE', url: '/api/me', headers: { cookie, origin }, payload: payload ?? {} });
+const post = (url: string, cookie: string, payload?: unknown) =>
+  h.app.inject({ method: 'POST', url, headers: { cookie, origin: WEB }, payload: payload ?? {} });
+const del = (cookie: string, payload?: unknown, origin = WEB) =>
+  h.app.inject({ method: 'DELETE', url: '/api/me', headers: { cookie, origin }, payload: payload ?? {} });
 
 describe('retention', () => {
   it('purges message logs and connection events older than 30 days, keeps newer ones', async () => {
@@ -40,7 +42,9 @@ describe('DELETE /api/me', () => {
     const u = await signUp(h, 'Kabir', '10.2.0.9');
     expect((await del(u.cookie)).statusCode).toBe(400);
     expect((await del(u.cookie, { confirm: 'delete my account' }, 'https://evil.example')).statusCode).toBe(403);
-    expect((await h.app.inject({ method: 'DELETE', url: '/api/me', headers: { origin: WEB }, payload: { confirm: 'delete my account' } })).statusCode).toBe(401);
+    expect((await h.app.inject({ method: 'DELETE', url: '/api/me', headers: { origin: WEB }, payload: { confirm: 'delete my account' } })).statusCode).toBe(
+      401,
+    );
   });
 
   it('hands shared crews on, deletes solo crews, credits kept rows to "Deleted player" and removes personal rows', async () => {
@@ -56,7 +60,16 @@ describe('DELETE /api/me', () => {
     await h.ctx().uploads.put('asha-game/bugs/b1.png', Buffer.from('png'), 'image/png');
     await h.db.insert(bugs).values({ id: 'b1', gameId: 'gAshaGame', reporterId: asha.id, description: 'stuck', screenshotPath: 'asha-game/bugs/b1.png' });
     await h.db.insert(scores).values({ id: 's1', gameId: 'gAshaGame', version: 1, userId: asha.id, score: 5, timeMs: 5000 });
-    await h.db.insert(messagesLog).values({ nexconnMessageId: 'm1', channelId: shared.groupChannelId, channelType: 3, fromUserId: nexconnUserId(asha.id), messageType: 'text', text: 'hi' });
+    await h.db
+      .insert(messagesLog)
+      .values({
+        nexconnMessageId: 'm1',
+        channelId: shared.groupChannelId,
+        channelType: 3,
+        fromUserId: nexconnUserId(asha.id),
+        messageType: 'text',
+        text: 'hi',
+      });
 
     const before = h.calls.length;
     const res = await del(asha.cookie, { confirm: 'delete my account' });

@@ -294,7 +294,10 @@ export function createMemoryQueue(opts: {
       playtestHandler = null;
     },
     async depth() {
-      const count = (kind: Item['kind']) => ({ queued: pending.filter(it => it.kind === kind).length, active: [...busyRooms].filter(l => l.startsWith(`${kind}|`)).length });
+      const count = (kind: Item['kind']) => ({
+        queued: pending.filter(it => it.kind === kind).length,
+        active: [...busyRooms].filter(l => l.startsWith(`${kind}|`)).length,
+      });
       return { agent: count('agent'), build: count('build'), playtest: count('playtest') };
     },
     idle: () =>

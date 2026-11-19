@@ -374,7 +374,7 @@ describe('failures', () => {
       await r.webhook('message:send', [{ ...textEvent(a.id, crew.groupChannelId, 'a game about something harmful'), time: r.now.t }]);
       await r.settle();
       const t = r.calls.slice(n).filter(c => c.path === '/v4/group-channel/message/send' && c.body.messageType === 'RC:TxtMsg');
-      expect(JSON.parse(String(t.at(-1)!.body.content)).content).toBe("I can't make that one. Try another idea?");
+      expect(JSON.parse(String(t.at(-1)!.body.content)).content).toBe("I can't make that one 🙈 Try a different idea?");
       const rows = await r.db.select().from(ledger).where(eq(ledger.action, 'plan.refused'));
       expect(rows[0]).toMatchObject({ actorId: 'agent-pixel', tokensIn: 50, reason: 'refusal: general_harms' });
       expect(r.calls.slice(n).some(c => c.body.messageType === CARD_MESSAGE_TYPES.plan)).toBe(false);

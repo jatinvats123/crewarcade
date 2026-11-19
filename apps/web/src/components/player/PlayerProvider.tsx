@@ -218,7 +218,11 @@ export function GamePlayer({
               // A second load means the game navigated its frame to another page (the sandbox can't
               // stop that, and no CrewArcade game does it): stop the game instead of showing that page.
               setPhase(p =>
-                p.kind !== 'ready' ? p : p.frameLoaded ? { kind: 'error', message: 'This game tried to open another page, so we stopped it.' } : { ...p, frameLoaded: true },
+                p.kind !== 'ready'
+                  ? p
+                  : p.frameLoaded
+                    ? { kind: 'error', message: 'This game tried to open another page, so we stopped it.' }
+                    : { ...p, frameLoaded: true },
               );
               // Keyboard: arrow keys and Space go to the game right away.
               frame.current?.focus();

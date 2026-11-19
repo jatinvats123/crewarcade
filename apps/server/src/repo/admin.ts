@@ -17,7 +17,11 @@ async function rows<T>(db: Db, query: SQL): Promise<T[]> {
   return Array.isArray(r) ? (r as T[]) : (r as { rows: T[] }).rows;
 }
 
-const list = (xs: readonly string[]) => sql.join(xs.map(x => sql`${x}`), sql`, `);
+const list = (xs: readonly string[]) =>
+  sql.join(
+    xs.map(x => sql`${x}`),
+    sql`, `,
+  );
 const num = (v: unknown): number | null => (v === null || v === undefined ? null : Math.round(Number(v)));
 
 export async function stageStats(db: Db, since: Date) {

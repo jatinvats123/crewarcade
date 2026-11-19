@@ -153,8 +153,8 @@ function DeleteAccountSheet({ open, onClose }: { open: boolean; onClose: () => v
       }
     >
       <p className="text-sm text-dim">
-        This can&apos;t be undone. Your profile, scores and chat logs are deleted. Crews you own pass to another member; a crew with only you in it is deleted with
-        its games. Games you helped make in other crews stay, credited to &ldquo;Deleted player&rdquo;.
+        This can&apos;t be undone. Your profile, scores and chat logs are deleted. Crews you own pass to another member; a crew with only you in it is deleted
+        with its games. Games you helped make in other crews stay, credited to &ldquo;Deleted player&rdquo;.
       </p>
       <label htmlFor="delete-confirm" className="mt-4 block text-sm font-semibold">
         Type DELETE to confirm

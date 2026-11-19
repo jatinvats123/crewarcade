@@ -44,8 +44,8 @@ describe('checkHtml', () => {
     ['location.assign', "location.assign('/x');"],
     ['location.replace', "location.replace('/x');"],
     ['window.open', "window.open('/x');"],
-    ['meta refresh', "document.head.innerHTML += '<meta http-equiv=\"refresh\" content=\"0;url=/x\">';"],
-    ['form', "document.body.innerHTML += '<form action=\"/x\"></form>';"],
+    ['meta refresh', 'document.head.innerHTML += \'<meta http-equiv="refresh" content="0;url=/x">\';'],
+    ['form', 'document.body.innerHTML += \'<form action="/x"></form>\';'],
   ])('flags page navigation: %s', (_name, code) => {
     const res = checkHtml(inject(code));
     expect(res.pass).toBe(false);

@@ -53,11 +53,7 @@ export async function deleteAccount(ctx: Ctx, user: UserRow): Promise<DeleteAcco
       } else {
         const rooms = await tx.select({ room: games.roomChannelId }).from(games).where(eq(games.crewId, crew.id));
         dismiss.push(crew.groupChannelId, ...rooms.map(r => r.room).filter((r): r is string => !!r));
-        const shots = await tx
-          .select({ path: bugs.screenshotPath })
-          .from(bugs)
-          .innerJoin(games, eq(games.id, bugs.gameId))
-          .where(eq(games.crewId, crew.id));
+        const shots = await tx.select({ path: bugs.screenshotPath }).from(bugs).innerJoin(games, eq(games.id, bugs.gameId)).where(eq(games.crewId, crew.id));
         screenshots.push(...shots.map(s => s.path).filter((p): p is string => !!p));
         await tx.delete(crews).where(eq(crews.id, crew.id)); // cascades games, versions, bugs, cards, ledger, members
         crewsDeleted++;
@@ -88,7 +84,8 @@ export async function deleteAccount(ctx: Ctx, user: UserRow): Promise<DeleteAcco
   if (ctx.nexconn) {
     const nexconn = ctx.nexconn;
     await kickOutOfAllGroups(nexconn, { userId: nxId }).catch(err => ctx.log.warn({ err, userId: user.id }, 'account delete: Nexconn kickout failed'));
-    for (const channelId of dismiss) await dismissGroup(nexconn, { channelId }).catch(err => ctx.log.warn({ err, channelId }, 'account delete: dismiss failed'));
+    for (const channelId of dismiss)
+      await dismissGroup(nexconn, { channelId }).catch(err => ctx.log.warn({ err, channelId }, 'account delete: dismiss failed'));
   }
   ctx.log.info({ userId: user.id, crewsTransferred, crewsDeleted }, 'account deleted');
   return { crewsTransferred, crewsDeleted };

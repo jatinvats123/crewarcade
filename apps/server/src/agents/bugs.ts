@@ -48,8 +48,8 @@ export async function playtestsOff(ctx: AgentCtx, job: PlaytestJobData): Promise
     job.channelId,
     'glitch',
     job.bugId
-      ? "Thanks, your bug report is saved 🐞. Playtests are switched off on this server right now, so I can't replay it on camera yet."
-      : `v${job.version} is built and you can play it ▶. Playtests are switched off on this server right now, so I can't test it, and it can't be published until they're back on.`,
+      ? "Thanks, bug saved 🐞 Playtests are switched off on this server for now, so I can't replay it on camera yet."
+      : `v${job.version} is ready to play ▶ Playtests are switched off on this server for now, so I can't test it, and it can't go public until they're back.`,
   ).catch(err => ctx.log.warn({ err }, 'playtests-off message failed'));
   await ctx.agents.states.set(job.channelId, 'glitch', 'idle');
 }
