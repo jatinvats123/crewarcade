@@ -24,6 +24,6 @@ export default defineConfig({
     url: `http://127.0.0.1:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
-    env: { NEXT_PUBLIC_API_ORIGIN: API_ORIGIN },
+    env: { NEXT_PUBLIC_API_ORIGIN: API_ORIGIN, NEXT_PUBLIC_DEV_PAGES: '1' },
   },
 });

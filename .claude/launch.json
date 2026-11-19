@@ -4,14 +4,36 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@crewarcade/web", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@crewarcade/web",
+        "dev"
+      ],
       "port": 3000
     },
     {
       "name": "server",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@crewarcade/server", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@crewarcade/server",
+        "dev"
+      ],
       "port": 8080
+    },
+    {
+      "name": "web-prod",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@crewarcade/web",
+        "exec",
+        "next",
+        "start",
+        "--port",
+        "3100"
+      ],
+      "port": 3100
     }
   ]
 }

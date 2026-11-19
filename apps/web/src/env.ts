@@ -11,6 +11,8 @@ export const PublicEnvSchema = z.object({
   NEXT_PUBLIC_SITE_URL: z.string().url().default('http://localhost:3000'),
   /** Nexconn App Key (public; used by NCEngine.initialize). Empty until the console app exists. */
   NEXT_PUBLIC_NEXCONN_APP_KEY: z.string().max(64).default(''),
+  /** '1' turns on the developer pages (/dev/*: UI kit, card demos) in a production build (e2e only). */
+  NEXT_PUBLIC_DEV_PAGES: z.enum(['0', '1']).default('0'),
 });
 export type PublicEnv = z.infer<typeof PublicEnvSchema>;
 
@@ -26,4 +28,8 @@ export const publicEnv: PublicEnv = parsePublicEnv({
   NEXT_PUBLIC_API_ORIGIN: process.env.NEXT_PUBLIC_API_ORIGIN,
   NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
   NEXT_PUBLIC_NEXCONN_APP_KEY: process.env.NEXT_PUBLIC_NEXCONN_APP_KEY,
+  NEXT_PUBLIC_DEV_PAGES: process.env.NEXT_PUBLIC_DEV_PAGES,
 });
+
+/** Developer pages: always in `next dev`, in production builds only with NEXT_PUBLIC_DEV_PAGES=1. */
+export const devPagesEnabled = process.env.NODE_ENV !== 'production' || publicEnv.NEXT_PUBLIC_DEV_PAGES === '1';

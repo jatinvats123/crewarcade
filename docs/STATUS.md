@@ -34,6 +34,13 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   10 min (GitHub runs schedules from the **default branch** only, so it starts once `main` is default).
   Hot path: a game room resolves in one parallel round trip (channel → crew/game mapping remembered),
   member counts cached 30 s (dropped on join), shield role lookups cached 60 s (`util/ttl-cache.ts`).
+- **P0.6 No developer UI in production:** `/dev/*` is 404 in production builds (checked on `next start`)
+  unless `NEXT_PUBLIC_DEV_PAGES=1` (only the e2e config sets it). The landing has no UI-kit link.
+  Next.js 16.4.4 → 16.4.5 (patch for two moderate `use cache` advisories).
+- **P0.5 Repo:** `phase-5`'s last docs commit merged into `phase-7`, so every phase branch is an ancestor;
+  `main` = `phase-7`. History secret scan (regexes for DB URLs, JWTs, Google/Anthropic/GitHub keys,
+  private keys, secret assignments, `.env` files): clean. Only hit: the dev-only session secret, which
+  production refuses.
 
 ## Phase 6: polish, harden, launch prep (branch `phase-6`)
 
