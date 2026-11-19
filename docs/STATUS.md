@@ -29,6 +29,10 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   (live now) deletes for everyone via `/v4/message/delete`, posts a 🛡 notice, skips the agents, and
   logs `moderation_log` + ledger `shield.blocked`. Public `/safety` page + `GET /api/public/safety`.
   Drafts for Nexconn: `docs/outreach/pre-messaging.md`.
+- **P0.4 Awake and faster:** `.github/workflows/keepalive.yml` pings `/health` and the web home every
+  10 min (GitHub runs schedules from the **default branch** only, so it starts once `main` is default).
+  Hot path: a game room resolves in one parallel round trip (channel → crew/game mapping remembered),
+  member counts cached 30 s (dropped on join), shield role lookups cached 60 s (`util/ttl-cache.ts`).
 
 ## Phase 6: polish, harden, launch prep (branch `phase-6`)
 
