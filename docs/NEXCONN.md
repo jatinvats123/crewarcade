@@ -305,6 +305,18 @@ clientIp, aiGenerated`.
 - If all 3 attempts time out, the original message is delivered. So the gate must be cheap and
   deterministic (regex rules, prompt-injection heuristics); slow AI review happens after delivery.
 - We do **not** use Nexconn automatic moderation (English/Arabic only, needs a card).
+- **Live finding (2026-11-19):** on our App Key the console would not let us select the pre-messaging
+  events, although the pricing page lists them for Free. Asked Nexconn (`docs/outreach/pre-messaging.md`).
+  Until it is enabled the shield runs **after delivery** (below); the same rules answer pre-messaging
+  the moment events arrive, and `/safety` shows which mode is live.
+
+### Delete for everyone (the shield's after-delivery mode)
+
+`POST /v4/message/delete` (docs: /platform-chat-api/message/msgrecall.md, checked 2026-11-20; 100/s):
+`{ fromUserId, channelType (1|3|4|6|10), channelId, messageId, sentAt?, disablePush?, extra? }` → `{ code: 0 }`.
+`messageId`/`sentAt` come from the `message:send` webhook. Clients replace the message with a delete
+notice; the Web SDK fires `onMessageDeleted` (our reducer drops it). `deleteMessage()` in
+`apps/server/src/nexconn/api.ts`; flow in `apps/server/src/safety/runtime.ts`.
 
 ## Web client (`@nexconn/chat`)
 

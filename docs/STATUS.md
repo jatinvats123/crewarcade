@@ -15,6 +15,21 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
 | 6     | Polish, harden, launch prep | **In progress** (branch `phase-6`)                                   |
 | 7     | Polish and launch           | —                                                                    |
 
+## Phase 7: final push to submission (branch `phase-7`, from `phase-6`)
+
+- **P0.1 Render Standard:** `render.yaml` is now `plan: standard`, `preDeployCommand: node dist/migrate.js`,
+  `PLAYTESTS`/`FORGE_SMOKE` `true`, no `MIGRATE_ON_START`. The service was created by hand, so the owner
+  switches the instance type, branch, pre-deploy command and env in the dashboard (steps in the Phase 7 report).
+  Live loop to verify once it's switched.
+- **P0.2 AI busy, honestly:** Gemini's busy retries report to the running job (`ai/busy.ts`, AsyncLocalStorage),
+  and the agent's live state reads "AI model busy, retrying (2/3)…" / "switching to …". An agent job whose
+  model stays busy is re-queued twice (45 s) with a chat notice, and a busy build says so. No paid key yet.
+- **P0.3 Safety shield:** rules in `safety/shield.ts` (prompt injection EN/Hindi/Hinglish, ship command
+  from a non-approver, abuse, spam/floods). Pre-delivery answers `*:pre_messaging`; after-delivery
+  (live now) deletes for everyone via `/v4/message/delete`, posts a 🛡 notice, skips the agents, and
+  logs `moderation_log` + ledger `shield.blocked`. Public `/safety` page + `GET /api/public/safety`.
+  Drafts for Nexconn: `docs/outreach/pre-messaging.md`.
+
 ## Phase 6: polish, harden, launch prep (branch `phase-6`)
 
 - **Arcade:** public `/arcade` (Newest / Top by plays then best score) from `GET /api/public/arcade`; published games only, fixture slugs never listed (tested).

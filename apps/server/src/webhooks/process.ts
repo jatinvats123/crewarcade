@@ -28,7 +28,7 @@ export const ConnectionStatusData = z.object({
 export type ProcessCtx = Pick<Ctx, 'db' | 'log'>;
 
 /** Called for every logged message (the agent router). Errors are logged, never fatal. */
-export type OnMessage = (m: { messageId: string; channelId: string; userId: string; messageType: string; content: string }) => Promise<unknown>;
+export type OnMessage = (m: z.infer<typeof MessageSendData>) => Promise<unknown>;
 
 export async function processWebhook(ctx: ProcessCtx, event: WebhookEnvelope, onMessage?: OnMessage): Promise<{ handled: number; skipped: number }> {
   let handled = 0;

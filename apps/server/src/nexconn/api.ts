@@ -162,6 +162,25 @@ export async function setMessageMetadata(c: NexconnClient, input: z.input<typeof
   await c.post('/v4/channel-type/message/metadata/set', body, Ok, { bucket: body.channelType === 3 ? 'groupMessage' : 'directMessage' });
 }
 
+// docs: /platform-chat-api/message/msgrecall.md (checked 2026-11-20): delete for everyone. Clients
+// replace the message with a delete notice (the Web SDK fires onMessageDeleted).
+export const DeleteMessageInput = z.object({
+  /** The original sender's Nexconn user ID. */
+  fromUserId: nexconnId,
+  channelType: z.union([z.literal(1), z.literal(3)]),
+  channelId: nexconnId,
+  messageId: z.string().min(1).max(128),
+  /** The original send time (webhook data[0].time). */
+  sentAt: z.number().int().positive().optional(),
+  disablePush: z.boolean().optional(),
+});
+
+/** POST /v4/message/delete (100/s). */
+export async function deleteMessage(c: NexconnClient, input: z.input<typeof DeleteMessageInput>): Promise<void> {
+  const body = DeleteMessageInput.parse(input);
+  await c.post('/v4/message/delete', body, Ok);
+}
+
 // ---- later phases: documented, not implemented yet --------------------------------------------
 
 // docs: /platform-chat-api/message/send-group-stream.md (checked 2026-11-14)

@@ -102,9 +102,20 @@ export function MessageList({ channel, members, myId, targets, scrollSignal, onL
                 </div>
                 {d.items.map(item =>
                   item.type === 'notice' ? (
-                    <p key={item.message.key} className="mx-auto max-w-[85%] rounded-full bg-surface-2 px-3 py-1 text-center text-xs text-dim">
-                      {item.message.notice?.text}
-                    </p>
+                    item.message.notice?.kind === 'shield' ? (
+                      <a
+                        key={item.message.key}
+                        href="/safety"
+                        className="mx-auto flex max-w-[85%] items-center gap-2 rounded-2xl border border-glitch/40 bg-glitch/10 px-3 py-2 text-left text-xs text-text"
+                      >
+                        <span className="text-[0.7rem] font-bold tracking-[0.12em] text-glitch uppercase">Shield</span>
+                        <span>{item.message.notice.text}</span>
+                      </a>
+                    ) : (
+                      <p key={item.message.key} className="mx-auto max-w-[85%] rounded-full bg-surface-2 px-3 py-1 text-center text-xs text-dim">
+                        {item.message.notice?.text}
+                      </p>
+                    )
                   ) : (
                     <SenderGroupView
                       key={item.group.key}

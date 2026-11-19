@@ -7,3 +7,4 @@ export * from './messages';
 export * from './api';
 export * from './content';
 export * from './play';
+export * from './public';

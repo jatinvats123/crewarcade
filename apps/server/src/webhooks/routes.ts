@@ -1,7 +1,7 @@
 // POST /webhooks/nexconn: the single webhook URL Nexconn calls for every event (Console > Chat >
 // Chat settings > Webhooks takes one URL). Flow:
 //   1. verify the signature (constant time) and timestamp freshness -> 401 if bad
-//   2. *:pre_messaging -> answer synchronously within the 5 s budget (Phase 1: allow all, pass 1)
+//   2. *:pre_messaging -> answer synchronously within the 5 s budget (the safety shield's rules)
 //   3. other events -> claim the event id in webhook_events (DB unique); duplicates get 200 at once
 //   4. reply 200, then process asynchronously (messages_log, connections)
 // POST /webhooks/nexconn/pre is an alias for the same handler, kept in case a separate
@@ -12,6 +12,7 @@ import type { Ctx } from '../context';
 import { routeIncoming } from '../agents/runtime';
 import type { AgentServices } from '../agents/runtime-deps';
 import { claimWebhookEvent } from '../repo/webhooks';
+import { preDeliveryDecision, shieldIncoming } from '../safety/runtime';
 import { processWebhook } from './process';
 import { verifyWebhook } from './verify';
 
@@ -20,9 +21,9 @@ export const PRE_MESSAGING_BUDGET_MS = 150;
 
 export const isPreMessaging = (type: string): boolean => type.endsWith(':pre_messaging');
 
-/** Phase 1 shield: deterministic allow-all. Phase 4 adds the prompt-injection/secret/abuse rules. */
-export function preMessagingDecision(_event: WebhookEnvelope): PreMessagingResponse {
-  return { pass: 1 };
+/** The shield's pre-delivery answer (rules in safety/shield.ts); logging runs after the reply. */
+export async function preMessagingDecision(ctx: Ctx, event: WebhookEnvelope): Promise<PreMessagingResponse> {
+  return preDeliveryDecision(ctx, event.data[0], work => ctx.runInBackground('shield pre-delivery log', work));
 }
 
 export function registerWebhookRoutes(app: FastifyInstance, ctx: Ctx): void {
@@ -62,7 +63,13 @@ export function registerWebhookRoutes(app: FastifyInstance, ctx: Ctx): void {
     const event = parsed.data;
 
     if (isPreMessaging(event.type)) {
-      const decision = PreMessagingResponse.parse(preMessagingDecision(event));
+      const decision = PreMessagingResponse.parse(
+        await preMessagingDecision(ctx, event).catch(err => {
+          // Fail open: Nexconn delivers on timeout anyway, and after-delivery still checks it.
+          ctx.log.error({ err }, 'pre-messaging: decision failed');
+          return { pass: 1 as const };
+        }),
+      );
       const ms = Math.round((performance.now() - t0) * 100) / 100;
       const log = { type: event.type, eventId: event.id, pass: decision.pass, ms };
       if (ms > PRE_MESSAGING_BUDGET_MS) ctx.log.warn(log, 'pre-messaging: slow decision');
@@ -76,7 +83,11 @@ export function registerWebhookRoutes(app: FastifyInstance, ctx: Ctx): void {
     }
     ctx.runInBackground(`webhook ${event.type}`, async () => {
       const agents = ctx.agents;
-      const r = await processWebhook(ctx, event, agents ? m => routeIncoming({ ...ctx, agents } as Ctx & { agents: AgentServices }, m) : undefined);
+      // The shield runs first (after-delivery mode): a stopped message never reaches the agents.
+      const r = await processWebhook(ctx, event, async m => {
+        if (await shieldIncoming(ctx, m)) return null;
+        return agents ? routeIncoming({ ...ctx, agents } as Ctx & { agents: AgentServices }, m) : null;
+      });
       ctx.log.debug({ type: event.type, eventId: event.id, ...r }, 'webhook: processed');
     });
     return reply.code(200).send({ ok: true });

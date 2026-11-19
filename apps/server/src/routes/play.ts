@@ -8,7 +8,12 @@
 //   GET  /api/games/:id/leaderboard               top 20, my best, my rank
 //   GET  /api/public/games/:slug                  the public game page (drafts: teaser)
 //   GET  /api/public/arcade?sort=new|top&limit=   published games (never fixtures)
+//   GET  /api/public/safety                       the safety shield's mode, rules and recent events
 //   POST /api/games/:slug/remix {crewId|newCrewName, idea}   signed in; published games only
+import { SafetyResponse } from '@crewarcade/shared';
+import { moderationCounts, recentModeration } from '../repo/moderation';
+import { shieldMode } from '../safety/runtime';
+import { RULE_INFO, SHIELD_RULES } from '../safety/shield';
 import { ArcadeQuery, RemixBody, ScoreBody } from '@crewarcade/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -132,6 +137,19 @@ export function registerPlayRoutes(app: FastifyInstance, ctx: Ctx): void {
     const q = ArcadeQuery.parse(req.query);
     reply.header('cache-control', 'public, max-age=60');
     return arcade(ctx, q);
+  });
+
+  // The safety shield's public report: mode, rules and recent events (rule + time; no users or text).
+  app.get('/api/public/safety', async (req, reply) => {
+    rateLimit(playLimit, `ip:${req.ip}`);
+    const [counts, recent] = await Promise.all([moderationCounts(ctx.db), recentModeration(ctx.db, 20)]);
+    reply.header('cache-control', 'public, max-age=30');
+    return SafetyResponse.parse({
+      mode: shieldMode(ctx),
+      rules: SHIELD_RULES.map(rule => ({ rule, ...RULE_INFO[rule], count: counts[rule] ?? 0 })),
+      recent: recent.map(r => ({ rule: r.rule, at: new Date(r.createdAt).toISOString() })),
+      retentionDays: 30,
+    });
   });
 
   app.post('/api/games/:slug/remix', async req => {

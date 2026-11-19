@@ -24,7 +24,7 @@ export const AgentStateMessage = z.object({
 export type AgentStateMessage = z.infer<typeof AgentStateMessage>;
 
 export const NoticeMessage = z.object({
-  kind: z.enum(['welcome', 'member_joined', 'member_left', 'room_created', 'publish_approved', 'publish_blocked', 'budget', 'info']),
+  kind: z.enum(['welcome', 'member_joined', 'member_left', 'room_created', 'publish_approved', 'publish_blocked', 'budget', 'info', 'shield']),
   text: z.string().min(1).max(300),
   gameId: z.string().max(64).optional(),
 });
