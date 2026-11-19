@@ -43,7 +43,7 @@ export const SenderGroupView = memo(function SenderGroupView({ group, sender, is
       <div
         className={cn(
           'flex min-w-0 flex-col gap-0.5',
-          hasCard ? 'w-full max-w-[min(100%,28rem)]' : 'max-w-[82%] sm:max-w-[70%]',
+          hasCard ? 'w-full max-w-[min(100%,36rem)]' : 'max-w-[82%] sm:max-w-[70%]',
           isMe ? 'items-end' : 'items-start',
         )}
       >

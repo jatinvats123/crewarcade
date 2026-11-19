@@ -5,11 +5,13 @@
 import { parseCardMeta, type PlanCardContent } from '@crewarcade/shared';
 import Link from 'next/link';
 import { useRef, useState } from 'react';
-import { Badge, Button, CardShell, Sheet, useToast } from '@/components/ui';
+import { GameScene } from '@/components/arcade/GameScene';
+import { Badge, Button, CardFact, CardShell, CheckList, CheckMark, Sheet, useToast } from '@/components/ui';
 import { ApiRequestError } from '@/lib/api';
 import { optimisticVote, planStatusLabel } from '@/lib/cards';
 import type { ChatMessage } from '@/lib/chat/types';
 import { cn } from '@/lib/cn';
+import { paletteFor } from '@/lib/palette';
 import { useCardEnv } from './context';
 
 const LANGUAGE_NAME: Record<string, string> = {
@@ -90,13 +92,16 @@ export function PlanCard({ m, plan }: { m: ChatMessage; plan: PlanCardContent })
     <>
       <CardShell
         agent="pixel"
-        className={cn('w-full', meta.status === 'superseded' && 'opacity-70')}
-        title={
+        className={cn('group w-full', meta.status === 'superseded' && 'opacity-70')}
+        cover={
           <>
-            <span aria-hidden>🗺️ </span>
-            {plan.title}
+            <GameScene seed={plan.slug} emoji="" colors={paletteFor(plan.gameId)} hud={false} motion="hover" className="absolute inset-0" />
+            <span className="absolute top-3 left-3 -rotate-2 bg-brand px-2 py-0.5 text-[11px] font-bold tracking-[0.18em] text-brand-ink uppercase">
+              Plan v{plan.version}
+            </span>
           </>
         }
+        title={plan.title}
         meta={`Plan v${plan.version}${plan.remixOf ? ` · remix of ${plan.remixOf}` : ''} · ${LANGUAGE_NAME[plan.language] ?? plan.language}`}
         badges={<Badge tone={status.tone}>{status.text}</Badge>}
         actions={
@@ -153,37 +158,41 @@ export function PlanCard({ m, plan }: { m: ChatMessage; plan: PlanCardContent })
           )
         }
       >
-        <p className="italic text-dim">{plan.pitch}</p>
-        <dl className="mt-3 grid gap-2 text-sm">
-          <Row label="Controls">
-            ⌨️ {plan.controls.keyboard}
-            <br />
-            📱 {plan.controls.touch}
-          </Row>
-          <Row label="Play">{plan.coreLoop}</Row>
+        <p className="text-base leading-relaxed text-text">{plan.pitch}</p>
+        <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+          <CardFact label="Controls">
+            <span className="block">⌨️ {plan.controls.keyboard}</span>
+            <span className="mt-1 block">📱 {plan.controls.touch}</span>
+          </CardFact>
+          <CardFact label="Play">{plan.coreLoop}</CardFact>
           {showAll && (
             <>
-              <Row label="Win / lose">{plan.winLose}</Row>
-              <Row label="Scoring">{plan.scoring}</Row>
-              <Row label="Look">{plan.lookAndFeel}</Row>
-              <Row label="Sound">{plan.sound}</Row>
+              <CardFact label="Win / lose">{plan.winLose}</CardFact>
+              <CardFact label="Scoring">{plan.scoring}</CardFact>
+              <CardFact label="Look">{plan.lookAndFeel}</CardFact>
+              <CardFact label="Sound">{plan.sound}</CardFact>
             </>
           )}
-        </dl>
-        <h4 className="mt-3 text-xs font-semibold tracking-wide text-faint uppercase">Checklist Glitch will test</h4>
-        <ul className="mt-1 flex flex-col gap-1">
-          {shown.map(a => (
-            <li key={a.id} className="flex gap-2">
-              <span aria-hidden className="text-faint">
-                ☐
-              </span>
-              <span>
-                <span className="sr-only">{a.id}: </span>
-                {a.text}
-              </span>
-            </li>
-          ))}
-        </ul>
+        </div>
+        <div className="mt-2.5">
+          <CheckList
+            label={
+              <h4>
+                <span className="sr-only">Checklist </span>Glitch will test
+              </h4>
+            }
+          >
+            {shown.map(a => (
+              <li key={a.id} className="flex gap-2.5">
+                <CheckMark state="todo" />
+                <span>
+                  <span className="sr-only">{a.id}: </span>
+                  {a.text}
+                </span>
+              </li>
+            ))}
+          </CheckList>
+        </div>
         <button type="button" onClick={() => setShowAll(v => !v)} className="mt-1 min-h-11 text-sm font-semibold text-pixel" aria-expanded={showAll}>
           {showAll ? 'Show less' : `Full plan${plan.acceptance.length > 4 ? ` (+${plan.acceptance.length - 4} checks)` : ''}`}
         </button>
@@ -213,14 +222,5 @@ export function PlanCard({ m, plan }: { m: ChatMessage; plan: PlanCardContent })
         <p className="text-right text-xs text-faint">{changeText.length}/280</p>
       </Sheet>
     </>
-  );
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[5.5rem_1fr] gap-2">
-      <dt className="text-xs font-semibold tracking-wide text-faint uppercase">{label}</dt>
-      <dd>{children}</dd>
-    </div>
   );
 }

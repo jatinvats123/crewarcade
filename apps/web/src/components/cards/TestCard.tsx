@@ -5,7 +5,7 @@
 // automatic fixes ran out, [Try again]. Metadata `next` says what follows a FAIL.
 import { parseCardMeta, type TestCardContent } from '@crewarcade/shared';
 import { useState } from 'react';
-import { Badge, Button, CardShell, useToast } from '@/components/ui';
+import { Badge, Button, CardShell, CheckList, CheckMark, useToast } from '@/components/ui';
 import { ApiRequestError } from '@/lib/api';
 import type { ChatMessage } from '@/lib/chat/types';
 import { useCardEnv } from './context';
@@ -45,7 +45,11 @@ export function TestCard({ m, test }: { m: ChatMessage; test: TestCardContent })
     <CardShell
       agent="glitch"
       className="w-full"
-      title={`🧪 Playtest v${test.version}: ${test.pass ? 'PASS' : 'FAIL'}`}
+      title={
+        <>
+          Playtest v{test.version}: <span className={test.pass ? 'text-success' : 'text-danger'}>{test.pass ? 'PASS' : 'FAIL'}</span>
+        </>
+      }
       meta={facts.join(' · ')}
       badges={
         <span className="inline-flex flex-wrap gap-1.5">
@@ -68,20 +72,22 @@ export function TestCard({ m, test }: { m: ChatMessage; test: TestCardContent })
     >
       {test.gifUrl && (
         // eslint-disable-next-line @next/next/no-img-element -- playtest GIF from our clips bucket
-        <img src={test.gifUrl} alt={`Glitch playing v${test.version}`} className="w-full rounded-2xl border border-border" loading="lazy" />
+        <img src={test.gifUrl} alt={`Glitch playing v${test.version}`} className="w-full rounded-2xl border border-border bg-bg" loading="lazy" />
       )}
       {test.items.length > 0 && (
-        <ul className="mt-2 flex flex-col gap-1" data-testid="test-items">
-          {items.map(it => (
-            <li key={it.id} className="flex gap-2">
-              <span aria-label={it.pass ? 'passed' : 'failed'}>{it.pass ? '✅' : '❌'}</span>
-              <span>
-                <span className="font-semibold">{it.id}</span> {it.text}
-                {!it.pass && it.detail && <span className="block text-sm text-dim">{it.detail}</span>}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-3" data-testid="test-items">
+          <CheckList label={`Glitch's checks · ${test.passed}/${test.total}`}>
+            {items.map(it => (
+              <li key={it.id} className="flex gap-2.5">
+                <CheckMark state={it.pass ? 'pass' : 'fail'} />
+                <span>
+                  <span className="text-faint">{it.id}</span> {it.text}
+                  {!it.pass && it.detail && <span className="block font-sans text-sm text-dim">{it.detail}</span>}
+                </span>
+              </li>
+            ))}
+          </CheckList>
+        </div>
       )}
       {test.items.length > 6 && (
         <Button variant="ghost" size="sm" onClick={() => setShowAll(s => !s)}>

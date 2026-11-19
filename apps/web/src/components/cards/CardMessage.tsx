@@ -6,7 +6,10 @@
 import { AGENTS, parseCardMeta, type AnyCard } from '@crewarcade/shared';
 import Link from 'next/link';
 import { agentKeyOf } from '@/components/identity/MemberAvatar';
-import { Avatar, Badge, Button, CardShell } from '@/components/ui';
+import { GameScene } from '@/components/arcade/GameScene';
+import { AiBadge, Avatar, Badge, Button, CardShell } from '@/components/ui';
+import { ACCENT_TEXT } from '@/lib/agents';
+import { paletteFor } from '@/lib/palette';
 import type { ChatMessage } from '@/lib/chat/types';
 import { useCardEnv } from './context';
 import { BugCard } from './BugCard';
@@ -38,33 +41,38 @@ function CardBody({ m, card }: { m: ChatMessage; card: AnyCard }) {
       const meta = parseCardMeta('handoff', m.meta);
       const to = AGENTS[c.to].displayName.split(' ')[0];
       const status = meta.status === 'waiting' ? `${to} will start soon` : meta.status === 'started' ? `${to} is on it` : 'Done';
+      // A slim baton pass, not a full card: who handed what to whom, and where it stands.
       return (
-        <CardShell
-          agent={c.from}
-          className="w-full"
-          title={
-            <span className="inline-flex items-center gap-2">
-              <span>Handoff</span>
-              <Avatar kind="agent" agent={c.from} size="sm" />
-              <span aria-label="to">→</span>
-              <Avatar kind="agent" agent={c.to} size="sm" />
+        <article className="flex w-full animate-slide-up items-start gap-3.5 rounded-2xl border border-border bg-surface px-4 py-3.5">
+          <span className="flex shrink-0 items-center gap-1.5 pt-0.5" aria-label={`${AGENTS[c.from].displayName} to ${AGENTS[c.to].displayName}`}>
+            <Avatar kind="agent" agent={c.from} size="sm" />
+            <span aria-hidden className="flex items-center text-faint">
+              <span className="h-px w-3 bg-border" />▸
             </span>
-          }
-          meta={`${AGENTS[c.from].displayName} → ${AGENTS[c.to].displayName}`}
-          badges={<Badge tone={meta.status === 'done' ? 'success' : 'gold'}>{status}</Badge>}
-        >
-          <p className="font-semibold">{c.task}</p>
-          <p className="mt-1 text-dim">{c.contextSummary}</p>
-          {c.artifacts.length > 0 && (
-            <ul className="mt-2 flex flex-wrap gap-1.5">
-              {c.artifacts.map(a => (
-                <li key={a.ref}>
-                  <Badge tone="pixel">📎 {a.label}</Badge>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardShell>
+            <Avatar kind="agent" agent={c.to} size="sm" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold tracking-[0.16em] text-faint uppercase">
+              Handoff · <span className={ACCENT_TEXT[c.from]}>{AGENTS[c.from].displayName.split(' ')[0]}</span> →{' '}
+              <span className={ACCENT_TEXT[c.to]}>{AGENTS[c.to].displayName.split(' ')[0]}</span>
+            </p>
+            <p className="mt-0.5 font-semibold">{c.task}</p>
+            <p className="mt-0.5 line-clamp-2 text-sm text-dim">{c.contextSummary}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <Badge tone={meta.status === 'done' ? 'success' : 'gold'}>{status}</Badge>
+              <AiBadge />
+            </div>
+            {c.artifacts.length > 0 && (
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {c.artifacts.map(a => (
+                  <li key={a.ref}>
+                    <Badge tone="pixel">📎 {a.label}</Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </article>
       );
     }
 
@@ -73,7 +81,8 @@ function CardBody({ m, card }: { m: ChatMessage; card: AnyCard }) {
       return (
         <CardShell
           agent={agent}
-          className="w-full"
+          className="group w-full"
+          cover={<GameScene seed={c.title} emoji="" colors={paletteFor(c.gameId)} hud={false} motion="hover" className="absolute inset-0" />}
           title={c.title}
           meta={c.kind === 'live' ? 'Live Build Theater' : 'Game room: plan, builds, playtests'}
           actions={

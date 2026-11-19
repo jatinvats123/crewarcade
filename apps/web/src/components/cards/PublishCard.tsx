@@ -5,7 +5,9 @@
 // Allow -> the card becomes the published card with the /g link and Share.
 import { parseCardMeta, type PublishCardContent } from '@crewarcade/shared';
 import { useState } from 'react';
+import { GameScene } from '@/components/arcade/GameScene';
 import { Badge, Button, CardShell, useToast } from '@/components/ui';
+import { paletteFor } from '@/lib/palette';
 import { ApiRequestError } from '@/lib/api';
 import type { ChatMessage } from '@/lib/chat/types';
 import { useCardEnv } from './context';
@@ -45,18 +47,28 @@ export function PublishCard({ m, pub }: { m: ChatMessage; pub: PublishCardConten
   const hotfix = pub.hotfix;
   const heading = live
     ? hotfix
-      ? `🎉 Hotfix v${pub.version} is live`
-      : `🎉 ${title} is live`
+      ? `Hotfix v${pub.version} is live`
+      : `${title} is live`
     : meta.status === 'rejected'
-      ? `🚫 v${pub.version} blocked`
+      ? `v${pub.version} blocked`
       : hotfix
-        ? `🩹 Hotfix v${pub.version}: publish?`
-        : `🚀 Publish ${title} v${pub.version}?`;
+        ? `Hotfix v${pub.version}: publish?`
+        : `Publish ${title} v${pub.version}?`;
 
   return (
     <CardShell
       agent="glitch"
-      className="w-full"
+      className="group w-full"
+      cover={
+        live ? (
+          <>
+            <GameScene seed={pub.gameId} emoji="" colors={paletteFor(pub.gameId)} hud={false} motion="on" className="absolute inset-0" />
+            <span className="absolute top-3 left-3 -rotate-2 bg-brand px-2 py-0.5 text-[11px] font-bold tracking-[0.18em] text-brand-ink uppercase">
+              Live on the Arcade
+            </span>
+          </>
+        ) : undefined
+      }
       title={heading}
       meta={live ? `v${pub.version} · public on the Arcade` : hotfix ? `Fixes “${hotfix.bug}” · passes every old repro` : 'Passed its playtest'}
       badges={

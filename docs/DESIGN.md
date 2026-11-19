@@ -192,8 +192,13 @@ the game page runs it always. Reduced motion stops it.
   (`lib/palette.ts`; scrolls while an agent works), Anton name, "Forge is building…" or the last message,
   unread badge; the active crew has a lime ring. On phones the empty state keeps its buttons; wider
   screens show a quiet hint (the launch pad has the buttons).
-- **Chat cards** (`CardShell`): glass (hairline, `bg-text/[0.04]`, blur), Anton title, the agent's colour
-  glowing up from the bottom. **Composer**: quick-start chips (`@pixel`, `remix`, `bug:`, `make it
+- **Chat cards** (`CardShell`): solid `surface`, 1 px border, no glow or blur; a 3 px bar in the
+  agent's colour on top (or a `GameScene` cover in the game's palette: plan, game room, live publish),
+  agent name in small caps + AI badge, big Anton title. Up to 36rem wide in chat. Plan: the pitch as
+  the lead line, Controls / Play as two `CardFact` tiles, Glitch's checks in a `CheckList` (code font,
+  square marks that become ✓ / ✕ on the Test card). Build: a Forge progress bar of steps over the step
+  list. Handoff is a slim baton row (Pixel ▸ Forge, task, status), not a full card. No emoji in titles
+  (score cards keep 🏆 / 🔥). **Composer**: quick-start chips (`@pixel`, `remix`, `bug:`, `make it
 harder`) while the box is empty and no starter pitch is offered.
 - **New crew chat:** while a crew has no games, the top of its history is `CrewWelcome` (`components/chat/`):
   the crew name as a poster, an invite card (link, Copy link, Share on WhatsApp) and three pitch cards that

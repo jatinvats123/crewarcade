@@ -78,7 +78,7 @@ export function BuildCard({ m, build }: { m: ChatMessage; build: BuildCardConten
       <CardShell
         agent="forge"
         className="w-full"
-        title={`🔨 ${build.title} · v${build.version}`}
+        title={`${build.title} · v${build.version}`}
         meta={facts.length > 0 ? facts.join(' · ') : REASON[build.reason] ? `${REASON[build.reason]} build` : 'Building from the approved plan'}
         badges={
           <Badge tone={meta.status === 'ready' ? 'success' : meta.status === 'failed' ? 'danger' : 'forge'}>
@@ -102,8 +102,19 @@ export function BuildCard({ m, build }: { m: ChatMessage; build: BuildCardConten
           ) : undefined
         }
       >
-        {build.change && <p className="mb-2 text-sm text-dim">Change: {build.change}</p>}
-        <ol className="flex flex-col gap-1" aria-label="Build progress" aria-live="polite">
+        {build.change && <p className="mb-3 text-sm text-dim">Change: {build.change}</p>}
+        <div className="mb-3 flex gap-1" aria-hidden>
+          {steps.map((s, i) => (
+            <span
+              key={i}
+              className={cn(
+                'h-1.5 flex-1 rounded-full',
+                s.s === 'done' ? 'bg-forge' : s.s === 'doing' ? 'animate-pulse bg-forge/60' : s.s === 'failed' ? 'bg-danger' : 'bg-surface-3',
+              )}
+            />
+          ))}
+        </div>
+        <ol className="flex flex-col gap-1.5 rounded-2xl border border-border bg-bg/60 px-3.5 py-3" aria-label="Build progress" aria-live="polite">
           {steps.map((s, i) => (
             <li
               key={`${i}-${s.t}`}

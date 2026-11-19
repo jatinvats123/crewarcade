@@ -31,7 +31,7 @@ export function BugCard({ m, bug }: { m: ChatMessage; bug: BugCardContent }) {
     <CardShell
       agent="glitch"
       className="w-full"
-      title={`🐞 Bug from ${who}`}
+      title={`Bug from ${who}`}
       meta={bug.version ? `on v${bug.version}` : undefined}
       badges={
         <Badge tone={TONE[meta.status]} data-testid="bug-status">

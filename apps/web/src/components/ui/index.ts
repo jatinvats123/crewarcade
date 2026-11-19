@@ -3,7 +3,7 @@ export { IconButton } from './IconButton';
 export { Avatar, HUMAN_RINGS, type HumanColor, type Presence } from './Avatar';
 export { Badge, RoleBadge, AiBadge, TranslatedBadge, type BadgeTone } from './Badge';
 export { StateChip, Chip } from './Chip';
-export { CardShell } from './Card';
+export { CardFact, CardShell, CheckList, CheckMark } from './Card';
 export { Sheet } from './Sheet';
 export { ToastProvider, useToast } from './Toast';
 export { Skeleton, MessageSkeleton, EmptyState, ErrorState } from './States';
