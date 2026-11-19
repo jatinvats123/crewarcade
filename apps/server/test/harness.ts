@@ -67,6 +67,8 @@ export async function createHarness(
     ai?: AiClient | null;
     stt?: SpeechToText;
     env?: Record<string, string>;
+    /** Local UI checks only (scripts/local-stack.ts): talk to a REAL Nexconn app instead of the fake. Never in tests. */
+    realNexconn?: { appKey: string; appSecret: string; baseUrls: readonly [string, string] };
   } = {},
 ): Promise<Harness> {
   const pg = new PGlite();
@@ -104,19 +106,21 @@ export async function createHarness(
   const nexconn =
     opts.nexconn === false
       ? null
-      : new NexconnClient({
-          appKey: APP_KEY,
-          appSecret: APP_SECRET,
-          baseUrls: ['https://api.sg-light-api.com', 'https://api-b.sg-light-api.com'],
-          fetch,
-          sleep: async () => {},
-        });
+      : opts.realNexconn
+        ? new NexconnClient({ ...opts.realNexconn })
+        : new NexconnClient({
+            appKey: APP_KEY,
+            appSecret: APP_SECRET,
+            baseUrls: ['https://api.sg-light-api.com', 'https://api-b.sg-light-api.com'],
+            fetch,
+            sleep: async () => {},
+          });
   const config = loadConfig({
     NODE_ENV: 'test',
     DATABASE_URL: 'postgres://u:p@localhost:5432/test',
     WEB_ORIGIN: WEB,
-    NEXCONN_APP_KEY: APP_KEY,
-    NEXCONN_APP_SECRET: APP_SECRET,
+    NEXCONN_APP_KEY: opts.realNexconn?.appKey ?? APP_KEY,
+    NEXCONN_APP_SECRET: opts.realNexconn?.appSecret ?? APP_SECRET,
     TOKEN_ENCRYPTION_KEY: ENC_KEY,
     SESSION_SECRET: 'x'.repeat(40),
     ...opts.env,
