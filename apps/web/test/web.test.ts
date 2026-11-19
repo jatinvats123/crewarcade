@@ -14,7 +14,9 @@ describe('public env', () => {
       NEXT_PUBLIC_API_ORIGIN: 'http://localhost:8080',
       NEXT_PUBLIC_SITE_URL: 'http://localhost:3000',
       NEXT_PUBLIC_NEXCONN_APP_KEY: '',
+      NEXT_PUBLIC_DEV_PAGES: '0',
     });
+    expect(() => parsePublicEnv({ NEXT_PUBLIC_DEV_PAGES: 'yes' })).toThrow(/NEXT_PUBLIC_DEV_PAGES/);
     expect(() => parsePublicEnv({ NEXT_PUBLIC_API_ORIGIN: 'not a url' })).toThrow(/NEXT_PUBLIC_API_ORIGIN/);
   });
   it('only declares NEXT_PUBLIC_ variables', () => {

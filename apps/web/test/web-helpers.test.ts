@@ -32,8 +32,9 @@ describe('pickAudioMime', () => {
 describe('invite sharing', () => {
   it('builds a WhatsApp-ready message with the link inside the text', () => {
     const url = inviteUrl('https://crewarcade.app/', 'K7XQ2MPA');
-    expect(url).toBe('https://crewarcade.app/i/K7XQ2MPA');
-    expect(inviteText('Friday crew', url)).toMatch(/Friday crew.*https:\/\/crewarcade\.app\/i\/K7XQ2MPA$/);
+    // Invite links carry the referrer (signups by referrer on /admin).
+    expect(url).toBe('https://crewarcade.app/i/K7XQ2MPA?ref=invite');
+    expect(inviteText('Friday crew', url)).toMatch(/Friday crew.*https:\/\/crewarcade\.app\/i\/K7XQ2MPA\?ref=invite$/);
   });
 });
 
