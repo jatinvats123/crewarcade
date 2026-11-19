@@ -12,7 +12,8 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
 | 3     | Forge, builds, play, scores | **Built** (branch `phase-3`); live E2E_CHAT run pending              |
 | 4     | Glitch, playtest, publish   | **Built** (branch `phase-4`); live E2E_CHAT run pending (Docker)     |
 | 5     | Bugs, voice, languages      | **Built** (branch `phase-5`); live on the free plan (no playtests)   |
-| 6     | Polish, harden, launch prep | **In progress** (branch `phase-6`)                                   |
+| 6     | Polish, harden, launch prep | **Built** (branch `phase-6`)                                         |
+| 7     | Final push to submission    | **In progress** (branch `phase-7`)                                   |
 | 7     | Polish and launch           | —                                                                    |
 
 ## Phase 7: final push to submission (branch `phase-7`, from `phase-6`)
@@ -240,7 +241,13 @@ repro, and it goes public only through Allow. Plus voice pitches (Sarvam) and ta
   `LIMITS.dailyTranslationChars` = 1,000 chars per user per day in `usage`) → Nexconn
   `translateMessages` + `TranslateHandler`. Over the cap: "back tomorrow".
 
-### Verified locally (2026-11-17)
+### Verified locally (2026-11-17, rerun 2026-11-19 after the deploy fixes)
+
+- 2026-11-19: typecheck ✓, ESLint ✓, client secret check ✓; tests package by package: shared 26,
+  engine 39, server 240 (1 skipped: gated real builds), web 60, all passing; `pnpm eval:fast`
+  21/21 caught, 0 false FAILs (8 min). Run in parallel, `pnpm test` once failed the engine's
+  frame-rate check (28 fps < 30) while the server's Chromium tests shared the CPU: a load flake,
+  so run the suites one at a time.
 
 - lint ✓, typecheck ✓, `pnpm test` 355 passing (1 skipped: the gated real-builds test), `pnpm eval:fast`
   21/21 caught, 0 false FAILs, `pnpm e2e` 35 passed, 7 skipped (same skips as Phase 4; built first,
