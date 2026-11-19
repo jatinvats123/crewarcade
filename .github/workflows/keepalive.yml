@@ -1,0 +1,23 @@
+name: Keep the server awake
+
+# Pings the live server every 10 minutes so judges never wait for a cold start (Render's free plan
+# sleeps after 15 idle minutes; harmless on paid plans). GitHub runs scheduled workflows from the
+# default branch only, and may delay them at busy times.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /health (server) and the home page (web)
+        run: |
+          for url in https://crewarcade-server.onrender.com/health https://crewarcade.vercel.app/; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 --retry 2 --retry-delay 10 "$url" || true)
+            echo "$url -> $code"
+          done

@@ -4,19 +4,47 @@ import { AGENT_ID_LIST, newId, nexconnUserId } from '@crewarcade/shared';
 import type { Ctx } from '../context';
 import { createGroup, joinGroup } from '../nexconn/api';
 import { getCrew, getCrewByChannel, listMembers, type CrewRow } from '../repo/crews';
-import { getGameByRoom, type GameRow } from '../repo/games';
+import { getGame, getGameByRoom, type GameRow } from '../repo/games';
 import { ensureRegistered, requireNexconn } from './chat-users';
 import { CREW_GROUP_PERMISSIONS } from './crews';
 
 export type Room = { kind: 'crew'; crew: CrewRow; game: null } | { kind: 'game'; crew: CrewRow; game: GameRow };
 
+// Which crew/game a channel belongs to never changes, so that mapping is remembered (per process,
+// bounded); the rows themselves are always read fresh, in parallel. A game room then costs one round
+// trip instead of three sequential ones (Supabase is 70-440 ms away from Render Singapore).
+type ChannelOwner = { kind: 'crew'; crewId: string } | { kind: 'game'; crewId: string; gameId: string };
+const channelOwners = new WeakMap<object, Map<string, ChannelOwner>>();
+const ownersOf = (db: object) => {
+  let m = channelOwners.get(db);
+  if (!m) channelOwners.set(db, (m = new Map()));
+  return m;
+};
+
 export async function resolveRoom(ctx: Pick<Ctx, 'db'>, channelId: string): Promise<Room | null> {
+  const owners = ownersOf(ctx.db);
+  const known = owners.get(channelId);
+  if (known) {
+    const [crew, game] = await Promise.all([getCrew(ctx.db, known.crewId), known.kind === 'game' ? getGame(ctx.db, known.gameId) : null]);
+    if (crew && known.kind === 'crew') return { kind: 'crew', crew, game: null };
+    if (crew && game) return { kind: 'game', crew, game };
+    owners.delete(channelId); // deleted since: look it up again below
+  }
+  const remember = (o: ChannelOwner) => {
+    owners.set(channelId, o);
+    if (owners.size > 5000) owners.delete(owners.keys().next().value!);
+  };
   const crew = await getCrewByChannel(ctx.db, channelId);
-  if (crew) return { kind: 'crew', crew, game: null };
+  if (crew) {
+    remember({ kind: 'crew', crewId: crew.id });
+    return { kind: 'crew', crew, game: null };
+  }
   const game = await getGameByRoom(ctx.db, channelId);
   if (!game) return null;
   const owner = await getCrew(ctx.db, game.crewId);
-  return owner ? { kind: 'game', crew: owner, game } : null;
+  if (!owner) return null;
+  remember({ kind: 'game', crewId: owner.id, gameId: game.id });
+  return { kind: 'game', crew: owner, game };
 }
 
 /** "🎮 Chai Dash": Nexconn group names are <= 64 chars. */

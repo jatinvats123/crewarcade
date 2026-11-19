@@ -77,7 +77,7 @@ describe('shield: spam', () => {
     expect(isSpamContent('see https://crewarcade.vercel.app/g/chai')).toBe(false);
     expect(checkMessage('heyyyyyy', member)).toBeNull();
   });
-  it('the same text 3 times in 60 s, or 8 messages in 10 s', () => {
+  it('the same text 3 times in 60 s, or 12 messages in 10 s', () => {
     let t = 0;
     const f = createFloodTracker(() => t);
     expect(f.hit('u', 'r', 'buy cheap coins')).toBe(false);
@@ -88,9 +88,9 @@ describe('shield: spam', () => {
     t += 120_000;
     expect(f.hit('u', 'r', 'buy cheap coins')).toBe(false); // old ones expired
     const g = createFloodTracker(() => t);
-    const burst = Array.from({ length: 8 }, (_, i) => g.hit('u', 'r', `msg ${i}`));
-    expect(burst.slice(0, 7).every(b => !b)).toBe(true);
-    expect(burst[7]).toBe(true);
+    const burst = Array.from({ length: 12 }, (_, i) => g.hit('u', 'r', `msg ${i}`));
+    expect(burst.slice(0, 11).every(b => !b)).toBe(true);
+    expect(burst[11]).toBe(true);
     expect(g.hit('other', 'r', 'msg')).toBe(false); // per user
     expect(checkMessage('hello', { canApprove: false, flooding: true })?.rule).toBe('spam');
     // Short replies repeat naturally; one message id counts once.

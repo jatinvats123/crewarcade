@@ -55,7 +55,7 @@ beforeAll(async () => {
   channelId = crew.groupChannelId;
   const join = await h.app.inject({ method: 'POST', url: `/api/invites/${crew.inviteCode}/join`, headers: { cookie: riya.cookie, origin: WEB } });
   expect(join.statusCode).toBe(200);
-});
+}, 60_000);
 afterAll(async () => {
   await h.close();
 });

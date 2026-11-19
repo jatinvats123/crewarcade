@@ -1,4 +1,5 @@
 // Crew and membership rows. Every permission check reads crew_members (docs/SPEC.md §8).
+import { createTtlCache, type TtlCache } from '../util/ttl-cache';
 import { AGENT_ID_LIST, nexconnUserId, type AgentId, type CrewDetail, type CrewMember, type CrewRole, type CrewSummary } from '@crewarcade/shared';
 import { and, asc, count, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/types';
@@ -54,6 +55,7 @@ export async function getRole(db: Db, crewId: string, userId: string): Promise<C
 /** Inserts the membership; false when the user was already a member. */
 export async function addMember(db: Db, crewId: string, userId: string, role: CrewRole = 'member'): Promise<boolean> {
   const rows = await db.insert(crewMembers).values({ crewId, userId, role }).onConflictDoNothing().returning({ userId: crewMembers.userId });
+  memberCounts(db).delete(crewId);
   return rows.length === 1;
 }
 
@@ -64,9 +66,19 @@ export async function setRole(db: Db, crewId: string, userId: string, role: Crew
     .where(and(eq(crewMembers.crewId, crewId), eq(crewMembers.userId, userId)));
 }
 
+// Member counts are read on every chat message (agent routing); cached 30 s per process, dropped on join.
+const countCaches = new WeakMap<object, TtlCache<number>>();
+const memberCounts = (db: Db) => {
+  let c = countCaches.get(db);
+  if (!c) countCaches.set(db, (c = createTtlCache<number>({ ttlMs: 30_000 })));
+  return c;
+};
+
 export async function countMembers(db: Db, crewId: string): Promise<number> {
-  const [row] = await db.select({ n: count() }).from(crewMembers).where(eq(crewMembers.crewId, crewId));
-  return row?.n ?? 0;
+  return memberCounts(db).get(crewId, async () => {
+    const [row] = await db.select({ n: count() }).from(crewMembers).where(eq(crewMembers.crewId, crewId));
+    return row?.n ?? 0;
+  });
 }
 
 export async function countOwnedCrews(db: Db, userId: string): Promise<number> {

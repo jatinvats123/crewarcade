@@ -418,7 +418,7 @@ describe('failures', () => {
     } finally {
       await r.close();
     }
-  });
+  }, 20_000);
 
   it('when streaming fails, the reply arrives as one normal text message', async () => {
     h.failNext('/v4/group-channel/message/stream/send', 1002);

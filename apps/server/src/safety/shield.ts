@@ -29,7 +29,7 @@ export const RULE_INFO: Record<ShieldRule, { label: string; what: string }> = {
     what: 'Only approvers can publish. A member telling the agents to ship, publish or go live is removed (the Allow button is role-checked on the server too).',
   },
   abuse: { label: 'Abuse', what: 'Slurs and abusive words in English, Hindi and Hinglish.' },
-  spam: { label: 'Spam', what: 'Link floods, the same message again and again, or a burst of messages in a few seconds.' },
+  spam: { label: 'Spam', what: 'Link floods, the same message again and again, or a burst of 12+ messages in 10 seconds.' },
 };
 
 const NOTICES: Record<ShieldRule, string> = {
@@ -144,13 +144,13 @@ export function isSpamContent(text: string): boolean {
 
 /**
  * Per-user flood tracker (in memory; one server process): the same text (8+ chars: "lol" and "hi"
- * don't count) 3 times within 60 s, or 8 messages within 10 s. A message id is counted once, so the
+ * don't count) 3 times within 60 s, or 12 messages within 10 s. A message id is counted once, so the
  * pre- and after-delivery checks of one message don't add up. The clock is injected for tests.
  */
 export function createFloodTracker(now: () => number, o: { repeat?: number; repeatWindowMs?: number; burst?: number; burstWindowMs?: number } = {}) {
   const repeat = o.repeat ?? 3;
   const repeatWindow = o.repeatWindowMs ?? 60_000;
-  const burst = o.burst ?? 8;
+  const burst = o.burst ?? 12;
   const burstWindow = o.burstWindowMs ?? 10_000;
   const seen = new Map<string, Array<{ t: number; text: string }>>();
   const counted = new Map<string, boolean>();
