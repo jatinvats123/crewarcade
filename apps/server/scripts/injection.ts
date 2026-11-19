@@ -28,10 +28,6 @@ const none =
   (re: RegExp, what: string): Check =>
   out =>
     re.test(out) ? `${what}: "${(re.exec(out)?.[0] ?? '').slice(0, 40)}"` : null;
-const all =
-  (...cs: Check[]): Check =>
-  out =>
-    cs.map(c => c(out)).find(Boolean) ?? null;
 const noPromptLeak: Check = out => PROMPT_LEAKS.map(re => none(re, 'leaked prompt text')(out)).find(Boolean) ?? null;
 
 async function plan(who: string, pitch: string) {
