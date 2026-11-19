@@ -1,7 +1,8 @@
 'use client';
 
-// Crew list: name, last message preview, unread badge, agent activity dot. Empty state offers a
-// one-tap solo crew (just you + the agents).
+// Crew list as crew cards: a little game-world header in the crew's colours (it scrolls while an
+// agent works), the name, what's happening ("Forge is building…") or the last message, unread badge.
+// Empty state offers a one-tap solo crew (just you + the agents).
 import type { CrewSummary } from '@crewarcade/shared';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -9,13 +10,15 @@ import { useState } from 'react';
 import { Logo } from '@/components/brand/Logo';
 import { MemberAvatar } from '@/components/identity/MemberAvatar';
 import { Avatar, Button, EmptyState, ErrorState, IconButton, Skeleton } from '@/components/ui';
-import { BUSY_STATES } from '@/lib/agents';
+import { GameScene } from '@/components/arcade/GameScene';
+import { BUSY_STATES, STATE_LABEL } from '@/lib/agents';
 import { api } from '@/lib/api';
 import { clockTime, dayLabel, localDay } from '@/lib/chat/grouping';
 import { previewText } from '@/lib/chat/normalize';
 import { useAllChannels } from '@/lib/chat/store';
 import type { ChannelState } from '@/lib/chat/types';
 import { cn } from '@/lib/cn';
+import { paletteFor } from '@/lib/palette';
 import { useCrews } from '@/lib/crews';
 import { useNexconn } from '@/lib/nexconn/NexconnProvider';
 import { useSession } from '@/lib/session';
@@ -55,12 +58,17 @@ export function CrewList() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-center justify-between gap-2 px-4 py-2">
+      <header className="flex min-w-0 items-center justify-between gap-1 px-4 py-2">
         <Link href="/crews" aria-label="CrewArcade: your crews" className="min-h-11 content-center">
           <Logo className="text-lg" />
         </Link>
         <div className="flex items-center gap-1">
-          <IconButton label="New crew" variant="filled" icon={<span aria-hidden>＋</span>} onClick={() => setSheet(true)} />
+          <Link
+            href="/arcade"
+            className="inline-flex min-h-11 items-center rounded-full px-3 text-sm font-semibold text-dim hover:bg-surface-2 hover:text-text"
+          >
+            Arcade
+          </Link>
           <Link
             href="/settings"
             aria-label="Settings"
@@ -71,7 +79,10 @@ export function CrewList() {
           </Link>
         </div>
       </header>
-      <h1 className="px-4 pb-2 font-display text-2xl font-bold">Crews</h1>
+      <div className="flex items-center justify-between gap-2 px-4 pb-2">
+        <h1 className="font-poster text-3xl tracking-wide uppercase">Crews</h1>
+        <IconButton label="New crew" variant="brand" icon={<span aria-hidden>＋</span>} onClick={() => setSheet(true)} />
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-safe">
         {error && !crews ? (
@@ -85,31 +96,37 @@ export function CrewList() {
             ))}
           </div>
         ) : crews.length === 0 ? (
-          <div className="p-2">
-            <EmptyState
-              emoji="🕹️"
-              title="No crews yet"
-              action={
-                <div className="flex w-full flex-col gap-2">
-                  <Button size="lg" block loading={soloBusy} onClick={() => void startSolo()}>
-                    Start a solo crew
-                  </Button>
-                  <Button variant="secondary" block onClick={() => setSheet(true)}>
-                    Name a crew and invite friends
-                  </Button>
-                  {soloError && (
-                    <p className="text-sm text-danger" role="alert">
-                      {soloError}
-                    </p>
-                  )}
-                </div>
-              }
-            >
-              A solo crew is just you, Pixel, Forge and Glitch: try everything alone, invite friends later. Got an invite link? Open it to join.
-            </EmptyState>
-          </div>
+          <>
+            {/* Wider screens: the launch pad in the middle has the buttons; here a quiet hint. */}
+            <p className="m-2 hidden rounded-[18px] border border-dashed border-text/20 p-4 text-sm text-dim md:block">
+              Your crews show up here, each with its latest game and what the agents are doing.
+            </p>
+            <div className="p-2 md:hidden">
+              <EmptyState
+                emoji="🕹️"
+                title="No crews yet"
+                action={
+                  <div className="flex w-full flex-col gap-2">
+                    <Button size="lg" block loading={soloBusy} onClick={() => void startSolo()}>
+                      Start a solo crew
+                    </Button>
+                    <Button variant="secondary" block onClick={() => setSheet(true)}>
+                      Name a crew and invite friends
+                    </Button>
+                    {soloError && (
+                      <p className="text-sm text-danger" role="alert">
+                        {soloError}
+                      </p>
+                    )}
+                  </div>
+                }
+              >
+                A solo crew is just you, Pixel, Forge and Glitch: try everything alone, invite friends later. Got an invite link? Open it to join.
+              </EmptyState>
+            </div>
+          </>
         ) : (
-          <ul className="flex flex-col gap-0.5">
+          <ul className="flex flex-col gap-3 px-1 pt-1">
             {glitch && (
               <li>
                 <Link
@@ -151,38 +168,44 @@ const lastTime = (c: ChannelState | undefined, crew: CrewSummary) => {
 function CrewRow({ crew, channel, active }: { crew: CrewSummary; channel: ChannelState | undefined; active: boolean }) {
   const last = channel?.messages[channel.messages.length - 1] ?? channel?.preview ?? null;
   const unread = active ? 0 : (channel?.unread ?? 0);
-  const busy = Object.values(channel?.agentStates ?? {}).some(s => BUSY_STATES.has(s.state));
+  const working = Object.values(channel?.agentStates ?? {}).find(s => BUSY_STATES.has(s.state));
   const when = last ? (localDay(last.sentTime) === localDay(Date.now()) ? clockTime(last.sentTime) : dayLabel(localDay(last.sentTime))) : '';
+  const agentName = working ? working.agentId[0]!.toUpperCase() + working.agentId.slice(1) : '';
   return (
     <Link
       href={`/crews/${crew.id}`}
       aria-current={active ? 'page' : undefined}
-      className={cn('flex min-h-16 items-center gap-3 rounded-2xl px-3 py-2 transition-colors', active ? 'bg-surface-3' : 'hover:bg-surface-2')}
+      className={cn(
+        'group block overflow-hidden rounded-[20px] border bg-text/[0.03] transition-colors',
+        active ? 'border-brand ring-1 ring-brand' : 'border-text/15 hover:border-text/35',
+      )}
     >
-      <span
-        aria-hidden
-        className="relative flex size-12 shrink-0 items-center justify-center rounded-2xl bg-brand/15 font-display text-lg font-bold text-brand"
-      >
-        {crew.name.slice(0, 1).toUpperCase()}
-        {busy && <span className="absolute -top-0.5 -right-0.5 size-3 animate-pulse rounded-full bg-forge ring-2 ring-bg" />}
+      <span aria-hidden className="relative block h-16">
+        <GameScene seed={crew.id} emoji="" colors={paletteFor(crew.id)} hud={false} motion={working ? 'on' : 'hover'} className="absolute inset-0" />
+        {unread > 0 && (
+          <span className="absolute top-2 right-2 min-w-6 rounded-full bg-brand px-1.5 text-center text-xs leading-6 font-bold text-brand-ink">
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
       </span>
-      <span className="min-w-0 flex-1">
+      <span className="block px-3 py-2.5">
         <span className="flex items-baseline justify-between gap-2">
-          <span className={cn('truncate font-semibold', unread > 0 && 'text-text')}>{crew.name}</span>
+          <span className="truncate font-poster text-lg tracking-wide uppercase">{crew.name}</span>
           <span className={cn('shrink-0 text-xs', unread > 0 ? 'font-semibold text-brand' : 'text-faint')}>{when}</span>
         </span>
-        <span className="flex items-center justify-between gap-2">
-          <span className={cn('truncate text-sm', unread > 0 ? 'text-text' : 'text-dim')}>{previewText(last) || `${crew.memberCount} members`}</span>
-          {unread > 0 && (
-            <span
-              className="min-w-6 shrink-0 rounded-full bg-brand px-1.5 text-center text-xs leading-6 font-bold text-brand-ink"
-              aria-label={`${unread} unread`}
-            >
-              {unread > 99 ? '99+' : unread}
+        {working ? (
+          <span className="mt-0.5 flex items-center gap-1.5 text-sm text-brand">
+            <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-brand" />
+            <span className="truncate">
+              {agentName} is {STATE_LABEL[working.state].toLowerCase()}…
             </span>
-          )}
-        </span>
-        {busy && <span className="sr-only">An agent is working in this crew</span>}
+          </span>
+        ) : (
+          <span className={cn('mt-0.5 block truncate text-sm', unread > 0 ? 'text-text' : 'text-dim')}>
+            {previewText(last) || `${crew.memberCount} members`}
+          </span>
+        )}
+        {unread > 0 && <span className="sr-only">{unread} unread</span>}
       </span>
     </Link>
   );

@@ -61,6 +61,13 @@ export const SenderGroupView = memo(function SenderGroupView({ group, sender, is
   );
 });
 
+// Agent messages carry a soft edge and tint in the agent's colour, so they read apart from friends'.
+const AGENT_BUBBLE = {
+  pixel: 'border border-pixel/35 bg-pixel/8',
+  forge: 'border border-forge/35 bg-forge/8',
+  glitch: 'border border-glitch/35 bg-glitch/8',
+} as const;
+
 function Bubble({
   m,
   isMe,
@@ -78,9 +85,10 @@ function Bubble({
   onSeenBy: (messageId: string) => void;
   onOpenImage: (url: string) => void;
 }) {
+  const agent = agentKeyOf(m.senderId);
   const bubble = cn(
     'rounded-3xl px-3.5 py-2 text-[0.95rem] leading-snug',
-    isMe ? 'rounded-br-lg bg-brand/18 text-text' : 'rounded-bl-lg bg-surface-2 text-text',
+    isMe ? 'rounded-br-lg bg-brand/18 text-text' : agent ? cn('rounded-tl-lg text-text', AGENT_BUBBLE[agent]) : 'rounded-bl-lg bg-surface-2 text-text',
   );
   let body: React.ReactNode;
   switch (m.kind) {

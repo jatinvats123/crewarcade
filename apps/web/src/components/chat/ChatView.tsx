@@ -23,10 +23,14 @@ import { activeRoomStore, roomActivitySignature, roomHref } from '@/lib/room';
 import { useSession } from '@/lib/session';
 import { inviteUrl, shareInvite } from '@/lib/share';
 import { ChatComposer } from './ChatComposer';
+import { CrewWelcome } from './CrewWelcome';
 import { CrewInfoSheet } from './CrewInfoSheet';
 import { ImageLightbox } from './ImageLightbox';
 import { MessageList } from './MessageList';
 import { SeenBySheet } from './SeenBySheet';
+
+/** First game in a crew: one tap fills the composer with a pitch for Pixel. */
+const SAMPLE_PITCH = { label: 'Try: a mango dodging crows on a rooftop', text: '@pixel a mango dodging crows on a rooftop' };
 
 export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChannelId?: string }) {
   const { user } = useSession();
@@ -61,6 +65,8 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
   const [seenBy, setSeenBy] = useState<string | null>(null);
   const [image, setImage] = useState<string | null>(null);
   const [scrollSignal, setScrollSignal] = useState(0);
+  // A pitch picked in the welcome block: remount the composer with it typed in.
+  const [prefill, setPrefill] = useState<{ text: string; n: number } | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const lastMemberRefresh = useRef(0);
   const connected = nx.state === 'connected';
@@ -238,7 +244,7 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
         >
           {detail ? (
             <>
-              <span className="block truncate font-display font-bold">{game ? `🎮 ${game.title}` : detail.name}</span>
+              <span className="block truncate font-poster text-xl tracking-wide uppercase">{game ? game.title : detail.name}</span>
               <span className="block truncate text-xs text-dim">
                 {game ? `Game room · ${detail.name} · ${online} online` : `${detail.members.length} members · ${online} online · Pixel, Forge, Glitch`}
               </span>
@@ -262,7 +268,17 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
             <IconButton label="Story: how this game was made" icon={<span aria-hidden>📜</span>} onClick={() => setStoryOpen(true)} />
           </span>
         )}
-        <IconButton label="Invite friends" icon={<span aria-hidden>📤</span>} onClick={() => void share()} disabled={!detail} />
+        <button
+          type="button"
+          onClick={() => void share()}
+          disabled={!detail}
+          className="hidden min-h-10 items-center rounded-full border border-text/25 px-4 text-sm font-semibold hover:border-brand hover:text-brand disabled:opacity-50 sm:inline-flex"
+        >
+          Invite friends
+        </button>
+        <span className="sm:hidden">
+          <IconButton label="Invite friends" icon={<span aria-hidden>📤</span>} onClick={() => void share()} disabled={!detail} />
+        </span>
         <IconButton label="Crew info" icon={<span aria-hidden>ⓘ</span>} onClick={() => setInfoOpen(true)} disabled={!detail} />
       </header>
       {rooms.length > 0 && crewChannelId && (
@@ -279,7 +295,10 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
           ))}
         </nav>
       )}
-      <AgentStatusStrip channel={channel} crewId={crewId} />
+      {/* Desktop shows the agents in Crew HQ; phones and tablets keep the strip. */}
+      <div className="lg:hidden">
+        <AgentStatusStrip channel={channel} crewId={crewId} />
+      </div>
 
       {nx.state === 'unconfigured' ? (
         <div className="flex flex-1 items-center justify-center p-6">
@@ -299,6 +318,23 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
             onRetry={onRetry}
             onSeenBy={setSeenBy}
             onOpenImage={setImage}
+            {...(channelId === crewChannelId &&
+              detail &&
+              detail.games.length === 0 && {
+                intro: (
+                  <CrewWelcome
+                    crewName={detail.name}
+                    inviteUrl={inviteUrl(window.location.origin, detail.inviteCode)}
+                    onCopy={() =>
+                      void navigator.clipboard.writeText(inviteUrl(window.location.origin, detail.inviteCode)).then(
+                        () => toast('Invite link copied', 'success'),
+                        () => toast("Couldn't copy the link", 'danger'),
+                      )
+                    }
+                    onPitch={idea => setPrefill(p => ({ text: `@pixel ${idea}`, n: (p?.n ?? 0) + 1 }))}
+                  />
+                ),
+              })}
           />
         </CardEnvProvider>
       )}
@@ -317,6 +353,11 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
           targets={targets}
           disabled={!connected}
           onTyping={() => nx.sendTyping(channelId)}
+          suggestion={channelId === crewChannelId && detail && detail.games.length === 0 ? SAMPLE_PITCH : null}
+          key={`composer-${prefill?.n ?? 0}`}
+          {...(prefill
+            ? { initialText: prefill.text }
+            : channelId === crewChannelId && searchParams.get('pitch') && { initialText: `@pixel ${searchParams.get('pitch')}` })}
           onSendText={(text, ids) => {
             nx.sendText(channelId, text, ids);
             setScrollSignal(s => s + 1);

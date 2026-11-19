@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <CrewList />
               </aside>
               <main className={cn('min-w-0 flex-1 flex-col', inCrewIndex ? 'hidden md:flex' : 'flex')}>{children}</main>
-              <aside aria-label="Game panel" className="hidden w-[360px] shrink-0 flex-col border-l border-border lg:flex">
+              <aside aria-label="Crew HQ" className="hidden w-[360px] shrink-0 flex-col border-l border-border lg:flex">
                 <ContextPanel />
               </aside>
             </div>

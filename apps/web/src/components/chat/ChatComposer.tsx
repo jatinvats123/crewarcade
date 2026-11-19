@@ -20,14 +20,26 @@ export interface ComposerProps {
   /** mentionUserIds: agents tagged before recording ("@pixel " then hold the mic) get the voice pitch. */
   onSendVoice: (file: File, durationS: number, mentionUserIds: string[]) => void;
   onTyping: () => void;
+  /** A starter pitch shown as a chip while the box is empty (first game in a crew). */
+  suggestion?: { label: string; text: string } | null;
+  /** Text already typed in the box when it opens (a pitch tapped on the launch pad). */
+  initialText?: string;
 }
+
+/** Quick starts shown while the box is empty, so commands are discoverable. */
+const QUICK = [
+  { label: '@pixel', text: '@pixel ' },
+  { label: 'remix', text: 'remix ' },
+  { label: 'bug:', text: 'bug: ' },
+  { label: 'make it harder', text: 'make it harder' },
+];
 
 type Recorder = Awaited<ReturnType<typeof startRecording>>;
 type VoiceMode = 'idle' | 'starting' | 'holding' | 'locked';
 
-export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSendVoice, onTyping }: ComposerProps) {
+export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSendVoice, onTyping, suggestion, initialText }: ComposerProps) {
   const toast = useToast();
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText ?? '');
   const [query, setQuery] = useState<{ query: string; start: number } | null>(null);
   const [highlight, setHighlight] = useState(0);
   const [attachOpen, setAttachOpen] = useState(false);
@@ -212,6 +224,58 @@ export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSen
 
   return (
     <div className="pb-safe relative border-t border-border bg-bg/90 px-2 pt-2 backdrop-blur">
+      {suggestion && !text && !disabled && voice === 'idle' && (
+        <div className="mb-2 flex flex-wrap gap-1.5 px-1">
+          <button
+            type="button"
+            data-testid="pitch-suggestion"
+            onClick={() => {
+              setText(suggestion.text);
+              requestAnimationFrame(() => {
+                area.current?.focus();
+                area.current?.setSelectionRange(suggestion.text.length, suggestion.text.length);
+              });
+            }}
+            className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-full border border-pixel/40 bg-pixel/10 px-4 text-left text-sm font-semibold hover:bg-pixel/20"
+          >
+            <span aria-hidden>💡</span>
+            <span className="min-w-0 truncate">{suggestion.label}</span>
+          </button>
+          {QUICK.slice(0, 3).map(q => (
+            <button
+              key={q.label}
+              type="button"
+              onClick={() => {
+                setText(q.text);
+                requestAnimationFrame(() => area.current?.focus());
+              }}
+              className="inline-flex min-h-11 items-center rounded-full border border-text/20 px-3.5 text-xs font-semibold text-text/80 hover:border-brand hover:text-brand"
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {!suggestion && !text && !disabled && voice === 'idle' && (
+        <div className="mb-2 flex flex-wrap gap-1.5 px-1" aria-label="Quick starts">
+          {QUICK.map(q => (
+            <button
+              key={q.label}
+              type="button"
+              onClick={() => {
+                setText(q.text);
+                requestAnimationFrame(() => {
+                  area.current?.focus();
+                  area.current?.setSelectionRange(q.text.length, q.text.length);
+                });
+              }}
+              className="inline-flex min-h-9 items-center rounded-full border border-text/20 px-3.5 text-xs font-semibold text-text/80 hover:border-brand hover:text-brand"
+            >
+              {q.label}
+            </button>
+          ))}
+        </div>
+      )}
       {listOpen && (
         <ul
           id={ids.list}

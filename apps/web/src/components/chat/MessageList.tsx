@@ -24,9 +24,11 @@ export interface MessageListProps {
   onRetry: (localId: string) => void;
   onSeenBy: (messageId: string) => void;
   onOpenImage: (url: string) => void;
+  /** Shown at the very start of the history (a new crew's welcome) instead of the plain start line. */
+  intro?: React.ReactNode;
 }
 
-export function MessageList({ channel, members, myId, targets, scrollSignal, onLoadMore, onRetry, onSeenBy, onOpenImage }: MessageListProps) {
+export function MessageList({ channel, members, myId, targets, scrollSignal, onLoadMore, onRetry, onSeenBy, onOpenImage, intro }: MessageListProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const sentinel = useRef<HTMLDivElement>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -78,6 +80,8 @@ export function MessageList({ channel, members, myId, targets, scrollSignal, onL
           <div ref={sentinel} className="flex min-h-8 items-center justify-center">
             {!loaded ? null : hasMore ? (
               loadingMore && <span className="text-xs text-faint">Loading earlier messages…</span>
+            ) : intro ? (
+              <div className="w-full">{intro}</div>
             ) : (
               <span className="text-xs text-faint">This is the start of your crew's chat</span>
             )}

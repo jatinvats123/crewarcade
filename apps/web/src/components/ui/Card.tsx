@@ -3,6 +3,13 @@ import { AGENTS } from '@crewarcade/shared';
 import type { ReactNode } from 'react';
 import { ACCENT_TEXT } from '@/lib/agents';
 import { cn } from '@/lib/cn';
+
+// The agent's colour glows up from the bottom of its card.
+const GLOW: Record<AgentKey, string> = {
+  pixel: 'shadow-[inset_0_-34px_56px_-40px_var(--pixel)]',
+  forge: 'shadow-[inset_0_-34px_56px_-40px_var(--forge)]',
+  glitch: 'shadow-[inset_0_-34px_56px_-40px_var(--glitch)]',
+};
 import { Avatar } from './Avatar';
 import { AiBadge } from './Badge';
 
@@ -19,10 +26,16 @@ export interface CardShellProps {
   className?: string;
 }
 
-/** The shell every chat card uses: header (agent avatar, name, meta, badges), body, action row. */
+/** The shell every chat card uses (liquid glass): header (agent avatar, name, meta, badges), body, action row. */
 export function CardShell({ agent, title, meta, badges, children, actions, className }: CardShellProps) {
   return (
-    <article className={cn('animate-slide-up overflow-hidden rounded-card border border-border bg-surface shadow-card', className)}>
+    <article
+      className={cn(
+        'animate-slide-up overflow-hidden rounded-[22px] border border-text/15 bg-text/[0.04] backdrop-blur-md',
+        agent ? GLOW[agent] : 'shadow-card',
+        className,
+      )}
+    >
       <header className="flex items-start gap-3 p-4 pb-2">
         {agent ? <Avatar kind="agent" agent={agent} size="sm" /> : null}
         <div className="min-w-0 flex-1">
@@ -30,14 +43,14 @@ export function CardShell({ agent, title, meta, badges, children, actions, class
             {agent && <p className={cn('text-xs font-semibold', ACCENT_TEXT[agent])}>{AGENTS[agent].displayName}</p>}
             {agent && <AiBadge />}
           </div>
-          <h3 className="font-display text-base leading-snug font-bold">{title}</h3>
+          <h3 className="font-poster text-xl leading-tight tracking-wide uppercase">{title}</h3>
           {meta && <p className="text-xs text-faint">{meta}</p>}
           {/* Under the title, so long status text never squeezes the title on a phone. */}
           {badges && <div className="mt-1.5 flex flex-wrap gap-1">{badges}</div>}
         </div>
       </header>
       {children && <div className="px-4 pb-3 text-sm text-text">{children}</div>}
-      {actions && <footer className="flex flex-col gap-2 border-t border-border bg-surface-2/50 p-3 sm:flex-row sm:flex-wrap sm:justify-end">{actions}</footer>}
+      {actions && <footer className="flex flex-col gap-2 border-t border-text/10 bg-black/20 p-3 sm:flex-row sm:flex-wrap sm:justify-end">{actions}</footer>}
     </article>
   );
 }
