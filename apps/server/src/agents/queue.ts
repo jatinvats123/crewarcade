@@ -35,8 +35,13 @@ export const AgentJobData = z.object({
       mentionedUserIds: z.array(z.string().max(64)).max(30).default([]),
     })
     .optional(),
+  /** Times this job was re-queued because the AI model stayed busy (max BUSY_REQUEUES). */
+  busyRetry: z.number().int().min(0).max(5).optional(),
 });
 export type AgentJobData = z.infer<typeof AgentJobData>;
+/** A job whose AI model stays busy (after the client's own retries and fallback) is re-queued this often. */
+export const BUSY_REQUEUES = 2;
+export const BUSY_REQUEUE_DELAY_S = 45;
 
 /** Forge's build queue: one job per version (or per retry of a failed version). */
 export const BuildJobData = z.object({
@@ -68,7 +73,7 @@ export const QUEUES = { agent: 'agent', build: 'forge-build', playtest: 'glitch-
 
 export interface JobQueue {
   /** false when a job with the same key was already enqueued. */
-  enqueueAgent(job: AgentJobData): Promise<boolean>;
+  enqueueAgent(job: z.input<typeof AgentJobData>, opts?: { delaySec?: number }): Promise<boolean>;
   enqueueBuild(job: z.input<typeof BuildJobData>): Promise<boolean>;
   enqueuePlaytest(job: PlaytestJobData): Promise<boolean>;
   /** Starts processing agent jobs with this handler. */
@@ -113,9 +118,13 @@ export function createPgBossQueue(
     })());
 
   return {
-    async enqueueAgent(job) {
+    async enqueueAgent(job, opts) {
       await ready();
-      const id = await boss.send(QUEUES.agent, AgentJobData.parse(job), { id: jobUuid(job.key), group: { id: job.channelId } });
+      const id = await boss.send(QUEUES.agent, AgentJobData.parse(job), {
+        id: jobUuid(job.key),
+        group: { id: job.channelId },
+        ...(opts?.delaySec && { startAfter: opts.delaySec }),
+      });
       return id !== null;
     },
     async enqueueBuild(job) {
@@ -197,6 +206,8 @@ export function createPgBossQueue(
 export function createMemoryQueue(opts: {
   concurrency: number;
   log?: QueueLog;
+  /** Real wait for a delayed job (tests pass () => 0). Default: delaySec seconds. */
+  delayMs?: (delaySec: number) => number;
 }): JobQueue & { idle: () => Promise<void>; builds: BuildJobData[]; playtests: PlaytestJobData[] } {
   const seen = new Set<string>();
   type Item = { kind: 'agent'; job: AgentJobData } | { kind: 'build'; job: BuildJobData } | { kind: 'playtest'; job: PlaytestJobData };
@@ -211,9 +222,10 @@ export function createMemoryQueue(opts: {
   const handlerFor = (it: Item) => (it.kind === 'agent' ? handler : it.kind === 'build' ? buildHandler : playtestHandler);
   let waiters: Array<() => void> = [];
 
+  let delayed = 0;
   const settleIdle = () => {
     // Jobs without a registered handler (builds when no build worker runs) just wait.
-    if (running === 0 && pending.every(it => !handlerFor(it))) {
+    if (running === 0 && delayed === 0 && pending.every(it => !handlerFor(it))) {
       const w = waiters;
       waiters = [];
       for (const f of w) f();
@@ -248,12 +260,24 @@ export function createMemoryQueue(opts: {
   return {
     builds,
     playtests,
-    async enqueueAgent(job) {
+    async enqueueAgent(job, enq) {
       const parsed = AgentJobData.parse(job);
       if (seen.has(parsed.key)) return false;
       seen.add(parsed.key);
-      pending.push({ kind: 'agent', job: parsed });
-      pump();
+      const add = () => {
+        pending.push({ kind: 'agent', job: parsed });
+        pump();
+      };
+      if (enq?.delaySec) {
+        delayed++;
+        setTimeout(
+          () => {
+            delayed--;
+            add();
+          },
+          (opts.delayMs ?? (sec => sec * 1000))(enq.delaySec),
+        ).unref();
+      } else add();
       return true;
     },
     async enqueueBuild(job) {

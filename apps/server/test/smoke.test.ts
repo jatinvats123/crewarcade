@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { channel, type AiClient, type StructuredCall } from '../src/ai/claude';
 import { fakeBuildOutput } from '../src/ai/fake-game';
 import { createGeminiClient, isBusyError, replayGuard } from '../src/ai/gemini';
+import { agentOfPurpose, busyDetail, withBusyNotify, type AiBusy } from '../src/ai/busy';
 import { insertCode, runBuildLoop } from '../src/agents/forge';
 import { createHeadless, smokeFindings } from '../src/agents/smoke';
 
@@ -183,6 +184,41 @@ describe('Gemini busy-retry', () => {
     // Without a fallback the busy error still surfaces.
     const lone = createGeminiClient({ apiKey: 'k', model: 'gemini-busy', baseUrl: base, sleep: async () => {}, retries: 1 });
     await expect(lone.structured(call).done).rejects.toThrow(/high demand|503|UNAVAILABLE/);
+  });
+
+  it('reports each busy retry and the model switch to the running job (live agent state)', async () => {
+    answers = ['ok'];
+    const seen: Array<{ purpose: string; b: AiBusy }> = [];
+    const ai = createGeminiClient({ apiKey: 'k', model: 'gemini-busy', fallbackModels: ['gemini-test'], baseUrl: base, sleep: async () => {}, retries: 2 });
+    await withBusyNotify(
+      (purpose, b) => void seen.push({ purpose, b }),
+      () => ai.structured(call).done,
+    );
+    expect(seen.map(x => busyDetail(x.b))).toEqual([
+      'AI model busy, retrying (1/2)…',
+      'AI model busy, retrying (2/2)…',
+      'AI model busy, switching to gemini-test…',
+    ]);
+    expect(seen.every(x => x.purpose === 'pixel.plan')).toBe(true);
+    // Outside a job scope nothing is reported, and a throwing notifier never breaks the call.
+    answers = ['ok'];
+    await expect(ai.structured(call).done).resolves.toBeTruthy();
+    answers = ['ok'];
+    await expect(
+      withBusyNotify(
+        () => {
+          throw new Error('boom');
+        },
+        () => ai.structured(call).done,
+      ),
+    ).resolves.toBeTruthy();
+  });
+
+  it('maps AI purposes to agents', () => {
+    expect(agentOfPurpose('forge.build')).toBe('forge');
+    expect(agentOfPurpose('glitch.repro')).toBe('glitch');
+    expect(agentOfPurpose('pixel.delta')).toBe('pixel');
+    expect(agentOfPurpose('stt.voice')).toBeNull();
   });
 
   it('the replay guard passes on only what is new', () => {

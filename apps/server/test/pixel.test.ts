@@ -5,7 +5,7 @@
 import { CARD_MESSAGE_TYPES, parseCardMeta, type PlanCardContent } from '@crewarcade/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { AiRefusalError, channel, type AiClient } from '../src/ai/claude';
+import { AiRefusalError, AiUnavailableError, channel, type AiClient } from '../src/ai/claude';
 import { cards, crews, gameVersions, games, ledger } from '../src/db/schema';
 import { createHarness, signUp, WEB, type Harness, type NexconnCall } from './harness';
 
@@ -334,7 +334,7 @@ describe('router safety and idempotency', () => {
     await h.settle();
     const t = sends(since(n), 'RC:TxtMsg')[0]!;
     expect(t.body.fromUserId).toBe('agentforge');
-    expect(JSON.parse(String(t.body.content)).content).toMatch(/I build once a plan is approved/);
+    expect(JSON.parse(String(t.body.content)).content).toMatch(/I start building once a plan is approved/);
   });
 });
 
@@ -378,6 +378,43 @@ describe('failures', () => {
       const rows = await r.db.select().from(ledger).where(eq(ledger.action, 'plan.refused'));
       expect(rows[0]).toMatchObject({ actorId: 'agent-pixel', tokensIn: 50, reason: 'refusal: general_harms' });
       expect(r.calls.slice(n).some(c => c.body.messageType === CARD_MESSAGE_TYPES.plan)).toBe(false);
+    } finally {
+      await r.close();
+    }
+  });
+
+  it('a busy AI model re-queues the pitch twice with an honest notice, then gives up politely', async () => {
+    let calls = 0;
+    const busy: AiClient = {
+      model: 'test',
+      structured: () => {
+        calls++;
+        const ch = channel<string>();
+        ch.end();
+        const done = Promise.reject(new AiUnavailableError('503 UNAVAILABLE: This model is experiencing high demand'));
+        done.catch(() => {});
+        return { fieldChunks: ch.iterable, done };
+      },
+      streamText: () => {
+        throw new Error('unused');
+      },
+    };
+    const r = await createHarness({ agents: true, ai: busy });
+    try {
+      const a = await signUp(r, 'Asha', '10.2.0.9');
+      const crew = (await r.app.inject({ method: 'POST', url: '/api/crews', headers: { cookie: a.cookie, origin: WEB }, payload: { name: 'Solo' } })).json()
+        .crew;
+      const n = r.calls.length;
+      await r.webhook('message:send', [{ ...textEvent(a.id, crew.groupChannelId, 'a mango hopping over trains'), time: r.now.t }]);
+      await r.settle();
+      const texts = r.calls
+        .slice(n)
+        .filter(c => c.path === '/v4/group-channel/message/send' && c.body.messageType === 'RC:TxtMsg')
+        .map(c => JSON.parse(String(c.body.content)).content as string);
+      expect(calls).toBe(3);
+      expect(texts.filter(t => t.includes('queued your request'))).toEqual([expect.stringContaining('retry 1/2'), expect.stringContaining('retry 2/2')]);
+      expect(texts.at(-1)).toBe('Oops, something jammed on my side. Try again in a minute?');
+      expect(await r.db.select().from(ledger).where(eq(ledger.action, 'plan.failed'))).toHaveLength(1);
     } finally {
       await r.close();
     }

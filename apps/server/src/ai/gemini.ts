@@ -5,6 +5,7 @@
 // as it is generated. Safety blocks become AiRefusalError (the friendly "I can't make that one").
 // Free-tier calls are logged with real token counts and $0 cost. SDK names checked in
 // node_modules/@google/genai (3.3.0): GoogleGenAI, models.generateContentStream, usageMetadata.
+import { reportBusy } from './busy';
 import { GoogleGenAI, type GenerateContentResponse } from '@google/genai';
 import {
   AiNotConfiguredError,
@@ -88,9 +89,11 @@ export function createGeminiClient(o: GeminiOptions): AiClient {
           if (n >= tries) {
             if (m + 1 >= models.length) throw e;
             o.log?.debug({ purpose: call.purpose, from: model, to: models[m + 1] }, 'gemini: model stays busy, falling back');
+            reportBusy(call.purpose, { retry: n, of: tries - 1, model, next: models[m + 1]! });
             break;
           }
           o.log?.debug({ purpose: call.purpose, model, attempt: n }, 'gemini: model busy, retrying');
+          reportBusy(call.purpose, { retry: n, of: tries - 1, model });
           await sleep(delay(n));
         }
       }

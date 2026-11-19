@@ -16,7 +16,7 @@ import { gameHtmlKey } from '../storage';
 import { BuildCheckFailedError, runBuildLoop, type BuildPhase } from './forge';
 import { SAFETY_RULES } from './prompts';
 import type { AgentJobData, BuildJobData } from './queue';
-import { BudgetExceededError, chargeUsage, checkBudget, requireAi, requireBuildAi, type AgentServices } from './runtime-deps';
+import { BudgetExceededError, chargeUsage, checkBudget, isBusyFailure, requireAi, requireBuildAi, type AgentServices } from './runtime-deps';
 
 type AgentCtx = Ctx & { agents: AgentServices };
 
@@ -107,6 +107,8 @@ const FAIL_TEXT = {
     `I couldn't get v${v} past the checks after ${n} tries. The problems are on the build card; tap **Try again** and I'll take another run at it.`,
   refusal: (v: number) => `I can't build v${v} from that request. Try a different change?`,
   budget: "We've used today's AI budget, so builds pause until tomorrow (or ask the crew owner).",
+  busy: (v: number) =>
+    `The AI model stayed busy through every retry while building v${v} (free tier, peak time) ⏳ Tap **Try again** on the build card in a minute.`,
   other: (v: number) => `Something went wrong while building v${v}. Tap **Try again** on the build card.`,
 };
 
@@ -325,7 +327,9 @@ async function failBuild(
       ? FAIL_TEXT.refusal(job.version)
       : e instanceof BudgetExceededError
         ? FAIL_TEXT.budget
-        : FAIL_TEXT.other(job.version);
+        : isBusyFailure(e)
+          ? FAIL_TEXT.busy(job.version)
+          : FAIL_TEXT.other(job.version);
   ctx.log[checkFailed || e instanceof AiRefusalError ? 'warn' : 'error']({ err: e, job }, 'build failed');
   const prev = o.stateRef();
   const state: BuildCardState = {

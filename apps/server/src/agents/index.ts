@@ -4,6 +4,7 @@ import type { AiClient } from '../ai/claude';
 import { createClaudeClient } from '../ai/claude';
 import { createFakeAiClient } from '../ai/fake';
 import { createGeminiClient } from '../ai/gemini';
+import { agentOfPurpose, busyDetail, withBusyNotify, type AiBusy } from '../ai/busy';
 import type { Config } from '../config';
 import type { Ctx } from '../context';
 import type { NexconnClient } from '../nexconn/client';
@@ -105,8 +106,11 @@ export function createQueue(
 export async function startAgentWorker(ctx: Ctx): Promise<void> {
   const agents = ctx.agents;
   if (!agents) return;
-  await agents.queue.start(job => handleAgentJob({ ...ctx, agents }, job));
-  await agents.queue.startBuilds(job => runBuildJob({ ...ctx, agents }, job));
+  // Busy AI retries inside a job show up as the agent's live state instead of silence.
+  const busy = (channelId: string, fallback: 'pixel' | 'forge' | 'glitch') => (purpose: string, b: AiBusy) =>
+    void agents.states.note(channelId, agentOfPurpose(purpose) ?? fallback, busyDetail(b));
+  await agents.queue.start(job => withBusyNotify(busy(job.channelId, job.agent), () => handleAgentJob({ ...ctx, agents }, job)));
+  await agents.queue.startBuilds(job => withBusyNotify(busy(job.channelId, 'forge'), () => runBuildJob({ ...ctx, agents }, job)));
   // Always consumed: without a playtester (PLAYTESTS=false) Glitch says testing is off instead of jobs waiting forever.
-  await agents.queue.startPlaytests(job => runGlitchJob({ ...ctx, agents }, job));
+  await agents.queue.startPlaytests(job => withBusyNotify(busy(job.channelId, 'glitch'), () => runGlitchJob({ ...ctx, agents }, job)));
 }

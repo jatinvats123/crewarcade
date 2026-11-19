@@ -10,7 +10,8 @@ import { limitLines } from '../src/agents/pixel';
 import { addMemory, baseSlug, detectLanguage, normalizePlan, pickSlug, PlanShapeError, PixelPlanOutput } from '../src/agents/plan';
 import { createMemoryQueue, jobUuid, type AgentJobData } from '../src/agents/queue';
 import { createAgentStates } from '../src/agents/states';
-import { AiOutputError, AiRefusalError, costUsd, createClaudeClient, outputJsonSchema, supportsServerFallback } from '../src/ai/claude';
+import { isBusyFailure } from '../src/agents/runtime-deps';
+import { AiOutputError, AiRefusalError, AiUnavailableError, costUsd, createClaudeClient, outputJsonSchema, supportsServerFallback } from '../src/ai/claude';
 import { createFakeAiClient, fakePlanOutput, fakeTitle } from '../src/ai/fake';
 import { streamJsonStringField } from '../src/ai/json-stream';
 import { NexconnClient, type FetchLike } from '../src/nexconn';
@@ -281,6 +282,31 @@ describe('plan normalization', () => {
   });
 });
 
+describe('busy AI re-queue', () => {
+  it('only a busy model counts as worth re-queueing', () => {
+    expect(isBusyFailure(new AiUnavailableError('503 UNAVAILABLE: high demand'))).toBe(true);
+    expect(isBusyFailure(new AiUnavailableError('429 RESOURCE_EXHAUSTED'))).toBe(true);
+    expect(isBusyFailure(new AiUnavailableError('timeout after 120000 ms'))).toBe(false);
+    expect(isBusyFailure(new AiRefusalError('general_harms'))).toBe(false);
+    expect(isBusyFailure(new Error('503'))).toBe(false);
+  });
+
+  it('a delayed job waits, and the queue is not idle until it has run', async () => {
+    let wait = 0;
+    const q = createMemoryQueue({ concurrency: 2, delayMs: s => (wait = s) && 20 });
+    const ran: string[] = [];
+    await q.start(async j => void ran.push(j.key));
+    await q.enqueueAgent(
+      { key: 'later', crewId: 'c', channelId: 'r', messageId: null, fromUserId: 'u', agent: 'pixel', intent: 'plan', text: 'x' },
+      { delaySec: 45 },
+    );
+    expect(wait).toBe(45);
+    expect(ran).toEqual([]);
+    await q.idle();
+    expect(ran).toEqual(['later']);
+  });
+});
+
 describe('agent states', () => {
   it('sends each change, beats every 5 s while busy, stops when idle or waiting', async () => {
     const sent: Array<{ state: string; startedAt: number }> = [];
@@ -309,6 +335,17 @@ describe('agent states', () => {
     expect(states.snapshot('r1')).toEqual([expect.objectContaining({ agentId: 'pixel', state: 'waiting_approval', detail: 'Chai Dash' })]);
     await states.set('r1', 'pixel', 'idle');
     expect(states.snapshot('r1')).toEqual([]);
+  });
+
+  it('note() re-sends the busy state with a new detail, keeping its clock and progress; no-op when idle', async () => {
+    const sent: Array<{ state: string; detail: string; startedAt: number; progress?: unknown }> = [];
+    const states = createAgentStates({ send: async (_c, s) => void sent.push(s), now: () => 500, setInterval: () => 1, clearInterval: () => {} });
+    await states.note('r1', 'forge', 'AI model busy, retrying (1/3)…');
+    expect(sent).toHaveLength(0);
+    await states.set('r1', 'forge', 'building', { detail: 'v1', progress: { done: 2, total: 5 } });
+    await states.note('r1', 'forge', 'AI model busy, retrying (1/3)…');
+    expect(sent.at(-1)).toMatchObject({ state: 'building', detail: 'AI model busy, retrying (1/3)…', startedAt: 500, progress: { done: 2, total: 5 } });
+    expect(states.snapshot('r1')[0]!.detail).toBe('AI model busy, retrying (1/3)…');
   });
 });
 

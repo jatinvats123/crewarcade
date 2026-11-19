@@ -26,6 +26,8 @@ export interface AgentStates {
   ): Promise<void>;
   /** Tells clients the messageId of a stream reply being written (kept until the next set()). */
   announceStream(channelId: string, agent: AgentKey, streamId: string): Promise<void>;
+  /** Re-sends an agent's current busy state with a new detail (e.g. "AI model busy, retrying"); no-op when idle. */
+  note(channelId: string, agent: AgentKey, detail: string): Promise<void>;
   /** Current non-idle states of a room. */
   snapshot(channelId: string): AgentStateMessage[];
   stopAll(): void;
@@ -68,6 +70,14 @@ export function createAgentStates(d: AgentStatesDeps): AgentStates {
             if (s) void safeSend(channelId, s);
           }, d.heartbeatMs ?? HEARTBEAT_MS),
         );
+      await safeSend(channelId, msg);
+    },
+    async note(channelId, agent, detail) {
+      const k = key(channelId, agent);
+      const prev = current.get(k);
+      if (!prev) return;
+      const msg = AgentStateMessage.parse({ ...prev, detail: detail.slice(0, 120) });
+      current.set(k, msg);
       await safeSend(channelId, msg);
     },
     async announceStream(channelId, agent, streamId) {

@@ -131,7 +131,7 @@ export async function createHarness(
   const tasks: Promise<void>[] = [];
   const ctxRef: { current: Ctx | null } = { current: null };
   const silent = { info: () => {}, warn: () => {}, error: () => {} };
-  const queue = createMemoryQueue({ concurrency: 4, log: silent });
+  const queue = createMemoryQueue({ concurrency: 4, log: silent, delayMs: () => 0 });
   const agents = opts.agents
     ? (createAgentServices({
         config,

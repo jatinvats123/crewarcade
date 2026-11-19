@@ -1,7 +1,8 @@
 // What the agent runtime needs besides the request context: the AI client (real or fake), the job
 // queue and the live agent states. Kept apart from runtime.ts so agents and services can share it
 // without import cycles.
-import { AiNotConfiguredError, type AiClient, type AiUsage } from '../ai/claude';
+import { AiNotConfiguredError, AiUnavailableError, type AiClient, type AiUsage } from '../ai/claude';
+import { isBusyError } from '../ai/gemini';
 import type { Ctx } from '../context';
 import { addUsageCost, dayOf, totalCostOn } from '../repo/games';
 import type { JobQueue } from './queue';
@@ -50,4 +51,9 @@ export async function checkBudget(ctx: Pick<Ctx, 'db' | 'config' | 'now'>): Prom
 export async function chargeUsage(ctx: Pick<Ctx, 'db' | 'now' | 'log'>, userId: string, usage: AiUsage): Promise<void> {
   if (usage.costUsd <= 0) return;
   await addUsageCost(ctx.db, dayOf(ctx.now()), userId, usage.costUsd).catch(err => ctx.log.warn({ err }, 'usage write failed'));
+}
+
+/** An AI failure worth queueing again: the model stayed busy (503/429/overloaded), not a refusal or a bug. */
+export function isBusyFailure(e: unknown): boolean {
+  return e instanceof AiUnavailableError && isBusyError(e.message);
 }

@@ -16,9 +16,9 @@ import { hasBuild, runBuildChange } from './forge-runtime';
 import { runExplain, runPlan, runRemix, runRevise } from './pixel';
 import { detectLanguage } from './plan';
 import { CANNED } from './prompts';
-import type { AgentJobData } from './queue';
+import { BUSY_REQUEUE_DELAY_S, BUSY_REQUEUES, type AgentJobData } from './queue';
 import { routeMessage } from './router';
-import { BudgetExceededError, checkBudget, type AgentServices } from './runtime-deps';
+import { BudgetExceededError, checkBudget, isBusyFailure, type AgentServices } from './runtime-deps';
 
 export type { AgentServices } from './runtime-deps';
 
@@ -235,6 +235,20 @@ export async function handleAgentJob(ctx: AgentCtx, input: AgentJobData): Promis
     else if (job.intent === 'remix') await runRemix(ctx, job, room);
     else if (job.intent === 'explain') await runExplain(ctx, job, room);
   } catch (e) {
+    // The AI model stayed busy through the client's retries and fallback: queue the job again
+    // (twice at most) and say so honestly instead of failing.
+    if (isBusyFailure(e) && (job.busyRetry ?? 0) < BUSY_REQUEUES) {
+      const n = (job.busyRetry ?? 0) + 1;
+      const queued = await ctx.agents.queue
+        .enqueueAgent({ ...job, key: `${input.key}:busy${n}`, busyRetry: n }, { delaySec: BUSY_REQUEUE_DELAY_S })
+        .catch(() => false);
+      if (queued) {
+        ctx.log.warn({ key: job.key, retry: n }, 'agent: AI busy, job re-queued');
+        await postText(ctx, job.channelId, job.agent, CANNED.busyQueued(n, BUSY_REQUEUES)).catch(() => {});
+        await ctx.agents.states.set(job.channelId, job.agent, 'idle');
+        return;
+      }
+    }
     const usage = (e as { usage?: AiUsage }).usage;
     const refused = e instanceof AiRefusalError;
     const text = refused ? CANNED.refusal : e instanceof BudgetExceededError ? CANNED.budget : CANNED.failed;

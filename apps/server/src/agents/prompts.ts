@@ -124,6 +124,8 @@ export const CANNED = {
   glitchBug: "Bugs go in the game's own room (or tap **Report a bug** in the player), so I can replay that game. See you there!",
   refusal: "I can't make that one 🙈 Try a different idea?",
   failed: 'Oops, something jammed on my side. Try again in a minute?',
+  busyQueued: (n: number, of: number) =>
+    `The AI model is very busy right now (free tier) ⏳ I've queued your request and will try again in about a minute (retry ${n}/${of}).`,
   budget: "We've used up today's AI budget 😅 The agents are back tomorrow.",
   noPlanToChange: "There's no open plan to change yet. Pitch one with @pixel first!",
   noPlanToExplain: "I don't have a plan for this room yet. Pitch one with @pixel and ask me again!",
