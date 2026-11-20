@@ -56,10 +56,18 @@ type FetchFn = (
   text(): Promise<string>;
 }>;
 
+/**
+ * Legacy service_role keys are JWTs: sent as Bearer and apikey. New secret keys (`sb_secret_…`) are
+ * not JWTs and go in `apikey` only (Supabase's gateway turns them into a service-role JWT).
+ */
+export function supabaseAuthHeaders(serviceKey: string): Record<string, string> {
+  return serviceKey.startsWith('sb_') ? { apikey: serviceKey } : { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey };
+}
+
 export function createSupabaseStorage(o: { url: string; serviceKey: string; bucket: string; public?: boolean; fetch?: FetchFn }): ObjectStorage {
   const base = `${o.url.replace(/\/+$/, '')}/storage/v1`;
   const doFetch: FetchFn = o.fetch ?? ((u, i) => fetch(u, i as RequestInit));
-  const auth = { Authorization: `Bearer ${o.serviceKey}`, apikey: o.serviceKey };
+  const auth = supabaseAuthHeaders(o.serviceKey);
   return {
     kind: 'supabase',
     bucket: o.bucket,

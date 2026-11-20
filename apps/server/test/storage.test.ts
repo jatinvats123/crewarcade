@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { assertKey, createGameStorage, createLocalStorage, createSupabaseStorage, gameHtmlKey, StorageError } from '../src/storage';
+import { assertKey, createGameStorage, createLocalStorage, createSupabaseStorage, gameHtmlKey, StorageError, supabaseAuthHeaders } from '../src/storage';
 
 describe('game storage', () => {
   const dirs: string[] = [];
@@ -32,6 +32,11 @@ describe('game storage', () => {
     expect(createGameStorage({ ...base, NODE_ENV: 'production', SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'svc' }).kind).toBe(
       'supabase',
     );
+  });
+
+  it('sends new sb_secret_ keys in apikey only, legacy JWT keys as Bearer too', () => {
+    expect(supabaseAuthHeaders('sb_secret_abc')).toEqual({ apikey: 'sb_secret_abc' });
+    expect(supabaseAuthHeaders('eyJhbGciOi.x.y')).toEqual({ Authorization: 'Bearer eyJhbGciOi.x.y', apikey: 'eyJhbGciOi.x.y' });
   });
 
   it('talks to the Supabase Storage REST API with the service key (upsert, authenticated read, private bucket)', async () => {
