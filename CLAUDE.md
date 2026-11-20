@@ -4,7 +4,8 @@ CrewArcade: **your friends + 3 AI agents, one chat, a new game in minutes.** A c
 group chat where Pixel (Designer), Forge (Builder) and Glitch (Playtester) are real members: they turn
 pitches into a plan, build the game as one HTML file, and playtest it headlessly with a GIF. Humans
 pitch, vote, approve, play, report bugs and publish; nothing goes public until an approver taps Allow.
-Built for the Nexconn Build Challenge 2026 (deadline 2026-11-22 23:59 AoE) on the Nexconn Chat SDK.
+Built for the Nexconn Build Challenge 2026 (Oct 23 – Nov 22; deadline **2026-11-22 23:59 IST**; judging
+Nov 23–27; results Dec 1) on the Nexconn Chat SDK. Submit: app link, public repo, demo video, write-up.
 
 **Read first, every phase:** `docs/SPEC.md` (product), `docs/STATUS.md` (where we are),
 `docs/NEXCONN.md` (chat integration), `docs/ENGINE.md` (game contract), `docs/DESIGN.md` (UI).
