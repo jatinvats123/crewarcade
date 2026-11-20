@@ -28,6 +28,10 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   for now (works on any plan). Supabase: new DB password + new `sb_secret_` key in Render (storage
   sends it as `apikey` only). Vercel production branch = `main`; Vercel skips commits that don't touch
   `apps/web`, so a server-only push to `main` needs a manual production deploy. GitHub default = `main`.
+- **Live loop verified (2026-11-20, owner on the live app):** pitch → Pixel plan (4:01 PM) → Approve
+  → game room → Forge build → Glitch headless playtest PASS with clip (v2 after a fix) → Publish card
+  (4:07 PM) → Allow → published, listed in `/arcade`. About 6 minutes end to end on Gemini's free tier.
+  Story panel: 17 steps, 23,524 tokens. Still to check live: shield (second account), bug repro → hotfix.
 - **P0.2 AI busy, honestly:** Gemini's busy retries report to the running job (`ai/busy.ts`, AsyncLocalStorage),
   and the agent's live state reads "AI model busy, retrying (2/3)…" / "switching to …". An agent job whose
   model stays busy is re-queued twice (45 s) with a chat notice, and a busy build says so. No paid key yet.
