@@ -22,6 +22,12 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   `PLAYTESTS`/`FORGE_SMOKE` `true`, no `MIGRATE_ON_START`. The service was created by hand, so the owner
   switches the instance type, branch, pre-deploy command and env in the dashboard (steps in the Phase 7 report).
   Live loop to verify once it's switched.
+- **Live on Render Standard (2026-11-20):** card added, compute 1 CPU / 2 GB, branch `main`,
+  `PLAYTESTS`/`FORGE_SMOKE` `true`, pool 8, agent concurrency 3; `/health` → `1d14fdc`, `db: up`.
+  Pre-deploy command was still locked right after the plan change, so `MIGRATE_ON_START=true` stays
+  for now (works on any plan). Supabase: new DB password + new `sb_secret_` key in Render (storage
+  sends it as `apikey` only). Vercel production branch = `main`; Vercel skips commits that don't touch
+  `apps/web`, so a server-only push to `main` needs a manual production deploy. GitHub default = `main`.
 - **P0.2 AI busy, honestly:** Gemini's busy retries report to the running job (`ai/busy.ts`, AsyncLocalStorage),
   and the agent's live state reads "AI model busy, retrying (2/3)…" / "switching to …". An agent job whose
   model stays busy is re-queued twice (45 s) with a chat notice, and a busy build says so. No paid key yet.
