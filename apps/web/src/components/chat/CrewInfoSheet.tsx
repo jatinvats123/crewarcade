@@ -8,6 +8,7 @@ import { AiBadge, Button, RoleBadge, Sheet, useToast } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useCrews } from '@/lib/crews';
 import { inviteUrl, shareInvite } from '@/lib/share';
+import { recordTourFacts } from '@/lib/tour/store';
 
 export function CrewInfoSheet({
   open,
@@ -38,6 +39,7 @@ export function CrewInfoSheet({
     setBusy(m.id);
     try {
       const updated = await api.setRole(crew.id, m.id, role);
+      if (role === 'approver') recordTourFacts('approver');
       upsert({ ...crew, members: crew.members.map(x => (x.id === m.id ? updated : x)) });
       toast(role === 'approver' ? `${m.displayName} can now approve` : `${m.displayName} is a member again`, 'success');
     } catch (e) {

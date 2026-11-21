@@ -8,6 +8,7 @@ import { agentKeyOf } from '@/components/identity/MemberAvatar';
 import { Avatar, Button, ErrorState, Skeleton } from '@/components/ui';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { recordTourFacts } from '@/lib/tour/store';
 
 const LABELS: Record<string, string> = {
   'plan.created': 'Planned the game',
@@ -48,6 +49,7 @@ export function StoryTimeline({ gameId, refreshKey = 0 }: { gameId: string; refr
   }, [load, refreshKey]);
 
   const exportJson = () => {
+    recordTourFacts('story-export');
     if (!data) return;
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -74,7 +76,7 @@ export function StoryTimeline({ gameId, refreshKey = 0 }: { gameId: string; refr
           {data.entries.length} steps · {(data.totals.tokensIn + data.totals.tokensOut).toLocaleString()} tokens · ${data.totals.costUsd.toFixed(4)} · agents{' '}
           {Math.round(data.totals.agentMs / 1000)} s
         </span>
-        <Button size="sm" variant="secondary" onClick={exportJson}>
+        <Button size="sm" variant="secondary" onClick={exportJson} data-tour="story-export">
           ⬇ Export JSON
         </Button>
       </div>

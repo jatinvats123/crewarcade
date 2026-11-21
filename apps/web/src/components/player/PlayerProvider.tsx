@@ -10,6 +10,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Button, IconButton, useToast } from '@/components/ui';
 import { api, ApiRequestError } from '@/lib/api';
 import { acceptHostMessage, GAME_ALLOW, GAME_SANDBOX } from '@/lib/player-messages';
+import { recordTourFacts } from '@/lib/tour/store';
 import { BugReportPanel } from './BugReport';
 
 export interface PlayRequest {
@@ -133,6 +134,9 @@ export function GamePlayer({
     };
   }, [request.gameId, request.version, attempt]);
 
+  // Judge tour: a game was opened.
+  useEffect(() => recordTourFacts(`play:${request.gameId}`), [request.gameId]);
+
   const reportingRef = useRef(false);
   reportingRef.current = reporting;
   // Lock page scroll while playing; Escape (when focus is outside the game) closes.
@@ -165,6 +169,7 @@ export function GamePlayer({
           setLast(r);
           if (r.accepted) {
             onScore(link.gameId);
+            recordTourFacts(`score:${link.gameId}`);
             if (r.newBest) toast(r.rank === 1 ? `🏆 New best: ${msg.score}. You're #1!` : `New best: ${msg.score} (#${r.rank})`, 'success');
           } else if (r.reason) toast(r.reason, 'info');
         })
@@ -192,7 +197,14 @@ export function GamePlayer({
           {link && <span className="ml-2 text-sm font-normal text-white/60">v{link.version}</span>}
         </p>
         {reportBugs && signedIn && link && (
-          <Button size="sm" variant="ghost" className="text-white hover:bg-white/10" onClick={() => setReporting(true)} data-testid="report-bug">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-white hover:bg-white/10"
+            onClick={() => setReporting(true)}
+            data-testid="report-bug"
+            data-tour="report-bug"
+          >
             🐞 Report a bug
           </Button>
         )}

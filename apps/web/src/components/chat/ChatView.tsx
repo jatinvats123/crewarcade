@@ -22,6 +22,8 @@ import { useNexconn } from '@/lib/nexconn/NexconnProvider';
 import { activeRoomStore, roomActivitySignature, roomHref } from '@/lib/room';
 import { useSession } from '@/lib/session';
 import { inviteUrl, shareInvite } from '@/lib/share';
+import { JUDGE_PITCHES } from '@/lib/tour/steps';
+import { recordTourFacts, setTourContext } from '@/lib/tour/store';
 import { ChatComposer } from './ChatComposer';
 import { CrewWelcome } from './CrewWelcome';
 import { CrewInfoSheet } from './CrewInfoSheet';
@@ -81,6 +83,18 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
     activeRoomStore.dispatch({ type: 'set', room: { crewId, channelId, game } });
   }, [crewId, channelId, game]);
   useEffect(() => () => activeRoomStore.dispatch({ type: 'set', room: null }), []);
+
+  // Judge tour: remember the crew chat and the latest game room, so Show me and Next can take the
+  // judge there from anywhere. (No-ops unless a judge's tour is on.)
+  useEffect(() => {
+    if (!crewChannelId) return;
+    if (roomChannelId) setTourContext({ roomPath: roomHref(crewId, roomChannelId, crewChannelId) });
+    else setTourContext({ crewPath: `/crews/${crewId}` });
+  }, [crewId, crewChannelId, roomChannelId]);
+  const approvedRoom = channel?.messages.findLast(m => m.card?.kind === 'plan' && m.meta?.roomChannelId)?.meta?.roomChannelId;
+  useEffect(() => {
+    if (approvedRoom && crewChannelId) setTourContext({ roomPath: roomHref(crewId, approvedRoom, crewChannelId) });
+  }, [approvedRoom, crewId, crewChannelId]);
 
   // Agents already working when the room opens: the server's snapshot (heartbeats keep it fresh).
   useEffect(() => {
@@ -265,18 +279,36 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
             icon={<span aria-hidden>▶</span>}
             onClick={() => player.open({ gameId: game.id, version: 'latest', title: game.title })}
             data-testid="room-play"
+            data-tour="room-play"
           />
         )}
         {game && (
           <span className="flex lg:hidden">
-            <IconButton label="Leaderboard" icon={<span aria-hidden>🏆</span>} onClick={() => setBoardOpen(true)} />
-            <IconButton label="Story: how this game was made" icon={<span aria-hidden>📜</span>} onClick={() => setStoryOpen(true)} />
+            <IconButton
+              label="Leaderboard"
+              icon={<span aria-hidden>🏆</span>}
+              onClick={() => {
+                setBoardOpen(true);
+                recordTourFacts('leaderboard');
+              }}
+              data-tour="leaderboard"
+            />
+            <IconButton
+              label="Story: how this game was made"
+              icon={<span aria-hidden>📜</span>}
+              onClick={() => {
+                setStoryOpen(true);
+                recordTourFacts('story');
+              }}
+              data-tour="story"
+            />
           </span>
         )}
         <button
           type="button"
           onClick={() => void share()}
           disabled={!detail}
+          data-tour="invite"
           className="hidden min-h-10 items-center rounded-full border border-text/25 px-4 text-sm font-semibold hover:border-brand hover:text-brand disabled:opacity-50 sm:inline-flex"
         >
           Invite friends
@@ -284,7 +316,7 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
         {/* In a game room on a phone, Invite lives in Crew info (ⓘ) to give the title room. */}
         {!game && (
           <span className="sm:hidden">
-            <IconButton label="Invite friends" icon={<span aria-hidden>📤</span>} onClick={() => void share()} disabled={!detail} />
+            <IconButton label="Invite friends" icon={<span aria-hidden>📤</span>} onClick={() => void share()} disabled={!detail} data-tour="invite" />
           </span>
         )}
         <IconButton label="Crew info" icon={<span aria-hidden>ⓘ</span>} onClick={() => setInfoOpen(true)} disabled={!detail} />
@@ -335,7 +367,10 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
                     inviteUrl={inviteUrl(window.location.origin, detail.inviteCode)}
                     onCopy={() =>
                       void navigator.clipboard.writeText(inviteUrl(window.location.origin, detail.inviteCode)).then(
-                        () => toast('Invite link copied', 'success'),
+                        () => {
+                          recordTourFacts('invite');
+                          toast('Invite link copied', 'success');
+                        },
                         () => toast("Couldn't copy the link", 'danger'),
                       )
                     }
@@ -361,7 +396,7 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
           targets={targets}
           disabled={!connected}
           onTyping={() => nx.sendTyping(channelId)}
-          suggestion={channelId === crewChannelId && detail && detail.games.length === 0 ? SAMPLE_PITCH : null}
+          suggestions={channelId !== crewChannelId || !detail ? [] : user?.isJudge ? JUDGE_PITCHES : detail.games.length === 0 ? [SAMPLE_PITCH] : []}
           key={`composer-${prefill?.n ?? 0}`}
           {...(prefill
             ? { initialText: prefill.text }
@@ -376,6 +411,7 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
           }}
           onSendVoice={(file, d, mentions) => {
             nx.sendVoice(channelId, file, d, mentions);
+            recordTourFacts('voice');
             setScrollSignal(s => s + 1);
           }}
         />

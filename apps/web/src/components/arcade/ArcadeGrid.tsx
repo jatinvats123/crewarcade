@@ -80,6 +80,7 @@ function Card({ game, index, rank }: { game: ArcadeGame; index: number; rank: nu
     >
       <Link
         href={`/g/${game.slug}`}
+        data-tour="arcade-game"
         className={cn(
           'group flex h-full flex-col gap-5 transition-transform duration-300 ease-out hover:-translate-y-1.5',
           featured && 'lg:grid lg:grid-cols-[1.35fr_1fr] lg:items-center lg:gap-10',

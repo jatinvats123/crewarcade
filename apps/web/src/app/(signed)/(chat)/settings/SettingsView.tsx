@@ -82,7 +82,7 @@ export function SettingsView() {
               </Link>
               . Deleting your account removes your profile, scores and chat logs. Crews you own pass to another member.
             </p>
-            <Button variant="danger" onClick={() => setDeleting(true)} data-testid="delete-account">
+            <Button variant="danger" onClick={() => setDeleting(true)} data-testid="delete-account" data-tour="delete-account">
               Delete my account
             </Button>
           </section>

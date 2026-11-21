@@ -11,6 +11,7 @@ import { formatDuration } from '@/lib/chat/normalize';
 import { insertMention, mentionCandidates, mentionQuery, resolveMentions, type MentionTarget } from '@/lib/chat/text';
 import { cn } from '@/lib/cn';
 import { compressImage, MAX_VOICE_S, startRecording } from '@/lib/media';
+import { subscribeComposerFill, takeComposerFill } from '@/lib/tour/store';
 
 export interface ComposerProps {
   targets: MentionTarget[];
@@ -20,8 +21,8 @@ export interface ComposerProps {
   /** mentionUserIds: agents tagged before recording ("@pixel " then hold the mic) get the voice pitch. */
   onSendVoice: (file: File, durationS: number, mentionUserIds: string[]) => void;
   onTyping: () => void;
-  /** A starter pitch shown as a chip while the box is empty (first game in a crew). */
-  suggestion?: { label: string; text: string } | null;
+  /** Starter pitches shown as chips while the box is empty (first game in a crew; judges always). */
+  suggestions?: ReadonlyArray<{ label: string; text: string }>;
   /** Text already typed in the box when it opens (a pitch tapped on the launch pad). */
   initialText?: string;
 }
@@ -37,7 +38,7 @@ const QUICK = [
 type Recorder = Awaited<ReturnType<typeof startRecording>>;
 type VoiceMode = 'idle' | 'starting' | 'holding' | 'locked';
 
-export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSendVoice, onTyping, suggestion, initialText }: ComposerProps) {
+export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSendVoice, onTyping, suggestions = [], initialText }: ComposerProps) {
   const toast = useToast();
   const [text, setText] = useState(initialText ?? '');
   const [query, setQuery] = useState<{ query: string; start: number } | null>(null);
@@ -58,6 +59,18 @@ export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSen
 
   useEffect(() => {
     finePointer.current = matchMedia('(pointer: fine)').matches;
+  }, []);
+
+  // Judge tour "Show me": types a test message in the box (the judge still taps Send).
+  useEffect(() => {
+    const apply = () => {
+      const t = takeComposerFill();
+      if (t === null) return;
+      setText(t);
+      requestAnimationFrame(() => area.current?.focus());
+    };
+    apply();
+    return subscribeComposerFill(apply);
   }, []);
 
   const candidates = query ? mentionCandidates(query.query, targets) : [];
@@ -224,24 +237,27 @@ export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSen
 
   return (
     <div className="pb-safe relative border-t border-border bg-bg/90 px-2 pt-2 backdrop-blur">
-      {suggestion && !text && !disabled && voice === 'idle' && (
-        <div className="mb-2 flex flex-wrap gap-1.5 px-1">
-          <button
-            type="button"
-            data-testid="pitch-suggestion"
-            onClick={() => {
-              setText(suggestion.text);
-              requestAnimationFrame(() => {
-                area.current?.focus();
-                area.current?.setSelectionRange(suggestion.text.length, suggestion.text.length);
-              });
-            }}
-            className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-full border border-pixel/40 bg-pixel/10 px-4 text-left text-sm font-semibold hover:bg-pixel/20"
-          >
-            <span aria-hidden>💡</span>
-            <span className="min-w-0 truncate">{suggestion.label}</span>
-          </button>
-          {QUICK.slice(0, 3).map(q => (
+      {suggestions.length > 0 && !text && !disabled && voice === 'idle' && (
+        <div className="mb-2 flex flex-wrap gap-1.5 px-1" aria-label="Pitch ideas" data-tour="pitch-chips">
+          {suggestions.map(s => (
+            <button
+              key={s.text}
+              type="button"
+              data-testid="pitch-suggestion"
+              onClick={() => {
+                setText(s.text);
+                requestAnimationFrame(() => {
+                  area.current?.focus();
+                  area.current?.setSelectionRange(s.text.length, s.text.length);
+                });
+              }}
+              className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-full border border-pixel/40 bg-pixel/10 px-4 text-left text-sm font-semibold hover:bg-pixel/20"
+            >
+              <span aria-hidden>💡</span>
+              <span className="min-w-0 truncate">{s.label}</span>
+            </button>
+          ))}
+          {QUICK.slice(0, suggestions.length > 1 ? 0 : 3).map(q => (
             <button
               key={q.label}
               type="button"
@@ -256,7 +272,7 @@ export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSen
           ))}
         </div>
       )}
-      {!suggestion && !text && !disabled && voice === 'idle' && (
+      {suggestions.length === 0 && !text && !disabled && voice === 'idle' && (
         <div className="mb-2 flex flex-wrap gap-1.5 px-1" aria-label="Quick starts">
           {QUICK.map(q => (
             <button
@@ -366,6 +382,7 @@ export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSen
             <textarea
               ref={area}
               id={ids.text}
+              data-tour="composer"
               rows={1}
               value={text}
               maxLength={LIMITS.chatTextChars}
@@ -392,12 +409,13 @@ export function ChatComposer({ targets, disabled, onSendText, onSendImage, onSen
             <IconButton label="Send voice note" variant="brand" icon={<span aria-hidden>➤</span>} onClick={() => void finishVoice(true)} />
           </>
         ) : text.trim() && !recording && !onlyMentions ? (
-          <IconButton label="Send" variant="brand" icon={<span aria-hidden>➤</span>} onClick={send} disabled={disabled} />
+          <IconButton label="Send" variant="brand" icon={<span aria-hidden>➤</span>} onClick={send} disabled={disabled} data-tour="composer-send" />
         ) : (
           <button
             type="button"
             aria-label={recording ? 'Recording: release to send' : 'Record a voice note (hold, or tap to start)'}
             title="Hold to record"
+            data-tour="voice"
             disabled={disabled}
             onPointerDown={micDown}
             onPointerMove={micMove}

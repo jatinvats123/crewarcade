@@ -15,6 +15,7 @@ const NAV = [
   { href: '#how', label: 'How it works' },
   { href: '/arcade', label: 'Arcade' },
   { href: '/impact', label: 'Live numbers' },
+  { href: '/try', label: 'Judge mode' },
 ];
 
 const TAPE = 'PITCH → PLAN → BUILD → PLAYTEST → PUBLISH → ';
@@ -127,6 +128,16 @@ export function GlassHero() {
               Play the Arcade
             </Link>
           </div>
+          {/* Judges: one tap, no sign-up, a guided tour of every feature (/try). */}
+          <Link
+            href="/try"
+            data-testid="judge-cta"
+            className="inline-flex min-h-11 max-w-full items-center justify-center gap-2 rounded-full border border-gold/60 bg-gold/10 px-5 text-sm font-semibold text-gold hover:bg-gold/20"
+          >
+            <span aria-hidden>★</span>
+            <span className="min-w-0 truncate">I&apos;m a judge: guided tour</span>
+            <span aria-hidden>→</span>
+          </Link>
         </div>
 
         <Credit className="absolute bottom-10 left-10 z-20 hidden md:block" />

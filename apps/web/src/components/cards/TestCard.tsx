@@ -44,6 +44,7 @@ export function TestCard({ m, test }: { m: ChatMessage; test: TestCardContent })
   return (
     <CardShell
       agent="glitch"
+      tour="test-card"
       className="w-full"
       title={
         <>
@@ -59,11 +60,11 @@ export function TestCard({ m, test }: { m: ChatMessage; test: TestCardContent })
       }
       actions={
         <>
-          <Button size="sm" onClick={() => env.actions.play(test.gameId, test.version)} data-testid="test-play">
+          <Button size="sm" onClick={() => env.actions.play(test.gameId, test.version)} data-testid="test-play" data-tour="test-play">
             ▶ Play
           </Button>
           {canFix && (
-            <Button variant="ghost" size="sm" loading={busy} onClick={() => void fix()} data-testid="test-fix">
+            <Button variant="ghost" size="sm" loading={busy} onClick={() => void fix()} data-testid="test-fix" data-tour="test-fix">
               {meta.next === 'ask_crew' ? '↻ Try again' : '🛠 Ask for fix'}
             </Button>
           )}

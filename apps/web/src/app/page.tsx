@@ -81,6 +81,12 @@ export default function Landing() {
             >
               Play the Arcade
             </Link>
+            <Link
+              href="/try"
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-brand-ink/40 px-7 text-sm font-bold tracking-[0.12em] uppercase hover:border-brand-ink"
+            >
+              ★ I&apos;m a judge
+            </Link>
           </div>
         </div>
       </section>
@@ -93,6 +99,9 @@ export default function Landing() {
         <span className="flex flex-wrap gap-x-4 md:ml-auto">
           <Link href="/arcade" className="inline-flex min-h-11 items-center font-semibold hover:text-text">
             Arcade
+          </Link>
+          <Link href="/try" className="inline-flex min-h-11 items-center font-semibold hover:text-text">
+            Judge mode
           </Link>
           <Link href="/impact" className="inline-flex min-h-11 items-center font-semibold hover:text-text">
             Live numbers

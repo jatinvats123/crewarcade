@@ -1,6 +1,8 @@
 'use client';
 
 // /start: sign-up is one calm screen (QuickProfileForm). Invite links sign up on /i/<code> instead.
+// Judges see the choice first: one tap into judge mode (/try, guided tour), or the normal sign-up.
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { Logo } from '@/components/brand/Logo';
@@ -29,6 +31,24 @@ export function Onboarding() {
       </header>
 
       <section aria-labelledby="start-title" className="flex flex-1 flex-col items-center justify-center px-2 py-8 text-center">
+        {!fromInvite && (
+          <div
+            className="mb-10 flex w-full max-w-md flex-col items-center gap-3 rounded-[22px] border border-gold/50 bg-gold/10 p-5 sm:flex-row sm:text-left"
+            data-testid="judge-choice"
+          >
+            <p className="min-w-0 flex-1 text-sm">
+              <span className="block font-semibold text-gold">Judging the Nexconn Build Challenge?</span>
+              <span className="text-dim">One tap, no name needed, and a guided tour of every feature.</span>
+            </p>
+            <Link
+              href="/try"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-gold px-5 text-sm font-bold whitespace-nowrap text-bg hover:brightness-110"
+            >
+              ★ I&apos;m a judge
+            </Link>
+          </div>
+        )}
+        {!fromInvite && <p className="mb-4 text-xs font-semibold tracking-[0.2em] text-faint uppercase">Or sign up as a player</p>}
         <h1 id="start-title" className="text-3xl font-semibold tracking-tight text-balance sm:text-[44px] sm:leading-[1.1]">
           What should your crew call you?
         </h1>

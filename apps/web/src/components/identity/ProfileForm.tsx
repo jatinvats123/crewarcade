@@ -182,6 +182,7 @@ function LanguageSelect({ id, value, onChange }: { id: string; value: string; on
   return (
     <select
       id={id}
+      data-tour="reply-language"
       value={value}
       onChange={e => onChange(e.target.value as ProfileValues['language'])}
       className="min-h-12 w-full rounded-2xl border border-border bg-surface px-4 text-base focus:border-brand focus:outline-none"

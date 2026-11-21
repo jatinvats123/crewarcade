@@ -1,4 +1,5 @@
 // Invite sharing: the native share sheet on phones (WhatsApp-ready text), clipboard on desktop.
+import { recordTourFacts } from './tour/store';
 
 export function inviteUrl(origin: string, code: string): string {
   return `${origin.replace(/\/+$/, '')}/i/${code}?ref=invite`;
@@ -17,6 +18,7 @@ export async function shareInvite(crewName: string, url: string): Promise<ShareR
   if (coarse && typeof navigator.share === 'function') {
     try {
       await navigator.share({ title: `Join ${crewName} on CrewArcade`, text });
+      recordTourFacts('invite');
       return 'shared';
     } catch (e) {
       if ((e as Error).name === 'AbortError') return 'cancelled';
@@ -24,6 +26,7 @@ export async function shareInvite(crewName: string, url: string): Promise<ShareR
   }
   try {
     await navigator.clipboard.writeText(url);
+    recordTourFacts('invite');
     return 'copied';
   } catch {
     return 'failed';

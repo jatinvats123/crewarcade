@@ -109,6 +109,7 @@ export function PlanCard({ m, plan }: { m: ChatMessage; plan: PlanCardContent })
             meta.roomChannelId && meta.roomChannelId !== m.channelId ? (
               <Link
                 href={env.roomHref(meta.roomChannelId)}
+                data-tour="room-link"
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-brand px-4 font-semibold text-brand-ink shadow-card"
               >
                 <span aria-hidden>🎮</span> Open game room
@@ -146,11 +147,24 @@ export function PlanCard({ m, plan }: { m: ChatMessage; plan: PlanCardContent })
                   </span>
                 </Button>
               </div>
-              <Button variant="ghost" size="sm" disabled={!!busy || meta.status === 'changes_requested'} onClick={() => setChangeOpen(true)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={!!busy || meta.status === 'changes_requested'}
+                onClick={() => setChangeOpen(true)}
+                data-tour="plan-change"
+              >
                 ✏️ Change
               </Button>
               {env.canApprove && (
-                <Button variant="approve" size="sm" loading={busy === 'approve'} disabled={!!busy && busy !== 'approve'} onClick={() => void approve()}>
+                <Button
+                  variant="approve"
+                  size="sm"
+                  loading={busy === 'approve'}
+                  disabled={!!busy && busy !== 'approve'}
+                  onClick={() => void approve()}
+                  data-tour="plan-approve"
+                >
                   Approve
                 </Button>
               )}

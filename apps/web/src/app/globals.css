@@ -82,6 +82,7 @@
   --animate-pop: pop 200ms var(--ease-snappy) both;
   --animate-float-up: float-up 1600ms ease-out forwards;
   --animate-marquee: marquee 22s linear infinite;
+  --animate-tour-pulse: tour-pulse 1.4s ease-out infinite;
 }
 
 @keyframes slide-up {
@@ -94,6 +95,16 @@
     opacity: 1;
   }
 }
+/* Judge tour "Show me": a ring that pulses around the exact button. */
+@keyframes tour-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 70%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 14px color-mix(in srgb, var(--brand) 0%, transparent);
+  }
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;

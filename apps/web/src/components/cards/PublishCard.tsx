@@ -83,7 +83,15 @@ export function PublishCard({ m, pub }: { m: ChatMessage; pub: PublishCardConten
           </Button>
           {deciding && (
             <>
-              <Button size="sm" variant="approve" loading={busy === 'allow'} disabled={!!busy} onClick={() => void decide('allow')} data-testid="publish-allow">
+              <Button
+                size="sm"
+                variant="approve"
+                loading={busy === 'allow'}
+                disabled={!!busy}
+                onClick={() => void decide('allow')}
+                data-testid="publish-allow"
+                data-tour="publish-allow"
+              >
                 ✅ Allow
               </Button>
               <Button size="sm" variant="ghost" loading={busy === 'block'} disabled={!!busy} onClick={() => void decide('block')} data-testid="publish-block">
@@ -97,6 +105,7 @@ export function PublishCard({ m, pub }: { m: ChatMessage; pub: PublishCardConten
                 href={pub.arcadeUrl}
                 className="inline-flex min-h-9 items-center justify-center rounded-2xl border border-border px-3 text-sm font-semibold"
                 data-testid="publish-link"
+                data-tour="publish-link"
               >
                 Open page
               </a>

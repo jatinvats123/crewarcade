@@ -40,6 +40,7 @@ export function AgentStatusStrip({ channel, crewId }: { channel: ChannelState | 
       <div
         role="status"
         aria-label="What the agents are doing"
+        data-tour="agents"
         className="flex gap-1.5 overflow-x-auto border-b border-border px-2 py-1.5 [scrollbar-width:none] sm:px-3"
       >
         {KEYS.map(k => {

@@ -21,6 +21,7 @@ import { paletteFor } from '@/lib/palette';
 import { useActiveRoom } from '@/lib/room';
 import { useSession } from '@/lib/session';
 import { inviteUrl, shareInvite } from '@/lib/share';
+import { recordTourFacts } from '@/lib/tour/store';
 
 const STATUS: Record<string, string> = {
   planning: 'Planning',
@@ -98,6 +99,7 @@ function YourCrew({ crewId }: { crewId: string }) {
         <button
           type="button"
           onClick={() => void invite()}
+          data-tour="invite"
           className="min-h-10 rounded-full bg-brand px-4 text-sm font-bold text-brand-ink hover:brightness-110"
         >
           Invite
@@ -124,7 +126,7 @@ export function ContextPanel() {
   }, []);
 
   const agents = (
-    <ul className="flex flex-col gap-2.5">
+    <ul className="flex flex-col gap-2.5" data-tour="agents">
       {(Object.keys(AGENTS) as AgentKey[]).map(k => {
         const s = states.get(k);
         const busy = !!s && BUSY_STATES.has(s.state);
@@ -166,7 +168,8 @@ export function ContextPanel() {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-4 border-b border-text/10 p-5 pb-4">
         {heading}
-        <div>
+        {/* The game's live status chip: the judge tour rings it while Forge and Glitch work. */}
+        <div data-tour="agents">
           <p className="text-[11px] font-semibold tracking-[0.2em] text-faint uppercase">Now making</p>
           <div className="mt-2 overflow-hidden rounded-2xl border border-text/15">
             <div className="relative aspect-[16/7]">
@@ -187,7 +190,13 @@ export function ContextPanel() {
               role="tab"
               type="button"
               aria-selected={tab === t}
-              onClick={() => setTab(t)}
+              onClick={() => {
+                setTab(t);
+                if (t === 'story') recordTourFacts('story');
+                if (t === 'board') recordTourFacts('leaderboard');
+              }}
+              {...(t === 'story' && { 'data-tour': 'story' })}
+              {...(t === 'board' && { 'data-tour': 'leaderboard' })}
               className={cn(
                 'min-h-10 flex-1 rounded-full text-xs font-bold tracking-[0.14em] uppercase transition-colors',
                 tab === t ? 'bg-brand text-brand-ink' : 'text-dim hover:text-text',

@@ -19,6 +19,7 @@ import { cn } from '@/lib/cn';
 import { useSession } from '@/lib/session';
 import { GameScene } from '@/components/arcade/GameScene';
 import { RIM } from '@/components/landing/glass';
+import { recordTourFacts } from '@/lib/tour/store';
 
 export function GamePage({ game }: { game: GamePageResponse }) {
   const { status } = useSession();
@@ -131,6 +132,7 @@ function GamePageBody({ game }: { game: GamePageResponse }) {
                 type="button"
                 onClick={play}
                 data-testid="game-page-play"
+                data-tour="game-play"
                 className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-brand px-10 text-sm font-bold tracking-[0.18em] text-brand-ink uppercase shadow-[0_20px_60px_-20px_var(--brand)] transition-transform hover:scale-[1.03] active:scale-[0.98]"
               >
                 ▶ Play now<span className="sr-only">: {game.title}</span>
@@ -139,6 +141,7 @@ function GamePageBody({ game }: { game: GamePageResponse }) {
                 <button
                   type="button"
                   onClick={() => setRemixOpen(true)}
+                  data-tour="remix"
                   className="inline-flex min-h-14 items-center justify-center rounded-full border border-text/25 px-10 text-sm font-bold tracking-[0.18em] uppercase hover:border-brand hover:text-brand"
                 >
                   Remix this
@@ -273,7 +276,10 @@ function GamePageBody({ game }: { game: GamePageResponse }) {
             {published && (
               <button
                 type="button"
-                onClick={() => setStoryOpen(true)}
+                onClick={() => {
+                  setStoryOpen(true);
+                  recordTourFacts('story');
+                }}
                 className="group flex items-center justify-between rounded-[24px] border border-text/15 bg-text/[0.04] px-6 py-5 text-left transition-colors hover:border-brand"
               >
                 <span>
@@ -357,6 +363,7 @@ function RemixSheet({ open, onClose, game }: { open: boolean; onClose: () => voi
         ...(target === 'new' ? { newCrewName: name.trim() || `${game.title} remix` } : { crewId: target }),
         ...(idea.trim() && { idea: idea.trim() }),
       });
+      recordTourFacts('remix');
       toast('Pixel is planning your remix in the crew chat.', 'success');
       router.push(`/crews/${r.crewId}`);
     } catch (e) {

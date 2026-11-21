@@ -88,6 +88,7 @@ function CardBody({ m, card }: { m: ChatMessage; card: AnyCard }) {
           actions={
             <Link
               href={env.roomHref(c.channelId)}
+              data-tour="room-link"
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-brand px-4 font-semibold text-brand-ink shadow-card"
             >
               <span aria-hidden>🎮</span> Open room

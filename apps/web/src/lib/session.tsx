@@ -5,6 +5,8 @@
 import type { Profile } from '@crewarcade/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, ApiRequestError } from './api';
+import { tourEnabledFor } from './tour/steps';
+import { setTourUser } from './tour/store';
 
 export type SessionStatus = 'loading' | 'anonymous' | 'ready' | 'error';
 
@@ -35,6 +37,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // The judge tour is on for judges only; anyone else signed in (or signed out) turns it off here.
+  useEffect(() => {
+    if (status === 'ready') setTourUser(tourEnabledFor(user) ? user!.id : null);
+    else if (status === 'anonymous') setTourUser(null);
+  }, [status, user]);
 
   const setUser = useCallback((u: Profile) => {
     setUserState(u);

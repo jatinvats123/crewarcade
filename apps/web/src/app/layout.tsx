@@ -3,6 +3,7 @@ import { Anton, Inter, Space_Grotesk } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { RefCapture } from '@/components/shell/RefCapture';
 import { WakeBanner } from '@/components/shell/WakeBanner';
+import { JudgeTour } from '@/components/tour/JudgeTour';
 import { ToastProvider } from '@/components/ui';
 import { publicEnv } from '@/env';
 import './globals.css';
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <WakeBanner />
           <RefCapture />
           {children}
+          <JudgeTour />
         </ToastProvider>
       </body>
     </html>

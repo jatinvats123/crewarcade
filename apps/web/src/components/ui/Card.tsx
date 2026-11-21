@@ -22,12 +22,14 @@ export interface CardShellProps {
   /** Action row (buttons). Stacks full-width on mobile. */
   actions?: ReactNode;
   className?: string;
+  /** `data-tour` hook for the judge tour's Show me. */
+  tour?: string;
 }
 
 /** The shell every chat card uses: optional cover, header (agent, AI badge, poster title, meta, badges), body, action row. */
-export function CardShell({ agent, title, meta, badges, cover, children, actions, className }: CardShellProps) {
+export function CardShell({ agent, title, meta, badges, cover, children, actions, className, tour }: CardShellProps) {
   return (
-    <article className={cn('relative animate-slide-up overflow-hidden rounded-[22px] border border-border bg-surface shadow-card', className)}>
+    <article data-tour={tour} className={cn('relative animate-slide-up overflow-hidden rounded-[22px] border border-border bg-surface shadow-card', className)}>
       {agent && !cover && <span aria-hidden className={cn('absolute inset-x-0 top-0 h-[3px]', BAR[agent])} />}
       {cover && <div className="relative aspect-[21/8] overflow-hidden border-b border-border">{cover}</div>}
       <header className="p-4 pb-3 sm:px-5 sm:pt-5">

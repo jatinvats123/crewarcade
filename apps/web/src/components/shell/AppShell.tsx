@@ -10,6 +10,7 @@ import { MessageSkeleton } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { CrewsProvider } from '@/lib/crews';
 import { NexconnProvider } from '@/lib/nexconn/NexconnProvider';
+import { TourChatObserver, TourSlot } from '@/components/tour/TourSlot';
 import { useSession } from '@/lib/session';
 import { ConnectionBanner } from './ConnectionBanner';
 import { ContextPanel } from './ContextPanel';
@@ -47,9 +48,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               </aside>
               <main className={cn('min-w-0 flex-1 flex-col', inCrewIndex ? 'hidden md:flex' : 'flex')}>{children}</main>
               <aside aria-label="Crew HQ" className="hidden w-[360px] shrink-0 flex-col border-l border-border lg:flex">
+                <TourSlot kind="desktop" className="max-h-[62%] shrink-0 overflow-y-auto border-b border-border empty:hidden" />
                 <ContextPanel />
               </aside>
             </div>
+            {/* Phones and tablets: the judge tour's bar sits under the chat, never over the composer. */}
+            <TourSlot kind="phone" className="shrink-0 empty:hidden lg:hidden" />
+            <TourChatObserver />
           </div>
         </PlayerProvider>
       </NexconnProvider>
