@@ -98,7 +98,59 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   (`repo/impact.ts`): agents, judges, `TEAM_USER_IDS` and the deleted placeholder never count, nor do
   their plays; the team's games are counted separately; referrer codes under 2 people become
   "other"; days are IST; computed at most once a minute. 9 server tests, 6 web tests, 1 e2e. Needs
-  `TEAM_USER_IDS` on Render (the owner's two phones). Landing footer and README link it.
+  `TEAM_USER_IDS` on Render (the owner's two phones). Landing footer and README link it. Live (`a3499e9`).
+- **Judge mode `/try` (2026-11-21):** CrowdPlay, Dibs, DoubtRoom and Hop all have a judge path. Ours:
+  pick one of three pitches (one in Hindi), tap **Start as a judge** → `POST /api/auth/judge` makes an
+  account named Judge with `is_judge = true` (never counted on `/impact`, same sign-up rate limit),
+  then a solo crew opens with the pitch already in the composer (`/crews/<id>?pitch=`). Signed-in
+  people keep their account and get a new solo crew. Checked locally at phone size: one tap → Judge's
+  crew with the three agents and `@pixel a rocket dodging falling stars` typed. 4 server tests, 1 e2e.
+  Landing nav/footer and README point judges to `/try`. Changed the same day: pitches are no longer
+  picked or prefilled; `/try` just starts, and the three pitches (one in Hindi) are chips above the
+  message box for judges.
+- **Judge or player, on the way in (2026-11-22):** the landing hero has a **★ I'm a judge: guided
+  tour** button (and the bottom call to action an **I'm a judge** one), the sign-up screen `/start`
+  opens with a "Judging the Nexconn Build Challenge? ★ I'm a judge" card above "Or sign up as a
+  player" (not on invite sign-ups), and `/try` links players back to the normal sign-up. 1 e2e.
+  Checked at 320 px: nothing cut off, no sideways scroll.
+- **Chat flapping "connecting / disconnected" fixed (2026-11-22):** on a rejected token (31004) or
+  exhausted reconnects (33007) the client fetched a new token and reconnected with no limit (the
+  status-handler path had no guard; the connect path's guard used a counter that never reset). A
+  token Nexconn never accepts (the local stack's fake Nexconn, a wrong App Key) looped until our
+  token endpoint answered 429. Now `lib/nexconn/retry.ts`: one immediate retry, one after 3 s, then
+  "Couldn't connect to chat · Try again"; a connect or Try again resets it. 2 web tests. Checked
+  locally: 3 token requests, then the banner (was dozens, then 429). Local chat still can't connect
+  with the fake Nexconn by design; real chat locally needs `LOCAL_REAL_NEXCONN=1` (see
+  `scripts/local-stack.ts`), and agents only answer on the deployed server (webhooks go there).
+- **Judge tour (2026-11-21):** judges only (`Profile.isJudge`; `tourEnabledFor` in `lib/tour/steps.ts`,
+  set by the session, cleared for anyone else). One persistent card that updates in place
+  (`components/tour/JudgeTour.tsx`, mounted in the root layout): phones/tablets get a bottom bar
+  ("Next step · 3 of 23" + Show me, tap for the checklist sheet) that sits under the chat in the app
+  shell (never over the composer) and fixed on other pages; desktop gets the checklist with a progress
+  bar at the top of the right panel, floating (with Hide) on pages without one. Every step says what
+  to press, what happens next and why; Show me goes to the step's page and rings the exact control
+  (`data-tour` hooks) with a hint, typing the test message first for the shield and Hindi steps;
+  Skip on every step; a done step shows a tick, "Done: …" and Next →; "Tour complete" lists skipped
+  steps with links back. 23 steps, ticked by real events (`factsFromMessages`: plan/v2/Hindi/remix/
+  approved, build ready, test pass/fail, publish approved + slug, bug reproduced/fixed, 🛡 notice or
+  blocked send; plus player opened, score saved, leaderboard/Story opened, JSON export, Translate
+  tapped (info card if translation is off), invite shared/copied, approver made, voice sent, pages
+  opened, Got it on the 3 info steps). Progress in localStorage per user (`crewarcade:tour:<userId>`,
+  parsed with zod). Steps, rules, reducer and fact readers: 56 web unit tests; judge flag on
+  `/api/me`: 1 more server test; e2e `tour.spec.ts` (phone + desktop: non-judges never see it, ticks,
+  Skip, Got it, Next, Show me's ring on the right control, persistence, public pages, complete card,
+  no sideways scroll at 320/360/375/390 px, a saved score on another crew's game ticks step 22).
+  Checked in the browser on the local stack (`scripts/local-stack.ts`) at 375 px and desktop: `/try`
+  → judge crew with the bar under the composer; Show me rings the message box; checklist sheet;
+  Arcade → game page, where Show me rings Play now without leaving (`stayIfTarget`), and opening the
+  game recorded `play:<id>` and the page visit; desktop right-panel card; Show me on Invite rings the
+  header's Invite friends; the floating card and its Hide pill on `/impact`. Fixed while checking:
+  Show me's `scrollIntoView` used `center`, which also scrolled the fixed-height app shell (now
+  `nearest`); a checklist tap low in the sheet left the step card out of view; the hint covered the
+  bar for low targets (now above them). Not checkable in the pane: a real score (the pane can't click
+  into the sandboxed game; covered by e2e) and a real invite copy (the pane blocks the clipboard, so
+  the app says so and nothing ticks, as intended). Known gap: steps that need agents (1–8, 11, 13–16) were
+  checked against the rules and in unit tests, not driven end to end locally (no Nexconn locally).
 
 ## Phase 6: polish, harden, launch prep (branch `phase-6`)
 

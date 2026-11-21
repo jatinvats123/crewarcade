@@ -15,7 +15,7 @@ browser and records the proof. Nothing goes public until someone in your crew ta
 [Real usage](#real-usage) ·
 [Safety](#safety)
 
-![tests](https://img.shields.io/badge/tests-449%20passing-2ea44f)
+![tests](https://img.shields.io/badge/tests-513%20passing-2ea44f)
 ![playtester eval](https://img.shields.io/badge/planted%20bugs%20caught-21%2F21-2ea44f)
 ![prompt injection](https://img.shields.io/badge/prompt%20injection%20resisted-10%2F10-2ea44f)
 ![hostile games](https://img.shields.io/badge/sandbox%20attacks%20blocked-21%2F21-2ea44f)
@@ -35,6 +35,7 @@ built by Forge, fixed once, playtested headlessly and published on 20 Nov 2026.<
 
 | What            | Where                                                                                                  |
 | --------------- | ------------------------------------------------------------------------------------------------------ |
+| Judge mode      | https://crewarcade.vercel.app/try (one tap, no sign-up, then a 23-step guided tour with Show me)       |
 | Live app        | https://crewarcade.vercel.app (no password, no email)                                                  |
 | Public Arcade   | https://crewarcade.vercel.app/arcade (games real crews made and published)                             |
 | Live numbers    | https://crewarcade.vercel.app/impact (real people only, recomputed every minute, with raw JSON)        |
@@ -48,20 +49,48 @@ built by Forge, fixed once, playtested headlessly and published on 20 Nov 2026.<
 
 ## For judges: try it in 3 minutes
 
-One phone or laptop is enough. No sign-up beyond a name, no second device, no waiting list.
+One phone or laptop is enough. No sign-up form, no second device, no waiting list.
 
-1. Open https://crewarcade.vercel.app, tap **Start playing**, type a name. That's the whole sign-up.
-2. Tap **Start a solo crew**. A solo crew is you plus Pixel, Forge and Glitch; **Invite friends**
-   adds real people later.
-3. Type a pitch, for example `@pixel a rocket dodging stars` (Hindi and Hinglish work too:
-   `@पिक्सेल …`, "pixel bhai …"). Pixel streams a short intro, then posts a **plan card** with the
-   controls, the rules and 4–8 acceptance checks.
-4. Vote 👍 and tap **Approve**. A game room opens. The agent chips show Forge **building** and then
-   Glitch **testing 1/5 … 5/5**; Glitch's test card comes with a GIF of its own playthrough. If a
-   check fails, Forge fixes it by itself (up to 2 rounds), or you tap **Try again**.
-5. Tap **▶ Play**, then **Allow** on the publish card. The game is live in the Arcade with a share
-   link and a leaderboard. Tap **Report a bug** in the player to watch Glitch reproduce it and Forge
-   ship a hotfix.
+1. Open **https://crewarcade.vercel.app/try** (or tap **★ I'm a judge** on the home page or the sign-up
+   screen) and tap **Start as a judge**. You land in your own crew
+   chat with Pixel, Forge and Glitch. Three pitch ideas wait as chips above the message box (one in
+   Hindi); nothing is typed for you, and your own idea works too. Judge accounts are marked and never
+   counted in [our live numbers](https://crewarcade.vercel.app/impact).
+2. **Follow the judge tour.** Judges (and only judges) get one card that walks through every feature:
+   a bar at the bottom on a phone ("Next step · 3 of 23", tap it for the checklist), a checklist with
+   a progress bar in the right panel on a laptop. Each step says what to press, what happens next and
+   why it matters. **Show me** goes to the right page and puts a pulsing ring on the exact button
+   (for the shield and Hindi steps it types the test message for you). Steps tick themselves from what
+   really happens in the app; **Skip** is on every step, and the last card lists what you skipped with
+   links back. Progress is saved in this browser.
+
+The 23 steps:
+
+| #   | Step                                                        | Ticks when                                   |
+| --- | ----------------------------------------------------------- | -------------------------------------------- |
+| 1   | Pitch a game                                                | Pixel's plan card appears                    |
+| 2   | Change the plan                                             | plan v2 arrives                              |
+| 3   | Approve it                                                  | the plan is approved (a game room opens)     |
+| 4   | Watch Forge build (live agent chips)                        | the build is ready                           |
+| 5   | Glitch playtests it, with a GIF                             | the test card arrives                        |
+| 6   | Try again if it fails                                       | a version passes                             |
+| 7   | Play it                                                     | you open the player or post a score          |
+| 8   | Allow it to go public (Block keeps it private)              | it is published                              |
+| 9   | Open the game page and its share link                       | you open your game's public page             |
+| 10  | Check the leaderboard                                       | you open it                                  |
+| 11  | Report a bug → Glitch reproduces it → Forge ships a hotfix  | the bug is reproduced or fixed               |
+| 12  | Read the Story (Decision Ledger) and export the JSON        | you open it                                  |
+| 13  | Remix a game                                                | a remix starts                               |
+| 14  | Test the safety shield (Show me types a prompt injection)   | the 🛡 notice appears                         |
+| 15  | Pitch in Hindi                                              | a plan in Hindi arrives                      |
+| 16  | Translate a message                                         | you tap Translate (an info card if it's off) |
+| 17  | Invite a friend / make an approver; "Seen by" read receipts | the invite is shared or copied               |
+| 18  | Pitch by voice                                              | info card                                    |
+| 19  | Score-beaten DM from Glitch                                 | info card                                    |
+| 20  | Live numbers (/impact) and Safety (/safety)                 | you open both                                |
+| 21  | Sandbox security                                            | info card                                    |
+| 22  | Play another crew's game in the Arcade                      | your score is saved                          |
+| 23  | Settings: reply language and Delete my account              | you open Settings                            |
 
 Median step times on the live app over the last 30 days (owner dashboard): **plan 6 s, build 71 s,
 playtest 57 s**. Each step's tokens, cost and time are on the game's **Story** tab.
@@ -285,7 +314,7 @@ structured outputs, a daily budget cap and a cost ledger; the live app runs **Cl
 
 ## Quality
 
-- **449 unit and integration tests** (shared 26, engine 48, server 301, web 74), plus **Playwright
+- **513 unit and integration tests** (shared 26, engine 48, server 306, web 133), plus **Playwright
   e2e** on phone and desktop viewports, including a check that no page or chat card runs off a
   phone screen.
 - **Playtester eval:** 7 kinds of planted bugs (collision disabled, score frozen, game over
