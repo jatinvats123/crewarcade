@@ -232,9 +232,22 @@ export async function playSteps(p: Page, steps: readonly Step[], hooks: StepHook
       const res = await p.evaluate(
         ({ expr, start, marks }) => {
           const state = window.__crew.state();
+          // AI-written scenarios often call state() / start() / marks.a() like the window.__crew
+          // hook. Each snapshot is both: reading fields works and calling it returns the snapshot.
+          const both = (o: object): object => {
+            const target = () => o;
+            return new Proxy(target, {
+              get: (t, k) => (k in o ? Reflect.get(o, k) : Reflect.get(t, k)),
+              has: (_t, k) => k in o,
+              ownKeys: () => Reflect.ownKeys(o),
+              getOwnPropertyDescriptor: (t, k) => Reflect.getOwnPropertyDescriptor(o, k) ?? Reflect.getOwnPropertyDescriptor(t, k),
+            });
+          };
+          const wrap = (o: unknown): unknown => (o !== null && typeof o === 'object' ? both(o) : o);
+          const wrappedMarks = Object.fromEntries(Object.entries(marks).map(([k, v]) => [k, wrap(v)]));
           try {
             const fn = new Function('state', 'start', 'marks', `return (${expr});`);
-            return { ok: !!fn(state, start, marks), state };
+            return { ok: !!fn(wrap(state), wrap(start), wrappedMarks), state };
           } catch (e) {
             return { ok: false, err: (e as Error).message, state };
           }

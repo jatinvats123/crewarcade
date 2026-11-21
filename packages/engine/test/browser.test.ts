@@ -36,6 +36,29 @@ describe('playtest()', () => {
     expect(res.summary).toMatch(/PLAYTEST PASS$/);
   });
 
+  it('lets expects read state, start and marks as values or as calls (AI scenarios write state().score)', async () => {
+    const res = await playtest({
+      html: starterHtml(),
+      scenario: [
+        { call: 'start' },
+        { mark: 'm' },
+        { wait: 2000 },
+        { expect: "state().scene === 'playing' || state().scene === 'over'", label: 'A1 runs (call)' },
+        { expect: 'state().score >= marks.m.score && marks.m().score === marks.m.score', label: 'A2 marks (call)' },
+        { expect: "typeof state.score === 'number' && state.score === state().score", label: 'A3 state (value)' },
+        { expect: 'start().scene === start.scene && Object.keys(state).includes("score") && "scene" in state', label: 'A4 start, keys, in' },
+      ],
+      profile: 'fast',
+      browser,
+    });
+    expect(res.expects.map(e => [e.label, e.pass])).toEqual([
+      ['A1 runs (call)', true],
+      ['A2 marks (call)', true],
+      ['A3 state (value)', true],
+      ['A4 start, keys, in', true],
+    ]);
+  });
+
   it('fails a game whose score hook was removed and one that logs errors', async () => {
     const noHook = starterHtml().replace("notifyHost({ type: 'crewarcade:start' });", '');
     const errors = replaceGameRegion(

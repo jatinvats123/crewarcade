@@ -53,6 +53,17 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   `main` = `phase-7`. History secret scan (regexes for DB URLs, JWTs, Google/Anthropic/GitHub keys,
   private keys, secret assignments, `.env` files): clean. Only hit: the dev-only session secret, which
   production refuses.
+- **AI on Claude Haiku 5.5 (2026-11-21):** Gemini billing could not be set up (RuPay card refused,
+  `OR_BACR2_59`), so production runs `AI_PROVIDER=anthropic` with `ANTHROPIC_MODEL` and
+  `ANTHROPIC_BUILD_MODEL` = `claude-haiku-5-5` on $5 of prepaid credit (org spend limit $5). Measured
+  live: about $0.02 per game. `ADMIN_USER_IDS` set, `/admin` works. Gemini prices are still not wired
+  into the ledger (cost shows $0 on Gemini, so `DAILY_BUDGET_USD` would not stop Gemini spend).
+- **Glitch false FAILs fixed (2026-11-21):** `/admin` showed test 2 OK / 13 failed. The game rooms showed
+  `error in "state().score > marks.m.score": state is not a function`: scenarios written by the model
+  call `state()` (the prompts phrase acceptance items as `state().field`), but `playSteps` passed `state`
+  as a plain object. Expects now get `state`, `start` and each mark as a snapshot that is readable and
+  callable (`packages/engine/src/player.ts`), with a browser test. Engine 48 ✓, server 288 ✓, typecheck,
+  lint, `pnpm eval:fast` 21/21 caught, 0 false FAILs. Needs a push to `main` (Render redeploys) to go live.
 
 ## Phase 6: polish, harden, launch prep (branch `phase-6`)
 
