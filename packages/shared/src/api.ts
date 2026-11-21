@@ -69,6 +69,10 @@ export const GuestSignupBody = z.object({
 });
 export type GuestSignupBody = z.input<typeof GuestSignupBody>;
 
+/** POST /api/auth/judge: judge mode (/try). One tap, no form; the account is marked as a judge. */
+export const JudgeSignupBody = z.object({ language: LanguageCodeSchema.default('en') });
+export type JudgeSignupBody = z.input<typeof JudgeSignupBody>;
+
 export const ProfilePatch = z
   .object({ displayName: DisplayName, avatarEmoji: AvatarEmoji, avatarColor: AvatarColorSchema, language: LanguageCodeSchema })
   .partial()

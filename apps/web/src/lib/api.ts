@@ -27,6 +27,7 @@ import {
   type RemixBody,
   type CreateCrewBody,
   type GuestSignupBody,
+  type JudgeSignupBody,
   type ProfilePatch,
 } from '@crewarcade/shared';
 import { z } from 'zod';
@@ -85,6 +86,8 @@ async function request<S extends z.ZodType>(method: 'GET' | 'POST' | 'PATCH' | '
 export const api = {
   me: () => request('GET', '/api/me', z.object({ user: Profile })).then(r => r.user),
   signUp: (body: GuestSignupBody) => request('POST', '/api/auth/guest', z.object({ user: Profile }), body).then(r => r.user),
+  /** Judge mode (/try): one tap, no form; the account is marked as a judge. */
+  signUpJudge: (body: JudgeSignupBody = {}) => request('POST', '/api/auth/judge', z.object({ user: Profile }), body).then(r => r.user),
   updateMe: (patch: ProfilePatch) => request('PATCH', '/api/me', z.object({ user: Profile }), patch).then(r => r.user),
   signOut: () => request('POST', '/api/auth/logout', z.unknown()),
   /** Deletes the guest account for good (the server needs this exact confirmation text). */

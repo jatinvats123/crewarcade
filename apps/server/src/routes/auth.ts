@@ -1,6 +1,7 @@
-// Guest identity (no passwords): POST /api/auth/guest, GET/PATCH /api/me, POST /api/auth/logout,
+// Guest identity (no passwords): POST /api/auth/guest, POST /api/auth/judge (judge mode, /try),
+// GET/PATCH /api/me, POST /api/auth/logout,
 // POST /api/nexconn/token (the browser's own Nexconn access token) and DELETE /api/me (delete my account).
-import { GuestSignupBody, nexconnUserId, ProfilePatch } from '@crewarcade/shared';
+import { GuestSignupBody, JudgeSignupBody, nexconnUserId, ProfilePatch } from '@crewarcade/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { clearSession, setSession } from '../auth/session';
@@ -30,6 +31,24 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx): void {
     });
     setSession(reply, user.id, ctx.session);
     ctx.log.info({ userId: user.id }, 'guest signed up');
+    return reply.code(201).send({ user: toProfile(user) });
+  });
+
+  // Judge mode (/try): one tap, no form. Marked as a judge, so it is never counted as a real user on
+  // /impact. Same sign-up rate limit as guests.
+  app.post('/api/auth/judge', async (req, reply) => {
+    rateLimit(signupLimit, `ip:${req.ip}`);
+    const body = JudgeSignupBody.parse(req.body ?? {});
+    const user = await createGuestUser(ctx.db, {
+      displayName: 'Judge',
+      avatarEmoji: '🌟',
+      avatarColor: 'gold',
+      language: body.language,
+      referrer: 'judge',
+      isJudge: true,
+    });
+    setSession(reply, user.id, ctx.session);
+    ctx.log.info({ userId: user.id }, 'judge signed up');
     return reply.code(201).send({ user: toProfile(user) });
   });
 
