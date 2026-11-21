@@ -34,6 +34,18 @@
         "3100"
       ],
       "port": 3100
+    },
+    {
+      "name": "local-stack",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@crewarcade/server",
+        "exec",
+        "tsx",
+        "scripts/local-stack.ts"
+      ],
+      "port": 8080
     }
   ]
 }

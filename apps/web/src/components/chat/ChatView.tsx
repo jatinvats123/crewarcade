@@ -244,7 +244,12 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
         >
           {detail ? (
             <>
-              <span className="block truncate font-poster text-xl tracking-wide uppercase">{game ? game.title : detail.name}</span>
+              {/* Phones: a game room's icons leave little room, so its title may take two lines. */}
+              <span
+                className={`block font-poster tracking-wide uppercase ${game ? 'line-clamp-2 text-lg leading-tight sm:truncate sm:text-xl' : 'truncate text-xl'}`}
+              >
+                {game ? game.title : detail.name}
+              </span>
               <span className="block truncate text-xs text-dim">
                 {game ? `Game room · ${detail.name} · ${online} online` : `${detail.members.length} members · ${online} online · Pixel, Forge, Glitch`}
               </span>
@@ -276,9 +281,12 @@ export function ChatView({ crewId, roomChannelId }: { crewId: string; roomChanne
         >
           Invite friends
         </button>
-        <span className="sm:hidden">
-          <IconButton label="Invite friends" icon={<span aria-hidden>📤</span>} onClick={() => void share()} disabled={!detail} />
-        </span>
+        {/* In a game room on a phone, Invite lives in Crew info (ⓘ) to give the title room. */}
+        {!game && (
+          <span className="sm:hidden">
+            <IconButton label="Invite friends" icon={<span aria-hidden>📤</span>} onClick={() => void share()} disabled={!detail} />
+          </span>
+        )}
         <IconButton label="Crew info" icon={<span aria-hidden>ⓘ</span>} onClick={() => setInfoOpen(true)} disabled={!detail} />
       </header>
       {rooms.length > 0 && crewChannelId && (

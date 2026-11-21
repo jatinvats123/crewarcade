@@ -72,7 +72,16 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   schemas now hold types only; `convertSteps` checks step count (2–80) and the engine schema checks the
   rest with step numbers, and `writeScenario` / `writeRepro` send malformed output (bad JSON, schema
   mismatch, max_tokens) to the repair round. Token limits 4000 → 8000 (scenario) and 3000 → 6000
-  (repro), since thinking counts toward them. 4 new tests; server 292 ✓, typecheck, lint.
+  (repro), since thinking counts toward them. 4 new tests; server 292 ✓, typecheck, lint. Live (`72893de`).
+- **Phone layout pass (2026-11-21):** a real user reported "things not aligned in mobile view". No page
+  scrolls sideways at 320/360/375/390 px (local scan, signed in), so the issues were cramped headers:
+  game-room title cut to "STAR DO…" by five icons (title may now take two lines on phones; Invite moves
+  to Crew info ⓘ in game rooms), "Make a game" and "Your crews" wrapping onto two lines (no-wrap,
+  tighter padding; the theme toggle below 360 px and the Arcade text link below 400 px wait for room),
+  long game titles breaking mid-word (smaller size for titles over 24 characters, hyphens), and agent
+  names cut ("GLITCH · PLAYTES…") by the badge (shows "✦ AI" on phones, full label for screen
+  readers). Web 68 ✓, typecheck, lint, e2e cards/smoke/player 24/24 (phone + desktop). The game-room
+  header was checked in code only: local chat has no Nexconn, so rooms can't open locally.
 
 ## Phase 6: polish, harden, launch prep (branch `phase-6`)
 

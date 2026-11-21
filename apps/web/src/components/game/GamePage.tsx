@@ -64,17 +64,21 @@ function GamePageBody({ game }: { game: GamePageResponse }) {
           <Logo className="text-xl" />
         </Link>
         <nav className="flex items-center gap-2 text-xs font-semibold tracking-[0.18em] uppercase" aria-label="Site">
-          <Link href="/arcade" className="inline-flex min-h-11 items-center px-3 text-text/70 hover:text-text">
+          {/* Narrow phones: the logo already leads home and to the Arcade, so the text link waits for room. */}
+          <Link href="/arcade" className="hidden min-h-11 items-center px-3 text-text/70 hover:text-text min-[400px]:inline-flex">
             Arcade
           </Link>
           {status === 'ready' ? (
-            <Link href="/crews" className="inline-flex min-h-11 items-center rounded-full border border-text/25 px-5 hover:border-brand hover:text-brand">
+            <Link
+              href="/crews"
+              className="inline-flex min-h-11 items-center rounded-full border border-text/25 px-4 whitespace-nowrap hover:border-brand hover:text-brand sm:px-5"
+            >
               Your crews
             </Link>
           ) : (
             <Link
               href={`/start?next=${encodeURIComponent(`/g/${game.slug}`)}`}
-              className="inline-flex min-h-11 items-center rounded-full border border-text/25 px-5 hover:border-brand hover:text-brand"
+              className="inline-flex min-h-11 items-center rounded-full border border-text/25 px-4 whitespace-nowrap hover:border-brand hover:text-brand sm:px-5"
             >
               Sign in
             </Link>
@@ -94,7 +98,12 @@ function GamePageBody({ game }: { game: GamePageResponse }) {
                 {published ? `v${game.publishedVersion} · Live in the Arcade` : 'In the works'}
               </span>
             </span>
-            <h1 id="game-title" className="mt-6 font-poster text-[clamp(3.25rem,8vw,8.5rem)] leading-[0.88] break-words uppercase">
+            {/* Long titles get a smaller size and hyphens instead of breaking words mid-letter on phones. */}
+            <h1
+              id="game-title"
+              lang="en"
+              className={`mt-6 font-poster break-words hyphens-auto uppercase ${game.title.length > 24 ? 'text-[clamp(2.25rem,6vw,6rem)] leading-[0.95]' : 'text-[clamp(3.25rem,8vw,8.5rem)] leading-[0.88]'}`}
+            >
               {game.title}
             </h1>
             <p className="mt-4 max-w-2xl text-lg text-text/80 md:text-xl">{game.pitch}</p>

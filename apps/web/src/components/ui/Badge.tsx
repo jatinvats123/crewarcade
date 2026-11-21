@@ -33,7 +33,11 @@ export function RoleBadge({ role }: { role: 'owner' | 'approver' | 'member' }) {
 export function AiBadge() {
   return (
     <Badge tone="neutral" icon={<span aria-hidden>✦</span>}>
-      AI-generated
+      {/* Phones: "AI" keeps the agent's name and role readable beside it; screen readers hear the full label. */}
+      <span aria-hidden className="sm:hidden">
+        AI
+      </span>
+      <span className="sr-only sm:not-sr-only">AI-generated</span>
     </Badge>
   );
 }

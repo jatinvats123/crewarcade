@@ -46,10 +46,15 @@ export default async function ArcadePage({ searchParams }: Props) {
           <Link href="/" className="hidden min-h-11 items-center px-3 text-dim hover:text-text sm:inline-flex">
             Home
           </Link>
-          <Link href="/start" className="inline-flex min-h-11 items-center rounded-full bg-brand px-5 text-brand-ink hover:brightness-110">
+          <Link
+            href="/start"
+            className="inline-flex min-h-11 items-center rounded-full bg-brand px-3 tracking-[0.1em] whitespace-nowrap text-brand-ink hover:brightness-110 sm:px-5 sm:tracking-[0.18em]"
+          >
             Make a game
           </Link>
-          <ThemeToggle />
+          <span className="hidden min-[360px]:inline-flex">
+            <ThemeToggle />
+          </span>
         </nav>
       </header>
 
