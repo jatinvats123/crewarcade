@@ -14,6 +14,7 @@ const NAV = [
   { href: '#agents', label: 'Agents' },
   { href: '#how', label: 'How it works' },
   { href: '/arcade', label: 'Arcade' },
+  { href: '/impact', label: 'Live numbers' },
 ];
 
 const TAPE = 'PITCH → PLAN → BUILD → PLAYTEST → PUBLISH → ';

@@ -9,9 +9,12 @@
 //   GET  /api/public/games/:slug                  the public game page (drafts: teaser)
 //   GET  /api/public/arcade?sort=new|top&limit=   published games (never fixtures)
 //   GET  /api/public/safety                       the safety shield's mode, rules and recent events
+//   GET  /api/public/impact                       live usage from real people only (aggregates)
 //   POST /api/games/:slug/remix {crewId|newCrewName, idea}   signed in; published games only
-import { SafetyResponse } from '@crewarcade/shared';
+import { ImpactResponse, SafetyResponse } from '@crewarcade/shared';
+import { impactStats } from '../repo/impact';
 import { moderationCounts, recentModeration } from '../repo/moderation';
+import { createTtlCache } from '../util/ttl-cache';
 import { shieldMode } from '../safety/runtime';
 import { RULE_INFO, SHIELD_RULES } from '../safety/shield';
 import { ArcadeQuery, RemixBody, ScoreBody } from '@crewarcade/shared';
@@ -48,6 +51,7 @@ export function registerPlayRoutes(app: FastifyInstance, ctx: Ctx): void {
   const scoreLimit = fixedWindowLimiter({ limit: 30, windowMs: 60_000, now: ctx.now });
   const actionLimit = fixedWindowLimiter({ limit: 10, windowMs: 60_000, now: ctx.now });
   const remixLimit = fixedWindowLimiter({ limit: 5, windowMs: 60_000, now: ctx.now });
+  const impactCache = createTtlCache<ImpactResponse>({ ttlMs: 60_000, max: 1, now: ctx.now });
 
   app.get('/play/:slug/v/:version', async (req, reply) => {
     rateLimit(playLimit, `ip:${req.ip}`);
@@ -150,6 +154,15 @@ export function registerPlayRoutes(app: FastifyInstance, ctx: Ctx): void {
       recent: recent.map(r => ({ rule: r.rule, at: new Date(r.createdAt).toISOString() })),
       retentionDays: 30,
     });
+  });
+
+  // Live usage from real people only (team, judges, agents left out): aggregates, no names or text.
+  // Recomputed at most once a minute per server.
+  app.get('/api/public/impact', async (req, reply) => {
+    rateLimit(playLimit, `ip:${req.ip}`);
+    const data = await impactCache.get('impact', () => impactStats(ctx.db, { teamIds: ctx.config.TEAM_USER_IDS, now: ctx.now() }));
+    reply.header('cache-control', 'public, max-age=60');
+    return ImpactResponse.parse(data);
   });
 
   app.post('/api/games/:slug/remix', async req => {

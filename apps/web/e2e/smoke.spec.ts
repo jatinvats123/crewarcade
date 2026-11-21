@@ -15,6 +15,15 @@ test('no horizontal scroll at phone width', async ({ page }) => {
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
+test('live numbers page: explains how it counts and links the raw JSON, even while the API is down', async ({ page }) => {
+  await page.goto('/impact');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Real crews');
+  await expect(page.getByRole('heading', { name: 'How we count' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Raw numbers (JSON)' })).toHaveAttribute('href', /\/api\/public\/impact$/);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
 test('UI kit: sheet opens and closes with Escape, toasts appear', async ({ page }) => {
   await page.goto('/dev/ui');
   await page.getByRole('button', { name: 'Open sheet' }).click();

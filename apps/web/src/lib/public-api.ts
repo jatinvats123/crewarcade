@@ -1,5 +1,5 @@
 // Server-side fetches of public, no-login endpoints (no cookies; cached briefly by Next).
-import { SafetyResponse } from '@crewarcade/shared';
+import { ImpactResponse, SafetyResponse } from '@crewarcade/shared';
 import type { z } from 'zod';
 import { publicEnv } from '@/env';
 
@@ -15,3 +15,6 @@ async function getPublic<T>(path: string, schema: z.ZodType<T>, revalidate: numb
 }
 
 export const fetchSafety = () => getPublic('/api/public/safety', SafetyResponse, 30);
+export const fetchImpact = () => getPublic('/api/public/impact', ImpactResponse, 60);
+/** The raw JSON behind /impact, linked from the page so anyone can check the numbers. */
+export const impactJsonUrl = () => `${publicEnv.NEXT_PUBLIC_API_ORIGIN.replace(/\/+$/, '')}/api/public/impact`;

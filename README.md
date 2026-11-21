@@ -9,12 +9,13 @@ browser and records the proof. Nothing goes public until someone in your crew ta
 
 [**Live app**](https://crewarcade.vercel.app) ·
 [**Arcade**](https://crewarcade.vercel.app/arcade) ·
+[**Live numbers**](https://crewarcade.vercel.app/impact) ·
 [Try it in 3 minutes](#for-judges-try-it-in-3-minutes) ·
 [Built on Nexconn](#built-on-nexconn) ·
 [Real usage](#real-usage) ·
 [Safety](#safety)
 
-![tests](https://img.shields.io/badge/tests-434%20passing-2ea44f)
+![tests](https://img.shields.io/badge/tests-449%20passing-2ea44f)
 ![playtester eval](https://img.shields.io/badge/planted%20bugs%20caught-21%2F21-2ea44f)
 ![prompt injection](https://img.shields.io/badge/prompt%20injection%20resisted-10%2F10-2ea44f)
 ![hostile games](https://img.shields.io/badge/sandbox%20attacks%20blocked-21%2F21-2ea44f)
@@ -36,6 +37,7 @@ built by Forge, fixed once, playtested headlessly and published on 20 Nov 2026.<
 | --------------- | ------------------------------------------------------------------------------------------------------ |
 | Live app        | https://crewarcade.vercel.app (no password, no email)                                                  |
 | Public Arcade   | https://crewarcade.vercel.app/arcade (games real crews made and published)                             |
+| Live numbers    | https://crewarcade.vercel.app/impact (real people only, recomputed every minute, with raw JSON)        |
 | Safety rules    | https://crewarcade.vercel.app/safety (what the shield blocks, publicly)                                |
 | API health      | https://crewarcade-server.onrender.com/health                                                          |
 | Demo video      | _TODO: YouTube link_                                                                                   |
@@ -196,6 +198,11 @@ Details: [`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## Real usage
 
+**Live: https://crewarcade.vercel.app/impact.** People, crews, games, the pitch-to-Arcade funnel,
+each day's sign-ups and how the agents did, straight from the database every minute, with the
+team's own accounts, judges and the agents left out (raw JSON:
+[`/api/public/impact`](https://crewarcade-server.onrender.com/api/public/impact)).
+
 People found CrewArcade through invite links shared in WhatsApp groups; each link carries a
 `?ref=` code, so sign-ups are counted by where they came from. No accounts were created by scripts.
 
@@ -278,7 +285,7 @@ structured outputs, a daily budget cap and a cost ledger; the live app runs **Cl
 
 ## Quality
 
-- **434 unit and integration tests** (shared 26, engine 48, server 292, web 68), plus **Playwright
+- **449 unit and integration tests** (shared 26, engine 48, server 301, web 74), plus **Playwright
   e2e** on phone and desktop viewports, including a check that no page or chat card runs off a
   phone screen.
 - **Playtester eval:** 7 kinds of planted bugs (collision disabled, score frozen, game over

@@ -12,12 +12,12 @@ export const STAGE_ACTIONS = {
 type Stage = keyof typeof STAGE_ACTIONS;
 
 /** Raw SQL rows on either driver (postgres.js returns an array, PGlite `{ rows }`). */
-async function rows<T>(db: Db, query: SQL): Promise<T[]> {
+export async function rows<T>(db: Db, query: SQL): Promise<T[]> {
   const r = (await db.execute(query)) as unknown;
   return Array.isArray(r) ? (r as T[]) : (r as { rows: T[] }).rows;
 }
 
-const list = (xs: readonly string[]) =>
+export const list = (xs: readonly string[]) =>
   sql.join(
     xs.map(x => sql`${x}`),
     sql`, `,

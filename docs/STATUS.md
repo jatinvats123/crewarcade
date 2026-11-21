@@ -89,7 +89,16 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   screen. Card messages now take the row's width and card bodies wrap with `overflow-wrap:anywhere`. The
   `/dev/ui` gallery now renders its cards inside the real chat row (after hydration, since the row
   prints a locale clock time) with long JSON details, and a new e2e checks every card stays inside the
-  screen. e2e cards/smoke/player 26/26 twice (phone + desktop).
+  screen. e2e cards/smoke/player 26/26 twice (phone + desktop). Live (`d62c45f`).
+- **Public `/impact` page (2026-11-21):** live numbers from real people only, in reply to the
+  competitors' impact pages (Dibs `/impact`, DoubtRoom `/impact`, Hop `/stats`: tiles, a daily chart,
+  "never counted"). Ours adds the pitch → approved → built → passed → published → played funnel,
+  clickable published games, the agents' last 30 days (playtests, pass rate, median build and test,
+  AI cost per game), referrer channels and a raw JSON link. `GET /api/public/impact`
+  (`repo/impact.ts`): agents, judges, `TEAM_USER_IDS` and the deleted placeholder never count, nor do
+  their plays; the team's games are counted separately; referrer codes under 2 people become
+  "other"; days are IST; computed at most once a minute. 9 server tests, 6 web tests, 1 e2e. Needs
+  `TEAM_USER_IDS` on Render (the owner's two phones). Landing footer and README link it.
 
 ## Phase 6: polish, harden, launch prep (branch `phase-6`)
 

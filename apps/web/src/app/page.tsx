@@ -90,9 +90,15 @@ export default function Landing() {
         <span>
           Made by <span className="text-text">Jatin</span> · Nexconn Build Challenge 2026 · Built on the Nexconn Chat SDK
         </span>
-        <span className="flex gap-4 md:ml-auto">
+        <span className="flex flex-wrap gap-x-4 md:ml-auto">
           <Link href="/arcade" className="inline-flex min-h-11 items-center font-semibold hover:text-text">
             Arcade
+          </Link>
+          <Link href="/impact" className="inline-flex min-h-11 items-center font-semibold hover:text-text">
+            Live numbers
+          </Link>
+          <Link href="/safety" className="inline-flex min-h-11 items-center font-semibold hover:text-text">
+            Safety
           </Link>
           <Link href="/privacy" className="inline-flex min-h-11 items-center font-semibold hover:text-text">
             Privacy

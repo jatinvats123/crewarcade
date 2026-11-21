@@ -68,6 +68,17 @@ const BaseSchema = z.object({
         .filter(Boolean),
     ),
 
+  /** The team's own CrewArcade user ids (comma list): left out of the public /impact numbers. */
+  TEAM_USER_IDS: z
+    .string()
+    .default('')
+    .transform(s =>
+      s
+        .split(',')
+        .map(h => h.trim())
+        .filter(Boolean),
+    ),
+
   /** CrewArcade user ids (comma list) that may open /admin. Empty: nobody. */
   ADMIN_USER_IDS: z
     .string()
