@@ -149,7 +149,8 @@ function Bubble({
   const seen = (m.readCount ?? 0) > 0;
   const translatable = !isMe && (m.kind === 'text' || (m.kind === 'stream' && m.streamComplete)) && !!m.text?.trim();
   return (
-    <div className={cn('flex flex-col', isMe ? 'items-end' : 'items-start')}>
+    // A card takes the row's width; sized to its content, long unbroken text would push it off a phone screen.
+    <div className={cn('flex flex-col', isMe ? 'items-end' : 'items-start', m.kind === 'card' && 'w-full min-w-0')}>
       {body}
       {translatable && <TranslateTap messageId={m.messageId} text={m.text ?? ''} />}
       {m.blockedReason && (

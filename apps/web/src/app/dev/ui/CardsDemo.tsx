@@ -4,14 +4,17 @@
 // behave like the server: votes, approval, change), a streamed Markdown reply, and the Agent Status
 // Strip. Content here is sample data, not a CrewArcade game.
 import { CARD_MESSAGE_TYPES, metaToStrings, parseCardMeta, applyVote, type AgentStateMessage, type AnyCard, type CardActionResponse } from '@crewarcade/shared';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { AgentStatusStrip } from '@/components/agents/AgentStatusStrip';
-import { CardMessage } from '@/components/cards/CardMessage';
 import { CardEnvProvider, type CardEnv } from '@/components/cards/context';
+import { SenderGroupView } from '@/components/chat/MessageGroup';
 import { usePlayer } from '@/components/player/PlayerProvider';
 import { Markdown } from '@/components/chat/Markdown';
 import { Button } from '@/components/ui';
 import { emptyChannel, type ChannelState, type ChatMessage } from '@/lib/chat/types';
+
+const noop = () => {};
+const subscribeNothing = () => noop;
 
 const ME = 'uDemoViewer000001';
 const CH = 'crewDemoChannel001';
@@ -170,11 +173,20 @@ export function CardsDemo() {
             passed: 16,
             total: 18,
             fps: 55,
-            failures: [{ label: 'key Space has an effect', detail: 'no change to state or picture after 600 ms' }],
+            failures: [
+              { label: 'key Space has an effect', detail: 'no change to state or picture after 600 ms' },
+              // A long unbroken detail, as real playtests produce: it must wrap inside the card on a phone.
+              { label: 'scenario valid', detail: 'could not write the scenario: glitch.scenario output did not match the schema: {"steps":[{"wait":95000}]}' },
+            ],
             regressions: [],
             items: [
               { id: 'A1', text: 'state().score rises while playing', pass: true },
-              { id: 'A2', text: 'Pressing Space makes state().jumping true', pass: false, detail: 'state.jumping === true -> state {"jumping":false}' },
+              {
+                id: 'A2',
+                text: 'Pressing Space makes state().jumping true',
+                pass: false,
+                detail: 'state.jumping === true -> state {"scene":"playing","score":2,"best":0,"time":2.1,"frame":126,"jumping":false,"rocketX":180}',
+              },
             ],
             round: 2,
           },
@@ -339,6 +351,11 @@ export function CardsDemo() {
     };
   }, []);
 
+  const hydrated = useSyncExternalStore(
+    subscribeNothing,
+    () => true,
+    () => false,
+  );
   return (
     <div className="flex w-full max-w-md flex-col gap-3" data-testid="cards-demo">
       <div className="overflow-hidden rounded-card border border-border">
@@ -353,9 +370,21 @@ export function CardsDemo() {
         </Button>
       </div>
       <CardEnvProvider value={env}>
-        {msgs.map(m => (
-          <CardMessage key={m.key} m={m} />
-        ))}
+        {/* Inside the real chat row (avatar, name, bubble), so layout bugs show up here too. Rendered after
+            hydration: the row prints a local clock time, which differs between server and browser locales. */}
+        {hydrated &&
+          msgs.map(m => (
+            <SenderGroupView
+              key={m.key}
+              group={{ key: m.key, senderId: m.senderId, direction: 'in', messages: [m] }}
+              sender={undefined}
+              isMe={false}
+              targets={[]}
+              onRetry={noop}
+              onSeenBy={noop}
+              onOpenImage={noop}
+            />
+          ))}
       </CardEnvProvider>
       <Button size="sm" variant="ghost" onClick={simulateBug} data-testid="demo-bug">
         🐞 Simulate a bug report

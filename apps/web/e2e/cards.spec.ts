@@ -69,4 +69,17 @@ test.describe('cards, stream and agent strip (gallery)', () => {
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   });
+
+  test('cards in a chat row stay inside the screen, even with long unbroken text', async ({ page }) => {
+    // The real chat row (avatar + name + bubble) with a FAIL card whose details are long JSON.
+    await expect(page.getByTestId('cards-demo').getByText(/did not match the schema/)).toBeVisible();
+    const sticking = await page.evaluate(() => {
+      const vw = document.documentElement.clientWidth;
+      return [...document.querySelectorAll('[data-testid="cards-demo"] article')]
+        .map(a => a.getBoundingClientRect())
+        .filter(r => r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5))
+        .map(r => `${Math.round(r.left)}..${Math.round(r.right)} of ${vw}`);
+    });
+    expect(sticking).toEqual([]);
+  });
 });

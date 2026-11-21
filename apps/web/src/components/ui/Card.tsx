@@ -45,7 +45,8 @@ export function CardShell({ agent, title, meta, badges, cover, children, actions
         {/* Under the title, so long status text never squeezes the title on a phone. */}
         {badges && <div className="mt-2 flex flex-wrap gap-1.5">{badges}</div>}
       </header>
-      {children && <div className="px-4 pb-4 text-sm text-text sm:px-5">{children}</div>}
+      {/* overflow-wrap:anywhere: test details carry long unbroken JSON that must wrap, not widen the card. */}
+      {children && <div className="min-w-0 px-4 pb-4 text-sm [overflow-wrap:anywhere] text-text sm:px-5">{children}</div>}
       {actions && (
         <footer className="flex flex-col gap-2 border-t border-border px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:px-5">
           {actions}

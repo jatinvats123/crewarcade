@@ -81,7 +81,15 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   long game titles breaking mid-word (smaller size for titles over 24 characters, hyphens), and agent
   names cut ("GLITCH · PLAYTES…") by the badge (shows "✦ AI" on phones, full label for screen
   readers). Web 68 ✓, typecheck, lint, e2e cards/smoke/player 24/24 (phone + desktop). The game-room
-  header was checked in code only: local chat has no Nexconn, so rooms can't open locally.
+  header was checked in code only: local chat has no Nexconn, so rooms can't open locally. Live (`6bf1f3a`);
+  the owner's phone confirmed the two-line game-room title.
+- **Cards pushed off the phone screen (2026-11-21):** the owner's phone showed Glitch's test card cut at
+  the right edge. In a chat row the bubble column is `items-start`, so a card sized to its content, and a
+  test detail with long unbroken JSON (`state {"scene":"playing",…}`) made that content wider than the
+  screen. Card messages now take the row's width and card bodies wrap with `overflow-wrap:anywhere`. The
+  `/dev/ui` gallery now renders its cards inside the real chat row (after hydration, since the row
+  prints a locale clock time) with long JSON details, and a new e2e checks every card stays inside the
+  screen. e2e cards/smoke/player 26/26 twice (phone + desktop).
 
 ## Phase 6: polish, harden, launch prep (branch `phase-6`)
 
