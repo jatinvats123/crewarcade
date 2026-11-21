@@ -199,8 +199,13 @@ Details: [`docs/SECURITY.md`](docs/SECURITY.md).
 People found CrewArcade through invite links shared in WhatsApp groups; each link carries a
 `?ref=` code, so sign-ups are counted by where they came from. No accounts were created by scripts.
 
-**21 Nov 2026, 15:08 IST** (owner dashboard): **8 sign-ups** (6 from a college group link, 1 from a
-crew invite, 1 direct), **10 games built**, **15 plays**, **$0.076** of AI spend.
+| When (owner dashboard)     | Sign-ups | Games built | Plays  | AI spend |
+| -------------------------- | -------- | ----------- | ------ | -------- |
+| 21 Nov 2026, 15:08 IST     | 8        | 10          | 15     | $0.076   |
+| **21 Nov 2026, 17:57 IST** | **20**   | _TODO_      | _TODO_ | _TODO_   |
+
+The first sign-ups came from a college group link (6 of the first 8), a crew invite and one direct
+visit. Both rows include the team's own accounts.
 
 _TODO before submitting: the final numbers, with the team's own accounts (the owner's phone and one
 test phone) removed and listed in the write-up._
