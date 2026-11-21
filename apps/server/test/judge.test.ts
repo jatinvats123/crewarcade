@@ -50,10 +50,30 @@ describe('POST /api/auth/judge', () => {
     expect(row?.language).toBe('en');
   });
 
+  it('someone already signed in keeps their account and becomes a judge (no new account)', async () => {
+    const guest = await h.app.inject({
+      method: 'POST',
+      url: '/api/auth/guest',
+      headers: { origin: WEB },
+      remoteAddress: '10.9.0.8',
+      payload: { displayName: 'Ravi', avatarEmoji: '🦊', avatarColor: 'violet' },
+    });
+    const cookie = sessionFrom(guest);
+    const id = guest.json().user.id;
+    const res = await h.app.inject({ method: 'POST', url: '/api/auth/judge', headers: { origin: WEB, cookie }, remoteAddress: '10.9.0.8', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user).toMatchObject({ id, displayName: 'Ravi', isJudge: true });
+    const me = await h.app.inject({ method: 'GET', url: '/api/me', headers: { cookie } });
+    expect(me.json().user).toMatchObject({ id, isJudge: true });
+    // Tapping it again changes nothing.
+    const again = await h.app.inject({ method: 'POST', url: '/api/auth/judge', headers: { origin: WEB, cookie }, remoteAddress: '10.9.0.8', payload: {} });
+    expect(again.json().user).toMatchObject({ id, isJudge: true });
+  });
+
   it('judges are never counted as real people on /impact', async () => {
     const impact = (await h.app.inject({ method: 'GET', url: '/api/public/impact' })).json();
     expect(impact.people.signedUp).toBe(1); // the guest above
-    expect(impact.excluded.judgeAccounts).toBe(2);
+    expect(impact.excluded.judgeAccounts).toBe(3); // two new judges + Ravi, who switched
   });
 
   it('shares the sign-up rate limit (10 a minute per IP)', async () => {

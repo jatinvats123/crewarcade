@@ -9,7 +9,7 @@ import type { Ctx } from '../context';
 import { createGuestUser, toProfile, updateUser } from '../repo/users';
 import { deleteAccount } from '../services/account';
 import { ensureNexconnToken, requireNexconn } from '../services/chat-users';
-import { fixedWindowLimiter, rateLimit, requireUser } from './http';
+import { fixedWindowLimiter, optionalUser, rateLimit, requireUser } from './http';
 
 const DeleteAccountBody = z.object({ confirm: z.literal('delete my account') });
 const TokenBody = z.object({ refresh: z.boolean().default(false) }).default({ refresh: false });
@@ -35,10 +35,17 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: Ctx): void {
   });
 
   // Judge mode (/try): one tap, no form. Marked as a judge, so it is never counted as a real user on
-  // /impact. Same sign-up rate limit as guests.
+  // /impact. Same sign-up rate limit as guests. Someone already signed in keeps their account (a guest
+  // account has no password, so swapping it would lose it for good): it is marked as a judge instead.
   app.post('/api/auth/judge', async (req, reply) => {
     rateLimit(signupLimit, `ip:${req.ip}`);
     const body = JudgeSignupBody.parse(req.body ?? {});
+    const current = await optionalUser(ctx, req);
+    if (current) {
+      const judge = current.isJudge ? current : ((await updateUser(ctx.db, current.id, { isJudge: true })) ?? current);
+      ctx.log.info({ userId: current.id }, 'signed-in user switched to judge mode');
+      return reply.code(200).send({ user: toProfile(judge) });
+    }
     const user = await createGuestUser(ctx.db, {
       displayName: 'Judge',
       avatarEmoji: '🌟',

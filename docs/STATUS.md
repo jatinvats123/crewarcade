@@ -113,6 +113,11 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   opens with a "Judging the Nexconn Build Challenge? ★ I'm a judge" card above "Or sign up as a
   player" (not on invite sign-ups), and `/try` links players back to the normal sign-up. 1 e2e.
   Checked at 320 px: nothing cut off, no sideways scroll.
+- **Judge mode for someone already signed in (2026-11-22):** the owner, signed in as a normal player,
+  tapped Start as a judge: `/try` kept the account and opened a crew, but no tour (not a judge). Now
+  `POST /api/auth/judge` with a session marks that same account as a judge (a guest account has no
+  password, so swapping it would lose it) and the tour turns on; `/try` says so before the tap. 1
+  server test; checked locally (player sign-up → no tour → `/try` → same account, tour on).
 - **Chat flapping "connecting / disconnected" fixed (2026-11-22):** on a rejected token (31004) or
   exhausted reconnects (33007) the client fetched a new token and reconnected with no limit (the
   status-handler path had no guard; the connect path's guard used a counter that never reset). A

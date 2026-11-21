@@ -26,7 +26,7 @@ export async function getUser(db: Db, id: string): Promise<UserRow | null> {
 export async function updateUser(
   db: Db,
   id: string,
-  patch: Partial<Pick<UserRow, 'displayName' | 'avatarEmoji' | 'avatarColor' | 'language' | 'nexconnTokenEncrypted' | 'lastSeenAt'>>,
+  patch: Partial<Pick<UserRow, 'displayName' | 'avatarEmoji' | 'avatarColor' | 'language' | 'nexconnTokenEncrypted' | 'lastSeenAt' | 'isJudge'>>,
 ): Promise<UserRow | null> {
   if (Object.keys(patch).length === 0) return getUser(db, id);
   const [row] = await db.update(users).set(patch).where(eq(users.id, id)).returning();

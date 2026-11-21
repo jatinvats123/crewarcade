@@ -15,7 +15,7 @@ browser and records the proof. Nothing goes public until someone in your crew ta
 [Real usage](#real-usage) ·
 [Safety](#safety)
 
-![tests](https://img.shields.io/badge/tests-513%20passing-2ea44f)
+![tests](https://img.shields.io/badge/tests-514%20passing-2ea44f)
 ![playtester eval](https://img.shields.io/badge/planted%20bugs%20caught-21%2F21-2ea44f)
 ![prompt injection](https://img.shields.io/badge/prompt%20injection%20resisted-10%2F10-2ea44f)
 ![hostile games](https://img.shields.io/badge/sandbox%20attacks%20blocked-21%2F21-2ea44f)
@@ -314,7 +314,7 @@ structured outputs, a daily budget cap and a cost ledger; the live app runs **Cl
 
 ## Quality
 
-- **513 unit and integration tests** (shared 26, engine 48, server 306, web 133), plus **Playwright
+- **514 unit and integration tests** (shared 26, engine 48, server 307, web 133), plus **Playwright
   e2e** on phone and desktop viewports, including a check that no page or chat card runs off a
   phone screen.
 - **Playtester eval:** 7 kinds of planted bugs (collision disabled, score frozen, game over

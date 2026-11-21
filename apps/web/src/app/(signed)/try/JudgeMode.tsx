@@ -43,11 +43,10 @@ export function JudgeMode() {
     setBusy(true);
     setError(null);
     try {
-      let me = user;
-      if (!me) {
-        me = await api.signUpJudge({});
-        setUser(me);
-      }
+      // Signed in already: the same account is switched to judge mode (the tour turns on); otherwise a
+      // new judge account. Either way the server marks it as a judge.
+      const me = user?.isJudge ? user : await api.signUpJudge({});
+      if (me !== user) setUser(me);
       const crew = await api.createCrew({ name: `${me.displayName}'s crew`.slice(0, 40) });
       router.push(`/crews/${crew.id}`);
     } catch (e) {
@@ -100,7 +99,7 @@ export function JudgeMode() {
             className={`${PILL} min-h-14 w-full bg-brand text-base text-brand-ink hover:brightness-110 disabled:opacity-60 sm:w-auto sm:self-start sm:px-10`}
             data-testid="judge-start"
           >
-            {busy ? 'Opening your crew…' : user ? 'Open a new crew' : 'Start as a judge'}
+            {busy ? 'Opening your crew…' : user?.isJudge ? 'Open a new crew' : 'Start as a judge'}
           </button>
           {error && (
             <p role="alert" className="text-sm text-danger">
@@ -118,7 +117,9 @@ export function JudgeMode() {
           )}
           <p className="text-xs text-dim">
             {user
-              ? `You are signed in as ${user.displayName}; this opens a new solo crew for you.`
+              ? user.isJudge
+                ? `You are signed in as ${user.displayName} (judge); this opens a new solo crew with the tour.`
+                : `You are signed in as ${user.displayName}. This keeps your account, switches it to judge mode (guided tour on, left out of our live numbers) and opens a new solo crew.`
               : 'This makes a judge account on this browser only. Judge accounts are marked and never counted in our live numbers.'}
           </p>
         </section>
