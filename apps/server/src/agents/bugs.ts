@@ -7,7 +7,7 @@
 import { GameSpecSchema, gameRegion, type PlaytestResult, type Scenario, type Step } from '@crewarcade/engine';
 import { AGENTS, nexconnUserId } from '@crewarcade/shared';
 import { z } from 'zod';
-import type { AiImage, AiUsage } from '../ai/claude';
+import { AiOutputError, type AiImage, type AiUsage } from '../ai/claude';
 import type { Ctx } from '../context';
 import { getBug, updateBug, type BugRow } from '../repo/bugs';
 import { getGame, updateGame, type GameRow } from '../repo/games';
@@ -56,10 +56,11 @@ export async function playtestsOff(ctx: AgentCtx, job: PlaytestJobData): Promise
 
 // ---- the repro ---------------------------------------------------------------------------------
 
+// Types only (the API drops length limits; convertSteps checks the steps with step numbers).
 export const ReproOutput = z.object({
-  steps: z.array(RawStep).min(2).max(60),
+  steps: z.array(RawStep),
   /** Asked when the repro passes (the bug did not show): one short, concrete question. */
-  question: z.string().min(5).max(300),
+  question: z.string().transform(s => s.trim().slice(0, 300)),
 });
 export type ReproOutput = z.infer<typeof ReproOutput>;
 
@@ -149,18 +150,28 @@ export async function writeRepro(
       ...base,
       problems.length ? `Your last repro broke these rules; fix every one:\n${problems.map((p, i) => `${i + 1}. ${p}`).join('\n')}` : 'Write the repro now.',
     ].join('\n\n');
-    const { value, usage: u } = await ai.structured({
-      purpose: 'glitch.repro',
-      system: REPRO_SYSTEM,
-      user,
-      ...(o.image && { images: [o.image] }),
-      effort: 'low',
-      maxTokens: 3000,
-      schema: ReproOutput,
-      hint: { description: o.description, bugNo: o.bugNo },
-    }).done;
-    usage.push(u);
-    question = value.question.trim();
+    let value: z.infer<typeof ReproOutput>;
+    try {
+      const r = await ai.structured({
+        purpose: 'glitch.repro',
+        system: REPRO_SYSTEM,
+        user,
+        ...(o.image && { images: [o.image] }),
+        effort: 'low',
+        maxTokens: 6000,
+        schema: ReproOutput,
+        hint: { description: o.description, bugNo: o.bugNo },
+      }).done;
+      value = r.value;
+      usage.push(r.usage);
+    } catch (e) {
+      // Malformed output (bad JSON, schema mismatch, max_tokens) gets the repair round too.
+      if (!(e instanceof AiOutputError)) throw e;
+      if (e.usage) usage.push(e.usage);
+      problems = [`your output could not be read (${e.message.slice(0, 160)}); return only the JSON object with "steps" and "question"`];
+      continue;
+    }
+    question = value.question || null;
     const v = validateRepro(value.steps, o.bugNo);
     if (v.steps) return { steps: v.steps, question, problems: [], usage };
     problems = v.problems;

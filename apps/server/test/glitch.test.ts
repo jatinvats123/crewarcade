@@ -5,7 +5,11 @@
 import { CARD_MESSAGE_TYPES, type PlanCardContent, type TestCardContent } from '@crewarcade/shared';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { afterFail, failuresForForge, fixRoundOf, MAX_AUTO_FIX_ROUNDS, validateScenario, type GlitchScenarioOutput } from '../src/agents/glitch';
+import { afterFail, failuresForForge, fixRoundOf, GlitchScenarioOutput, MAX_AUTO_FIX_ROUNDS, validateScenario, writeScenario } from '../src/agents/glitch';
+import { ReproOutput } from '../src/agents/bugs';
+import type { AgentServices } from '../src/agents/runtime-deps';
+import { AiOutputError, type AiClient, type AiUsage } from '../src/ai/claude';
+import { starterHtml, type GameSpec } from '@crewarcade/engine';
 import { cards, games, gameVersions, ledger } from '../src/db/schema';
 import { canDecidePublish } from '../src/services/publish';
 import { createHarness, signUp, stubPlaytester, WEB, type Harness, type NexconnCall } from './harness';
@@ -49,6 +53,81 @@ describe('scenario validation', () => {
     expect(all).toMatch(/A1: needs exactly one labelled expect \(found 2\)/);
     expect(all).toMatch(/A2: needs exactly one labelled expect \(found 0\)/);
     expect(all).toMatch(/game time/);
+  });
+});
+
+describe('scenario output from the model (the API ignores numeric and length limits)', () => {
+  it('parses out-of-range numbers and long text, then reports them as fixable problems with step numbers', () => {
+    const raw = {
+      steps: [
+        { call: 'start' as const },
+        { wait: 95_000 },
+        { press: 'ArrowRight', ms: 0 },
+        { expect: 'state.score > 0', label: 'A1 ' + 'x'.repeat(250) },
+        { expect: 'state.x > 0', label: 'A2 right moves' },
+      ],
+    };
+    const parsed = GlitchScenarioOutput.safeParse(raw);
+    expect(parsed.success).toBe(true);
+    const r = validateScenario(parsed.data!.steps, A);
+    expect(r.steps).toBeNull();
+    const all = r.problems.join('\n');
+    expect(all).toMatch(/step \d+:/);
+    expect(all).toMatch(/game time/);
+  });
+
+  it('caps a scenario at 80 steps and needs at least 2', () => {
+    expect(GlitchScenarioOutput.safeParse({ steps: [] }).success).toBe(true);
+    expect(validateScenario([{ call: 'start' }], A).problems.join('\n')).toMatch(/2 to 80 steps/);
+    const many = [{ call: 'start' as const }, ...Array.from({ length: 85 }, () => ({ wait: 10 }))];
+    expect(validateScenario(many, A).problems.join('\n')).toMatch(/2 to 80 steps/);
+  });
+
+  it('a repro question of any length parses (trimmed to 300 characters)', () => {
+    const r = ReproOutput.safeParse({ steps: [{ call: 'start' }], question: 'ok? ' + 'y'.repeat(400) });
+    expect(r.success).toBe(true);
+    expect(r.data!.question.length).toBeLessThanOrEqual(300);
+  });
+
+  it('a schema error from the model goes to the repair round instead of failing the playtest', async () => {
+    const h = await createHarness();
+    try {
+      const usage: AiUsage = { model: 'test', tokensIn: 1, tokensOut: 1, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: 0, ms: 1, fellBack: false };
+      const prompts: string[] = [];
+      let n = 0;
+      const ai = {
+        model: 'test',
+        structured: (call: { user: string }) => {
+          prompts.push(call.user);
+          n++;
+          const done =
+            n === 1
+              ? Promise.reject(new AiOutputError('glitch.scenario output did not match the schema: Too big: expected number to be <=60000', usage))
+              : Promise.resolve({
+                  value: {
+                    steps: [
+                      { call: 'start' },
+                      { mark: 'a' },
+                      { wait: 2000 },
+                      { expect: 'state.score > marks.a.score', label: 'A1 score rises' },
+                      { press: 'ArrowRight', ms: 400 },
+                      { expect: 'state.x > marks.a.x', label: 'A2 right moves' },
+                    ],
+                  },
+                  usage,
+                });
+          return { done, fields: (async function* () {})() };
+        },
+      } as unknown as AiClient;
+      const ctx = { ...h.ctx(), agents: { ai } as unknown as AgentServices };
+      const spec = { title: 'Test', controls: ['ArrowRight'] } as unknown as GameSpec;
+      const res = await writeScenario(ctx, { html: starterHtml(), spec, acceptance: A, probeLines: [] });
+      expect(res.steps).toHaveLength(6);
+      expect(n).toBe(2);
+      expect(prompts[1]).toMatch(/did not match the schema/);
+    } finally {
+      await h.close();
+    }
   });
 });
 

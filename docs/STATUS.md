@@ -63,7 +63,16 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   call `state()` (the prompts phrase acceptance items as `state().field`), but `playSteps` passed `state`
   as a plain object. Expects now get `state`, `start` and each mark as a snapshot that is readable and
   callable (`packages/engine/src/player.ts`), with a browser test. Engine 48 ✓, server 288 ✓, typecheck,
-  lint, `pnpm eval:fast` 21/21 caught, 0 false FAILs. Needs a push to `main` (Render redeploys) to go live.
+  lint, `pnpm eval:fast` 21/21 caught, 0 false FAILs. Live on `main` (`a6374f7`); Roof Rider v4 and
+  Pedal Pup then passed and were published.
+- **Glitch "could not write the scenario" fixed (2026-11-21):** a live test card showed
+  `scenario valid: could not write the scenario` on Haiku. The API drops numeric and length limits
+  from the JSON schema it enforces (`outputJsonSchema`), so the model could return e.g. `wait: 95000`,
+  and the zod limits in `RawStep` / `ReproOutput` then threw before the repair round. The model-facing
+  schemas now hold types only; `convertSteps` checks step count (2–80) and the engine schema checks the
+  rest with step numbers, and `writeScenario` / `writeRepro` send malformed output (bad JSON, schema
+  mismatch, max_tokens) to the repair round. Token limits 4000 → 8000 (scenario) and 3000 → 6000
+  (repro), since thinking counts toward them. 4 new tests; server 292 ✓, typecheck, lint.
 
 ## Phase 6: polish, harden, launch prep (branch `phase-6`)
 

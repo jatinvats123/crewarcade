@@ -22,7 +22,7 @@ import {
 import { AGENTS, newId, nexconnUserId, type TestCardContent } from '@crewarcade/shared';
 import { and, eq, isNotNull, lte } from 'drizzle-orm';
 import { z } from 'zod';
-import type { AiUsage } from '../ai/claude';
+import { AiOutputError, type AiUsage } from '../ai/claude';
 import type { Ctx } from '../context';
 import { bugs } from '../db/schema';
 import { getBug, updateBug, type BugRow } from '../repo/bugs';
@@ -47,17 +47,24 @@ const glitchOperator = nexconnUserId(AGENTS.glitch.id);
 
 // ---- the scenario ------------------------------------------------------------------------------
 
-/** What the model returns: flat optional fields (simple for structured outputs), converted below. */
+/**
+ * What the model returns: flat optional fields (simple for structured outputs), converted below.
+ * Types only, no numeric or length limits: the API drops those from the schema it enforces, so a
+ * limit here would throw before the repair round. convertSteps checks them with step numbers.
+ */
 export const RawStep = z.object({
   call: z.enum(['start', 'reset']).optional(),
-  press: z.string().max(20).optional(),
-  ms: z.number().int().min(1).max(30_000).optional(),
-  wait: z.number().int().min(0).max(60_000).optional(),
-  mark: z.string().max(40).optional(),
-  expect: z.string().max(500).optional(),
-  label: z.string().max(200).optional(),
+  press: z.string().optional(),
+  ms: z.number().int().optional(),
+  wait: z.number().int().optional(),
+  mark: z.string().optional(),
+  expect: z.string().optional(),
+  label: z.string().optional(),
 });
-export const GlitchScenarioOutput = z.object({ steps: z.array(RawStep).min(2).max(80) });
+export const GlitchScenarioOutput = z.object({ steps: z.array(RawStep) });
+/** Steps a Glitch scenario or repro may have. */
+export const MIN_STEPS = 2;
+export const MAX_STEPS = 80;
 export type GlitchScenarioOutput = z.infer<typeof GlitchScenarioOutput>;
 
 /** The acceptance id an expect label belongs to ("A3 jump works" -> "A3"), or null. */
@@ -91,6 +98,7 @@ export function validateScenario(raw: GlitchScenarioOutput['steps'], acceptance:
 export function convertSteps(raw: GlitchScenarioOutput['steps']): { steps: Step[]; problems: string[]; parsed: Scenario | null } {
   const problems: string[] = [];
   const steps: Step[] = [];
+  if (raw.length < MIN_STEPS || raw.length > MAX_STEPS) problems.push(`the scenario needs ${MIN_STEPS} to ${MAX_STEPS} steps (got ${raw.length})`);
   raw.forEach((r, i) => {
     const actions = (['call', 'press', 'wait', 'mark', 'expect'] as const).filter(k => r[k] !== undefined);
     if (actions.length !== 1)
@@ -176,16 +184,26 @@ export async function writeScenario(
         ? `Your last scenario broke these rules; fix every one:\n${problems.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
         : 'Write the scenario now.',
     ].join('\n\n');
-    const { value, usage: u } = await ai.structured({
-      purpose: 'glitch.scenario',
-      system: SCENARIO_SYSTEM,
-      user,
-      effort: 'low',
-      maxTokens: 4000,
-      schema: GlitchScenarioOutput,
-      hint: { acceptance: o.acceptance },
-    }).done;
-    usage.push(u);
+    let value: GlitchScenarioOutput;
+    try {
+      const r = await ai.structured({
+        purpose: 'glitch.scenario',
+        system: SCENARIO_SYSTEM,
+        user,
+        effort: 'low',
+        maxTokens: 8000,
+        schema: GlitchScenarioOutput,
+        hint: { acceptance: o.acceptance },
+      }).done;
+      value = r.value;
+      usage.push(r.usage);
+    } catch (e) {
+      // Malformed output (bad JSON, schema mismatch, max_tokens) gets the repair round too.
+      if (!(e instanceof AiOutputError)) throw e;
+      if (e.usage) usage.push(e.usage);
+      problems = [`your output could not be read (${e.message.slice(0, 160)}); return only the JSON object with "steps"`];
+      continue;
+    }
     const v = validateScenario(value.steps, o.acceptance);
     if (v.steps) return { steps: v.steps, problems: [], usage };
     problems = v.problems;
