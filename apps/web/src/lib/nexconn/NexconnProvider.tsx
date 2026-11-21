@@ -25,6 +25,7 @@ import { normalizeMessage, parseStreamContent, streamSummary, type SdkMessageLik
 import { createChatStore, createPresenceStore, type ChatStore, type PresenceStore } from '../chat/store';
 import type { ChatMessage } from '../chat/types';
 import { createTranslationStore, TranslationContext, type TranslateOutcome, type TranslationApi } from '../chat/translations';
+import { afterTokenRejected } from './retry';
 import { useSession } from '../session';
 
 type Sdk = typeof NexconnSdk;
@@ -95,6 +96,9 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
   const receiptTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Set when Nexconn says the token is invalid or expired: the next attempt asks for a new one. */
   const needFreshToken = useRef(false);
+  /** Token rejections / exhausted reconnects in a row (see retry.ts); reset on connect and Try again. */
+  const rejects = useRef(0);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [attempt, setAttempt] = useState(0);
   const userId = user?.id ?? null;
   const translations = useMemo(createTranslationStore, []);
@@ -336,6 +340,19 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       return;
     }
     let cancelled = false;
+    // Rejected token or reconnects exhausted: a fresh token and another go, a limited number of times.
+    const onRejected = (tokenInvalid: boolean) => {
+      rejects.current += 1;
+      const plan = afterTokenRejected(rejects.current);
+      if (!plan.retry) {
+        console.warn('[nexconn] giving up after repeated token rejections');
+        setState('error');
+        return;
+      }
+      needFreshToken.current = tokenInvalid;
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+      retryTimer.current = setTimeout(() => setAttempt(a => a + 1), plan.delayMs);
+    };
     const run = async () => {
       setState(everConnected.current ? 'reconnecting' : 'connecting');
       let token: NexconnTokenResponse;
@@ -361,6 +378,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
         new ConnectionStatusHandler({
           onConnectionStatusChanged({ status, code }) {
             if (status === ConnectionStatus.CONNECTED) {
+              rejects.current = 0;
               if (everConnected.current) setReconnectedAt(Date.now());
               everConnected.current = true;
               setState('connected');
@@ -368,10 +386,8 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
               void refreshPresence([...subscribed.current]);
             } else if (status === ConnectionStatus.CONNECTING) setState(everConnected.current ? 'reconnecting' : 'connecting');
             else if (code === CODE.kicked) setState('kicked');
-            else if (code === CODE.tokenInvalid || code === CODE.reconnectExhausted) {
-              needFreshToken.current = code === CODE.tokenInvalid;
-              setAttempt(a => a + 1);
-            } else setState('offline');
+            else if (code === CODE.tokenInvalid || code === CODE.reconnectExhausted) onRejected(code === CODE.tokenInvalid);
+            else setState('offline');
           },
         }),
       );
@@ -462,14 +478,14 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
       const res = await NCEngine.connect({ token: token.token });
       if (cancelled) return;
       if (res.isOk && res.data) {
+        rejects.current = 0;
         myIdRef.current = res.data.userId;
         setMyId(res.data.userId);
         everConnected.current = true;
         setState('connected');
         void refreshChannelList();
-      } else if (res.code === CODE.tokenInvalid && attempt < 2) {
-        needFreshToken.current = true;
-        setAttempt(a => a + 1);
+      } else if (res.code === CODE.tokenInvalid) {
+        onRejected(true);
       } else {
         console.warn('[nexconn] connect failed', res.code);
         setState(res.code === CODE.kicked ? 'kicked' : 'error');
@@ -478,6 +494,7 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
     void run();
     return () => {
       cancelled = true;
+      if (retryTimer.current) clearTimeout(retryTimer.current);
     };
   }, [session, userId, attempt, handleIncoming, refreshChannelList, refreshPresence, store, channelOfMessage, noteOrphanStream, translations]);
 
@@ -722,7 +739,10 @@ export function NexconnProvider({ children }: { children: ReactNode }) {
     return () => void unknownListeners.current.delete(fn);
   }, []);
 
-  const retryConnect = useCallback(() => setAttempt(a => a + 1), []);
+  const retryConnect = useCallback(() => {
+    rejects.current = 0;
+    setAttempt(a => a + 1);
+  }, []);
 
   // ---- tap-to-translate: reserve the daily allowance on our server, then ask Nexconn
   const language = user?.language ?? 'en';
