@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { Logo } from '@/components/brand/Logo';
 import { cn } from '@/lib/cn';
+import { HERO_3D_QUERY, heroUses3d } from '@/lib/hero';
 
 // three.js loads on demand, only where WebGL2 works.
 const HeroScene = dynamic(() => import('./HeroScene'), { ssr: false });
@@ -39,8 +40,9 @@ export function GlassHero() {
   const [active, setActive] = useState(true);
 
   useEffect(() => {
-    setUse3d(canUse3d());
-    setQuality(window.matchMedia('(min-width: 768px)').matches ? 'high' : 'low');
+    const wide = window.matchMedia(HERO_3D_QUERY).matches;
+    setUse3d(heroUses3d({ webgl2: canUse3d(), wide }));
+    setQuality(wide ? 'high' : 'low');
     setStill(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     const el = section.current;
     if (!el) return;
@@ -76,7 +78,10 @@ export function GlassHero() {
                 {n.label}
               </Link>
             ))}
-            <Link href="/start" className="inline-flex min-h-11 items-center rounded-full border border-text/30 px-4 hover:border-brand hover:text-brand">
+            <Link
+              href="/start"
+              className="inline-flex min-h-11 items-center rounded-full border border-text/30 px-3 hover:border-brand hover:text-brand sm:px-4"
+            >
               Start a crew
             </Link>
           </nav>
