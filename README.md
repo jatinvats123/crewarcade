@@ -11,6 +11,7 @@ browser and records the proof. Nothing goes public until someone in your crew ta
 [**Arcade**](https://crewarcade.vercel.app/arcade) ·
 [**Live numbers**](https://crewarcade.vercel.app/impact) ·
 [Try it in 3 minutes](#for-judges-try-it-in-3-minutes) ·
+[A real game, minute by minute](#a-real-game-minute-by-minute) ·
 [How we use Nexconn](#how-we-use-nexconn) ·
 [Built on Nexconn](#built-on-nexconn) ·
 [Real usage](#real-usage) ·
@@ -39,7 +40,7 @@ built by Forge, fixed once, playtested headlessly and published on 20 Nov 2026.<
 | Judge mode      | https://crewarcade.vercel.app/try (one tap, no sign-up, then a 23-step guided tour with Show me)       |
 | Live app        | https://crewarcade.vercel.app (no password, no email)                                                  |
 | Public Arcade   | https://crewarcade.vercel.app/arcade (games that crews made and published)                             |
-| Live numbers    | https://crewarcade.vercel.app/impact (real people only, recomputed every minute, with raw JSON)        |
+| Live numbers    | https://crewarcade.vercel.app/impact (judges and agents left out, recomputed every minute, raw JSON)   |
 | Safety rules    | https://crewarcade.vercel.app/safety (what the shield blocks, publicly)                                |
 | API health      | https://crewarcade-server.onrender.com/health                                                          |
 | Demo video      | _TODO: YouTube link_                                                                                   |
@@ -47,6 +48,38 @@ built by Forge, fixed once, playtested headlessly and published on 20 Nov 2026.<
 | Nexconn App Key | In the write-up PDF (the rules ask for it there). Singapore data center                                |
 | Source          | https://github.com/jatinvats123/crewarcade (default branch `main`, MIT)                                |
 | Build log       | [`docs/STATUS.md`](docs/STATUS.md): every phase, what was verified live, and every bug found and fixed |
+
+## A real game, minute by minute
+
+CrewArcade is live, and what it makes is public. This is **Mango Rooftop Run**, copied from its public
+ledger (20 Nov 2026, IST). The first build **failed**, and the agents fixed it without being asked:
+
+| Time     | Who            | What happened                                                                                           |
+| -------- | -------------- | ------------------------------------------------------------------------------------------------------- |
+| 16:01:47 | Pixel          | Answers "a mango dodging crows on a rooftop" with a plan card, written in 8 s                           |
+| 16:02:22 | **A human**    | Taps **Approve**; the game gets its own room                                                            |
+| 16:03:41 | Forge          | Delivers v1: 19.9 KB, written in 76 s                                                                   |
+| 16:04:09 | Glitch         | **FAIL 18/20**: hitting a crow doesn't lower lives, so the game never ends                              |
+| 16:04:10 | Glitch → Forge | Hands both failed checks back                                                                           |
+| 16:06:46 | Forge          | Delivers v2 with the crows' collisions fixed                                                            |
+| 16:07:19 | Glitch         | **PASS 20/20** at 59 fps (the recording is at the top of this page)                                     |
+| 16:12:32 | **A human**    | Taps **Allow**; it is live at [/g/mango-rooftop-run](https://crewarcade.vercel.app/g/mango-rooftop-run) |
+
+That run was on Gemini. On Claude Haiku 5.5, [Star Dodge Rocket](https://crewarcade.vercel.app/g/star-dodge-rocket)
+(22 Nov) went from plan to **PASS 20/20 in 2 min 44 s for $0.0114**, and a "make it harder" change to
+**PASS 23/23 in 2 min 4 s for $0.0032**. Every published game has the same public ledger under **How it
+was made**.
+
+| A live crew chat                                                                                                        | A live game room                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ![Crew chat on the live app: Pixel's plan was approved and the game got its own room](docs/images/live-crew-chat.jpg)   | ![Game room on the live app: Forge hands v2 to Glitch, and a new top score arrives as a card](docs/images/live-game-room.jpg) |
+| The plan was approved, so the game got its own room. Pitch ideas wait above the message box, one in Hindi (judge view). | Forge hands v2 to Glitch, and a new top score lands in the chat as a card.                                                    |
+
+<p align="center">
+  <img src="docs/images/live-arcade.jpg" alt="Four of the games in the live Arcade with their plays and best scores" width="760">
+</p>
+<p align="center"><sub>Four of the six games in the live <a href="https://crewarcade.vercel.app/arcade">Arcade</a> on 22 Nov 2026, each written by Forge
+and passed by Glitch before a human could publish it.</sub></p>
 
 ## For judges: try it in 3 minutes
 
@@ -417,7 +450,13 @@ source of truth; the table is a snapshot.
 People found CrewArcade through invite links shared in WhatsApp groups; each link carries a
 `?ref=` code, so sign-ups are counted by where they came from. No accounts were created by scripts.
 
-Snapshot of `/impact`, **22 Nov 2026, 13:43 IST**:
+<p align="center">
+  <img src="docs/images/live-impact.jpg" alt="Live funnel: 17 games pitched, 13 approved, 13 built, 7 passed, 2 published, 3 played" width="760">
+</p>
+<p align="center"><sub>The live funnel on <a href="https://crewarcade.vercel.app/impact">/impact</a>, 22 Nov 2026. The Arcade has six games; this counts two,
+because games made by judge accounts are left out.</sub></p>
+
+Snapshot of `/impact`, **22 Nov 2026, 14:00 IST**:
 
 | Measure                                         | Number                                                           |
 | ----------------------------------------------- | ---------------------------------------------------------------- |
