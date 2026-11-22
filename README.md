@@ -11,17 +11,18 @@ browser and records the proof. Nothing goes public until someone in your crew ta
 [**Arcade**](https://crewarcade.vercel.app/arcade) ·
 [**Live numbers**](https://crewarcade.vercel.app/impact) ·
 [Try it in 3 minutes](#for-judges-try-it-in-3-minutes) ·
+[Sponsors](#sponsors-and-how-we-use-them) ·
 [Built on Nexconn](#built-on-nexconn) ·
 [Real usage](#real-usage) ·
 [Safety](#safety)
 
-![tests](https://img.shields.io/badge/tests-522%20passing-2ea44f)
+![tests](https://img.shields.io/badge/tests-532%20passing-2ea44f)
 ![playtester eval](https://img.shields.io/badge/planted%20bugs%20caught-21%2F21-2ea44f)
 ![prompt injection](https://img.shields.io/badge/prompt%20injection%20resisted-10%2F10-2ea44f)
 ![hostile games](https://img.shields.io/badge/sandbox%20attacks%20blocked-21%2F21-2ea44f)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-Nexconn Build Challenge 2026
+Nexconn Build Challenge 2026 · Track: **Open Innovation**
 
 </div>
 
@@ -37,13 +38,13 @@ built by Forge, fixed once, playtested headlessly and published on 20 Nov 2026.<
 | --------------- | ------------------------------------------------------------------------------------------------------ |
 | Judge mode      | https://crewarcade.vercel.app/try (one tap, no sign-up, then a 23-step guided tour with Show me)       |
 | Live app        | https://crewarcade.vercel.app (no password, no email)                                                  |
-| Public Arcade   | https://crewarcade.vercel.app/arcade (games real crews made and published)                             |
+| Public Arcade   | https://crewarcade.vercel.app/arcade (games that crews made and published)                             |
 | Live numbers    | https://crewarcade.vercel.app/impact (real people only, recomputed every minute, with raw JSON)        |
 | Safety rules    | https://crewarcade.vercel.app/safety (what the shield blocks, publicly)                                |
 | API health      | https://crewarcade-server.onrender.com/health                                                          |
 | Demo video      | _TODO: YouTube link_                                                                                   |
 | Write-up PDF    | _TODO: link_                                                                                           |
-| Nexconn App Key | `TODO_APP_KEY` (public by design, Singapore data center)                                               |
+| Nexconn App Key | In the write-up PDF (the rules ask for it there). Singapore data center                                |
 | Source          | https://github.com/jatinvats123/crewarcade (default branch `main`, MIT)                                |
 | Build log       | [`docs/STATUS.md`](docs/STATUS.md): every phase, what was verified live, and every bug found and fixed |
 
@@ -55,7 +56,7 @@ One phone or laptop is enough. No sign-up form, no second device, no waiting lis
    screen) and tap **Start as a judge**. You land in your own crew
    chat with Pixel, Forge and Glitch. Three pitch ideas wait as chips above the message box (one in
    Hindi); nothing is typed for you, and your own idea works too. Judge accounts are marked and never
-   counted in [our live numbers](https://crewarcade.vercel.app/impact).
+   counted as people, crews or games in [our live numbers](https://crewarcade.vercel.app/impact).
 2. **Follow the judge tour.** Judges (and only judges) get one card that walks through every feature:
    a bar at the bottom on a phone ("Core · step 3 of 6", tap it for the checklist), the checklist with
    progress in the right panel on a laptop. It starts with the **6-step core loop**, which you can
@@ -97,8 +98,20 @@ One phone or laptop is enough. No sign-up form, no second device, no waiting lis
 | 22                              | Play another crew's game in the Arcade                      | your score is saved                          |
 | 23                              | Settings: reply language and Delete my account              | you open Settings                            |
 
-Median step times on the live app over the last 30 days (owner dashboard): **plan 6 s, build 71 s,
-playtest 57 s**. Each step's tokens, cost and time are on the game's **Story** tab.
+**What to expect.** Over the last 30 days the median build took **53 s** and the median playtest
+**78 s** ([/impact](https://crewarcade.vercel.app/impact), 22 Nov 2026, all accounts), so a game that
+passes first time is playable in about 2–3 minutes. Many don't: when Glitch fails a build, Forge fixes
+it (up to two rounds), which adds minutes. After that you can tap **Try again**, change the game, or
+play it anyway. Each step's tokens, cost and time are on the game's **Story** tab.
+
+### Judge mode is the real app
+
+Judge mode has no bots, scripted replies or canned games. Your pitch goes to the same Pixel, Forge and
+Glitch, through the same Nexconn channels, webhooks, AI calls and headless playtests as every other
+crew, so Glitch can really fail your build. A judge account only differs in three ways: it is marked
+(`is_judge`), it is left out of the people, crew and game counts, and it sees the tour and the pitch
+chips. To try the multiplayer side, tap **Invite** and open the link on a second device or in a
+private window.
 
 ## What it is
 
@@ -178,43 +191,194 @@ sequenceDiagram
   end
 ```
 
+## Sponsors and how we use them
+
+The [challenge site](https://reskilll.com/hack/nexconn) names two companies: **Nexconn**, whose
+platform every entry must use, and **Reskilll**, which runs the challenge for them.
+
+| Company      | What they do                                                                                            | Their role in CrewArcade                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nexconn**  | Chat and call SDKs and APIs: direct, group, open and community channels, translation, moderation, calls | **The core.** Crews, game rooms, agents, cards, live states, DMs and receipts all run on Nexconn Chat, as the rest of this section shows |
+| **Reskilll** | India's hackathon platform; runs this challenge                                                         | Where we registered and submit. Nothing in the code depends on it                                                                        |
+
+AWS and Alibaba Cloud appear on the prize list (discounted accounts for winners). CrewArcade doesn't
+use either. The other services we run on (Claude, Render, Vercel, Supabase, Sarvam) are not sponsors
+of the challenge.
+
+### What breaks without Nexconn
+
+Nexconn isn't a chat box next to the product; it is where the product happens. Each step of the loop
+is a Nexconn object:
+
+| Step in the app                | What Nexconn carries                                                                                       | Without it                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| 1. Friends join a crew         | A **user and access token** per person, one **group channel** per crew, three agents added as members      | No crew, and the agents aren't in the room    |
+| 2. Someone pitches             | A **group message** with a mention → the **`message:send` webhook** → our agent router                     | Agents never hear the pitch                   |
+| 3. Pixel answers               | A **stream message** sent as Pixel, then a **`CA:PlanCard`** custom message                                | No plan to look at                            |
+| 4. The crew votes and approves | **Message metadata** on that same card, so every phone updates in place                                    | Votes would need a second real-time system    |
+| 5. The game gets its own room  | A **second group channel** plus a **`CA:RoomLink`** card back in the crew                                  | Builds would flood the crew chat              |
+| 6. Forge builds, Glitch tests  | **`CA:HandoffCard`** between agents, **`CA:AgentState`** status messages, `CA:BuildCard` and `CA:TestCard` | Minutes of silence, and no proof of the test  |
+| 7. A human decides             | **`CA:PublishCard`**, whose Allow / Block state is server-written metadata                                 | No visible approval gate                      |
+| 8. Someone attacks the agents  | **Delete for everyone**, plus a `CA:Notice` saying why                                                     | The injection would stay on everyone's screen |
+| 9. A friend beats your score   | A **direct channel** message from Glitch with a Play again link                                            | No reason to come back                        |
+
+### Agents as real chat members
+
+The design question we cared about is what an AI agent looks like when it is a _member_ of a group
+chat, not a bot panel beside it:
+
+- **Identity.** Pixel, Forge and Glitch are three Nexconn users with their own IDs, names and avatars.
+  They are added when the group is created and send as themselves
+  ([`services/chat.ts`](apps/server/src/services/chat.ts)).
+- **Handoffs.** One agent passes work to another with a `CA:HandoffCard` that people can read, so
+  agent-to-agent traffic is visible in the chat.
+- **Structured output.** A decision is a typed card, not prose: 8 card types, each with a zod schema
+  shared by server and browser ([`shared/cards.ts`](packages/shared/src/cards.ts)).
+- **Live state.** `CA:AgentState` says thinking, designing, building, testing, fixing or waiting for
+  you. It is re-sent every 5 s while an agent works, so someone who opens the room late sees it too.
+- **Human in the loop.** A tap on Approve or Allow goes to our server, which checks the role and then
+  writes the result into the card's metadata. A model's output alone can't publish anything.
+- **Trust.** Human text is untrusted data to the agents, and the shield checks each chat message and
+  voice transcript before the agents see it.
+
+### Every Nexconn product, and whether we use it
+
+| Nexconn product                                              | Used?   | How, or why not                                                                                                                                                               |
+| ------------------------------------------------------------ | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chat SDK for Web (`@nexconn/chat`, `@nexconn/engine` 26.2.1) | **Yes** | All live chat in the browser, with our own UI                                                                                                                                 |
+| Platform Chat API                                            | **Yes** | Tokens, channels, agent messages, streams, metadata, deletes                                                                                                                  |
+| Webhooks                                                     | **Yes** | The main trigger for agent jobs; connection events                                                                                                                            |
+| Group channels                                               | **Yes** | Crews and game rooms                                                                                                                                                          |
+| Direct channels                                              | **Yes** | Glitch's score DMs                                                                                                                                                            |
+| Custom, stream, status and media messages                    | **Yes** | Cards, agent replies, live states and typing, voice notes and images                                                                                                          |
+| Metadata, receipts, mentions, history, online status         | **Yes** | See [Built on Nexconn](#built-on-nexconn)                                                                                                                                     |
+| Translation                                                  | Built   | Tap to translate, with a daily cap per user. Needs the Console switch                                                                                                         |
+| Pre-messaging webhook                                        | Built   | Handler built and tested; we couldn't select the event for our App Key                                                                                                        |
+| `nexconn-chat` coding-agent skill and `llms.txt` docs        | **Yes** | Nexconn's own skill is in the repo ([`.claude/skills/nexconn-chat`](.claude/skills/nexconn-chat), pinned in [`skills-lock.json`](skills-lock.json)) and fetches the live docs |
+| Console                                                      | **Yes** | App Key, Singapore data center, webhook URL and events                                                                                                                        |
+| Hackathon support on GitHub                                  | **Yes** | [NexconnAI-Dev/hackathon#1](https://github.com/NexconnAI-Dev/hackathon/issues/1), on pre-messaging                                                                            |
+| Chat UI                                                      | No      | Its Web quickstart says it isn't tuned for portrait mobile, and we needed custom cards and a game player                                                                      |
+| Open channels                                                | No      | Planned for a live build theater, which isn't built                                                                                                                           |
+| Community channels                                           | No      | A crew is a small group of friends                                                                                                                                            |
+| Automatic moderation                                         | No      | English and Arabic only, and it needs a card on file; our shield also reads Hindi and Hinglish                                                                                |
+| Speech-to-text                                               | No      | Pitches are often mixed Hindi and English, so clips go to Sarvam's code-mix mode                                                                                              |
+| Call SDK                                                     | No      | Optional in the rules; the game is made in chat                                                                                                                               |
+
+### Exactly which calls we make
+
+<details>
+<summary><b>Server: Platform Chat API endpoints</b></summary>
+
+| Endpoint                                | When CrewArcade calls it                                                    |
+| --------------------------------------- | --------------------------------------------------------------------------- |
+| `/v4/auth/access-token/issue`           | Access tokens for people and agents, stored encrypted                       |
+| `/v4/group-channel/create`              | New crew, and each approved game's room                                     |
+| `/v4/group-channel/join`                | Invite accepted: the crew and its game rooms. Members past 30 in a new room |
+| `/v4/group-channel/dismiss`             | Account deletion: channels that went away with the account                  |
+| `/v4/group-channel/member/kickout-all`  | Account deletion: leaves every group                                        |
+| `/v4/group-channel/message/send`        | Agent texts, every card, agent states, notices                              |
+| `/v4/group-channel/message/stream/send` | Agent replies, in chunks of about 300 ms                                    |
+| `/v4/direct-channel/message/send`       | Glitch's "your score was beaten" DM                                         |
+| `/v4/channel-type/message/metadata/set` | Live card state: votes, approvals, publish status                           |
+| `/v4/message/delete`                    | The shield removes a blocked message for everyone                           |
+
+All of them are in [`nexconn/api.ts`](apps/server/src/nexconn/api.ts), with zod on the way in and out.
+
+</details>
+
+<details>
+<summary><b>Browser: Web Chat SDK calls and events</b></summary>
+
+| SDK call or event                                                                            | What it does here                                                      |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `NCEngine.initialize`, `connect`, `disconnect`                                               | One connection per page, Singapore                                     |
+| `registerCustomMessages`                                                                     | Registers every `CA:*` type before connecting                          |
+| `GroupChannel.sendMessage` with `mentionedInfo`                                              | Chat, mentions of people and agents, group typing                      |
+| `sendMediaMessage`, `Helper.createSend…MessageParams`                                        | Voice notes and images, with upload progress                           |
+| `createChannelsQuery`, `createMessagesQuery`, `getMessagesByIds`                             | Channel list, history, fetching a stream by ID                         |
+| `requestStreamMessage`, `onStreamMessageRequest…`                                            | Agent replies as they are written                                      |
+| `onMessageReceived`, `onMessageMetadataUpdated`                                              | New messages; votes and approvals changing on a card already on screen |
+| `onMessageDeleted`, `onMessageBlocked`                                                       | A message the shield removed, or one that wasn't delivered             |
+| `sendReadReceiptResponse`, `onMessageReceiptResponse`, `createMessagesReadReceiptUsersQuery` | "Seen by N" and the list of names                                      |
+| `userModule.subscribeEvent`, `onSubscriptionChanged`                                         | Online dots                                                            |
+| `onTypingStatusChanged`                                                                      | Typing in direct channels                                              |
+| `translateModule`, `onTranslationCompleted`                                                  | Tap to translate                                                       |
+| `clearUnreadCount`, `onOfflineMessageSyncCompleted`                                          | Unread counts and catching up after being away                         |
+| `onConnectionStatusChanged`                                                                  | Reconnecting banner, signed in elsewhere, a token that needs replacing |
+
+All in [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx); chat state is a pure
+reducer in [`lib/chat`](apps/web/src/lib/chat).
+
+</details>
+
+### How we keep it reliable and safe
+
+- **Failover.** Two API domains. A timeout (5 s), network error or 5xx switches domain and retries, up
+  to three attempts with jittered backoff; HTTP 429 and code 1008 retry too
+  ([`client.ts`](apps/server/src/nexconn/client.ts)).
+- **Rate limits.** One token bucket per endpoint family. Group sends, streams and group metadata share
+  Nexconn's 20 per second, so a burst waits in order instead of failing
+  ([`rate-limit.ts`](apps/server/src/nexconn/rate-limit.ts)).
+- **Webhooks.** Signature compared in constant time, stale timestamps refused, each event ID claimed
+  once in the database, and a fast 200 with the work done afterwards
+  ([`webhooks/`](apps/server/src/webhooks)).
+- **Two triggers, one job.** If a webhook is late or missing, the browser also tells our server about
+  the message. Job IDs come from Nexconn's message ID, so the agents still answer once.
+- **Token trouble.** A rejected token is replaced at most twice before we stop and show the error
+  ([`retry.ts`](apps/web/src/lib/nexconn/retry.ts)).
+- **Secrets.** The App Secret, signing, token issuance and every Platform API call stay on the server,
+  enforced by an ESLint rule and
+  [`scripts/check-client-secrets.mjs`](scripts/check-client-secrets.mjs) in CI.
+
 ## Built on Nexconn
 
-Every message, card and agent action travels through Nexconn. The browser uses the Web Chat SDK
-(`@nexconn/chat`); the server uses the signed Platform Chat API with domain failover, retries and
-rate limits. The App Secret never leaves the server (enforced by an ESLint rule and
-[`scripts/check-client-secrets.mjs`](scripts/check-client-secrets.mjs) in CI).
+The same integration feature by feature, with the code and how far each has been checked.
 
 **Status** says what has run on the live service, not just in tests. "Live" means checked by hand on
 the production app; dates are in [`docs/STATUS.md`](docs/STATUS.md).
 
-| Nexconn feature                               | How CrewArcade uses it                                                                                                                                                                      | Where                                                                                                                                                           | Status                                                                                                                          |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Access tokens (`/v4/auth/access-token/issue`) | Every human and every agent is a Nexconn user. Tokens are issued once and stored encrypted (AES-256-GCM).                                                                                   | [`nexconn/api.ts`](apps/server/src/nexconn/api.ts), [`nexconn/client.ts`](apps/server/src/nexconn/client.ts)                                                    | Live                                                                                                                            |
-| Group channels                                | A crew is a group channel; each approved game gets its own game room. Create, join, dismiss, kick out on account delete.                                                                    | [`services/crews.ts`](apps/server/src/services/crews.ts), [`services/rooms.ts`](apps/server/src/services/rooms.ts)                                              | Live                                                                                                                            |
-| Server-sent messages as agents                | Pixel, Forge and Glitch post as their own users (`/v4/group-channel/message/send`).                                                                                                         | [`services/chat.ts`](apps/server/src/services/chat.ts)                                                                                                          | Live                                                                                                                            |
-| Custom message types                          | 8 card types (`CA:PlanCard`, `CA:HandoffCard`, `CA:BuildCard`, `CA:TestCard`, `CA:PublishCard`, `CA:BugCard`, `CA:ScoreCard`, `CA:RoomLink`) plus `CA:Notice`, every payload zod-validated. | [`shared/cards.ts`](packages/shared/src/cards.ts), [`shared/messages.ts`](packages/shared/src/messages.ts), [`components/cards`](apps/web/src/components/cards) | Live                                                                                                                            |
-| Message metadata                              | Live card state: votes, approval, publish status. The server writes it (`metadata/set`) under a row lock; phones update the card in place (`onMessageMetadataUpdated`).                     | [`nexconn/api.ts`](apps/server/src/nexconn/api.ts), [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                       | Live                                                                                                                            |
-| Streaming messages (`RC:StreamMsg`)           | Agent replies arrive as stream messages; clients follow with `requestStreamMessage`.                                                                                                        | [`nexconn/stream.ts`](apps/server/src/nexconn/stream.ts)                                                                                                        | Live, as one complete chunk per reply (Nexconn kept only the first chunk of multi-chunk streams in our tests)                   |
-| Status messages                               | `CA:AgentState` (thinking, designing, building, testing 3/5, fixing, waiting for you…) with a 5 s heartbeat drives the agent chips.                                                         | [`agents/states.ts`](apps/server/src/agents/states.ts)                                                                                                          | Live                                                                                                                            |
-| Webhooks                                      | `message:send` routes pitches, mentions and commands to the agents; `user:connection_status` for presence. Signature check, dedupe, fast ack.                                               | [`webhooks/`](apps/server/src/webhooks)                                                                                                                         | Live                                                                                                                            |
-| Delete for everyone (`/v4/message/delete`)    | The safety shield removes a blocked message for everyone and posts a 🛡 notice.                                                                                                              | [`safety/runtime.ts`](apps/server/src/safety/runtime.ts)                                                                                                        | Live                                                                                                                            |
-| Pre-messaging (`*:pre_messaging`)             | The same shield, before delivery.                                                                                                                                                           | [`safety/runtime.ts`](apps/server/src/safety/runtime.ts)                                                                                                        | Built and tested; not selectable on our plan ([NexconnAI-Dev/hackathon#1](https://github.com/NexconnAI-Dev/hackathon/issues/1)) |
-| History and connection status                 | Message history (`createMessagesQuery`), reconnect banner.                                                                                                                                  | [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                                                                           | Live                                                                                                                            |
-| Media messages                                | Voice pitches and bug screenshots (`sendMediaMessage`).                                                                                                                                     | [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                                                                           | Built and tested; voice relay off in production                                                                                 |
-| Direct channels                               | Glitch DMs a crew member whose best score was just beaten, with a Play again link (rate-limited).                                                                                           | [`services/scores.ts`](apps/server/src/services/scores.ts)                                                                                                      | Built and tested                                                                                                                |
-| Built-in translation                          | Tap **Translate** under a message (`translateMessages`, daily per-user cap).                                                                                                                | [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                                                                           | Built and tested; needs the Console's Translation switch                                                                        |
+| Nexconn feature                               | How CrewArcade uses it                                                                                                                                                                                                                 | Where                                                                                                                                                           | Status                                                                                                                          |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Access tokens (`/v4/auth/access-token/issue`) | Every human and every agent is a Nexconn user. Tokens are issued once and stored encrypted (AES-256-GCM).                                                                                                                              | [`nexconn/api.ts`](apps/server/src/nexconn/api.ts), [`nexconn/client.ts`](apps/server/src/nexconn/client.ts)                                                    | Live                                                                                                                            |
+| Group channels                                | A crew is a group channel; each approved game gets its own game room. Create, join, dismiss, kick out on account delete.                                                                                                               | [`services/crews.ts`](apps/server/src/services/crews.ts), [`services/rooms.ts`](apps/server/src/services/rooms.ts)                                              | Live                                                                                                                            |
+| Server-sent messages as agents                | Pixel, Forge and Glitch post as their own users (`/v4/group-channel/message/send`).                                                                                                                                                    | [`services/chat.ts`](apps/server/src/services/chat.ts)                                                                                                          | Live                                                                                                                            |
+| Custom message types                          | 8 card types (`CA:PlanCard`, `CA:HandoffCard`, `CA:BuildCard`, `CA:TestCard`, `CA:PublishCard`, `CA:BugCard`, `CA:ScoreCard`, `CA:RoomLink`) plus `CA:Notice`, every payload zod-validated.                                            | [`shared/cards.ts`](packages/shared/src/cards.ts), [`shared/messages.ts`](packages/shared/src/messages.ts), [`components/cards`](apps/web/src/components/cards) | Live                                                                                                                            |
+| Message metadata                              | Live card state: votes, approval, publish status. The server writes it (`metadata/set`) under a row lock; phones update the card in place (`onMessageMetadataUpdated`).                                                                | [`nexconn/api.ts`](apps/server/src/nexconn/api.ts), [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                       | Live                                                                                                                            |
+| Streaming messages (`RC:StreamMsg`)           | Agent replies are sent in chunks of about 300 ms. Clients pull the text with `requestStreamMessage`; the full text also arrives as `RC_Ext_StreamMsgSummary` metadata. If a stream fails, the reply goes out as a normal text message. | [`nexconn/stream.ts`](apps/server/src/nexconn/stream.ts)                                                                                                        | Live                                                                                                                            |
+| Status messages                               | `CA:AgentState` (thinking, designing, building, testing 3/5, fixing, waiting for you…) with a 5 s heartbeat drives the agent chips.                                                                                                    | [`agents/states.ts`](apps/server/src/agents/states.ts)                                                                                                          | Live                                                                                                                            |
+| Webhooks                                      | `message:send` routes pitches, mentions and commands to the agents; `user:connection_status` is logged. Signature check, dedupe, fast ack.                                                                                             | [`webhooks/`](apps/server/src/webhooks)                                                                                                                         | Live                                                                                                                            |
+| Delete for everyone (`/v4/message/delete`)    | The safety shield removes a blocked message for everyone and posts a 🛡 notice.                                                                                                                                                         | [`safety/runtime.ts`](apps/server/src/safety/runtime.ts)                                                                                                        | Live                                                                                                                            |
+| Pre-messaging (`*:pre_messaging`)             | The same shield, before delivery.                                                                                                                                                                                                      | [`safety/runtime.ts`](apps/server/src/safety/runtime.ts)                                                                                                        | Built and tested; not selectable on our plan ([NexconnAI-Dev/hackathon#1](https://github.com/NexconnAI-Dev/hackathon/issues/1)) |
+| History and connection status                 | Message history (`createMessagesQuery`), reconnect banner.                                                                                                                                                                             | [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                                                                           | Live                                                                                                                            |
+| Read receipts                                 | "Seen by N" under your message, with the list of people (`sendReadReceiptResponse`).                                                                                                                                                   | [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                                                                           | Built and tested                                                                                                                |
+| Typing                                        | "X is typing…". Groups use a `CA:Typing` status message; direct channels use the SDK's typing status.                                                                                                                                  | [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                                                                           | Built and tested                                                                                                                |
+| Online status                                 | Presence dots for people (`userModule.subscribeEvent`).                                                                                                                                                                                | [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                                                                           | Built and tested                                                                                                                |
+| Media messages                                | Voice pitches and bug screenshots (`sendMediaMessage`).                                                                                                                                                                                | [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                                                                           | Built and tested; voice relay off in production                                                                                 |
+| Direct channels                               | Glitch DMs a crew member whose best score was just beaten, with a Play again link (rate-limited).                                                                                                                                      | [`services/scores.ts`](apps/server/src/services/scores.ts)                                                                                                      | Built and tested                                                                                                                |
+| Built-in translation                          | Tap **Translate** under a message (`translateMessages`, daily per-user cap).                                                                                                                                                           | [`NexconnProvider.tsx`](apps/web/src/lib/nexconn/NexconnProvider.tsx)                                                                                           | Built and tested; needs the Console's Translation switch                                                                        |
 
-What we learned building on the live service (stream message IDs, metadata keys, typing in group
-channels, plan limits, and where the docs and the service disagreed) is written up in
-[`docs/NEXCONN.md`](docs/NEXCONN.md).
+**Found while building** (full list of 17 in
+[`docs/NEXCONN.md`](docs/NEXCONN.md#discrepancies-found-prompt-facts-vs-live-docs-vs-installed-sdk)):
+
+- Stream continuation chunks need `messageId`; the older `messageUID` turned every chunk into a new
+  message. Even then, history kept only the first chunk and Web SDK 26.2.1 never fired
+  `onMessageReceived` for a server-sent `RC:StreamMsg`, so the client calls
+  `requestStreamMessage()` and reads `RC_Ext_StreamMsgSummary` from metadata.
+- `groupExtProfile` keys must be registered for the app first (error 25415), so the database maps
+  channels to crews instead.
+- Group channels have no `sendTypingStatus` in 26.2.1 (only direct channels do); typing in a crew
+  is a `CA:Typing` status message.
+- The docs spell the custom-message flag `isPersited`; the installed typings say `isPersisted`.
+- Pre-messaging is documented but not selectable on our plan; we reported it in
+  [NexconnAI-Dev/hackathon#1](https://github.com/NexconnAI-Dev/hackathon/issues/1).
 
 ## Safety
 
 - **Shield** ([`safety/shield.ts`](apps/server/src/safety/shield.ts)): prompt injection (English,
   Hindi, Hinglish), a ship/publish command from someone who isn't an approver, abuse, and
   spam/floods. A hit is removed for everyone, a 🛡 notice explains why without repeating it, the
-  agents skip it, and it is logged. The rules are public at
+  agents skip it, and it is logged. The browser's backup trigger and voice transcripts go through the
+  same rules, and a stopped message's text is dropped from the log the agents read. The rules are public at
   [`/safety`](https://crewarcade.vercel.app/safety).
 - **Chat is data, not instructions.** Human text reaches the models only inside `<untrusted>`
   blocks. A live run of 10 injection attempts against the production prompts (pitches, chat and bug
@@ -233,27 +397,32 @@ Details: [`docs/SECURITY.md`](docs/SECURITY.md).
 ## Real usage
 
 **Live: https://crewarcade.vercel.app/impact.** People, crews, games, the pitch-to-Arcade funnel,
-each day's sign-ups and how the agents did, straight from the database every minute, with the
-team's own accounts, judges and the agents left out (raw JSON:
-[`/api/public/impact`](https://crewarcade-server.onrender.com/api/public/impact)).
+each day's sign-ups and how the agents did, straight from the database every minute (raw JSON:
+[`/api/public/impact`](https://crewarcade-server.onrender.com/api/public/impact)). The live page is the
+source of truth; the table is a snapshot.
 
 People found CrewArcade through invite links shared in WhatsApp groups; each link carries a
 `?ref=` code, so sign-ups are counted by where they came from. No accounts were created by scripts.
 
-| When (owner dashboard)     | Sign-ups | Games built | Plays  | AI spend |
-| -------------------------- | -------- | ----------- | ------ | -------- |
-| 21 Nov 2026, 15:08 IST     | 8        | 10          | 15     | $0.076   |
-| **21 Nov 2026, 17:57 IST** | **20**   | _TODO_      | _TODO_ | _TODO_   |
+Snapshot of `/impact`, **22 Nov 2026, 13:08 IST**:
 
-The first sign-ups came from a college group link (6 of the first 8), a crew invite and one direct
-visit. Both rows include the team's own accounts.
+| Measure                                         | Number                                                           |
+| ----------------------------------------------- | ---------------------------------------------------------------- |
+| Accounts signed up                              | **22** (16 by a college group link, 5 by crew invites, 1 direct) |
+| Active in the last 24 h                         | 21                                                               |
+| Crews                                           | 25 (2 of them with more than one person)                         |
+| Games: pitched → approved → built               | 17 → 13 → 13                                                     |
+| Games with a version that passed Glitch         | 6 of 13 built                                                    |
+| Games published                                 | 2 (a human tapped Allow on each)                                 |
+| Scores saved                                    | 14, by 3 people                                                  |
+| Agents, last 30 days, all accounts: playtests   | 15 of 44 passed                                                  |
+| Agents, last 30 days, all accounts: AI per game | $0.018                                                           |
 
-_TODO before submitting: the final numbers, with the team's own accounts (the owner's phone and one
-test phone) removed and listed in the write-up._
-
-How we count: a user is a person who signed in on their own device. The team's own accounts are not
-counted. Games are counted when built; the Arcade shows only games a crew owner or approver chose to
-publish.
+**What is in these numbers.** Judge accounts (3) and the agents are left out of the people, crew and
+game rows. In this snapshot the team's own accounts had not been filtered yet (`teamAccounts: 0` in the
+raw JSON), so some of the 22 may be ours. The agent rows cover every account, including the team's and
+judges' test games. A failed playtest sends the game back to Forge; some early failures were our own
+bug in how checks ran (fixed on 21 Nov, see [Quality](#quality)).
 
 ## Business and growth
 
@@ -319,7 +488,7 @@ structured outputs, a daily budget cap and a cost ledger; the live app runs **Cl
 
 ## Quality
 
-- **522 unit and integration tests** (shared 26, engine 48, server 307, web 141), plus **Playwright
+- **532 unit and integration tests** (shared 26, engine 48, server 317, web 141), plus **Playwright
   e2e** on phone and desktop viewports, including a check that no page or chat card runs off a
   phone screen.
 - **Playtester eval:** 7 kinds of planted bugs (collision disabled, score frozen, game over
@@ -373,16 +542,17 @@ Honest limits, checked against the code and the live app:
 - **Small games.** One HTML file, keyboard and touch controls, 2D canvas.
 - **Translation and voice pitches** are built and tested, but Translation needs the Nexconn
   Console switch and the voice relay is off in production.
-- **Early usage.** The first real users arrived on 21 Nov 2026 (see [Real usage](#real-usage)).
+- **Early usage.** 22 accounts, most from one college group, and only 2 crews with more than one
+  person so far (see [Real usage](#real-usage)).
 - **No native apps.** It is a mobile-first web app.
 - The planned Live Build Theater (watch a build in an open channel) is not built.
 
 ## Project background
 
-Built for the Nexconn Build Challenge 2026 by Jatin. The repository's first commits are from 13 Nov 2026. _TODO: say here whether the game engine in
-`packages/engine` (imported in the first commits) was written before the challenge started on 23 Oct._
-Everything Nexconn-related (crews, agents, cards, webhooks, streaming, the shield) was built during
-the challenge.
+Built by Jatin for the Nexconn Build Challenge 2026, all of it during the challenge (from 23 Oct 2026).
+The game engine in `packages/engine` was written first, in a separate folder, and is the first commit
+of this repository (13 Nov 2026); `git log --reverse` shows every step since. Third-party code is
+limited to the npm dependencies and [Nexconn's own coding-agent skill](.claude/skills/nexconn-chat).
 
 ## License
 

@@ -495,5 +495,6 @@ it and routes the transcript exactly like a text message. On any failure the age
     (`type`, `user`) and chunk 2 (`messageId`, `seq: 2`, `complete: true`), all answered `code: 0`, showed
     only chunk 1's text in history ("part one," of "part one, part two"), and the Web SDK 26.2.1 client got
     no live `onStreamMessageRequest*` events. A single chunk with `complete: true` arrives whole. So
-    `streamToGroup` defaults to one complete chunk per reply; ask Nexconn support before re-enabling
-    `mode: 'chunked'`.
+    `streamToGroup` then defaulted to one complete chunk per reply. **Superseded (Phase 3, 2026-11-16):**
+    with `messageId` on every chunk the stream assembles correctly, so `mode: 'chunked'` is the default
+    again and clients pull the text with `requestStreamMessage()` (see "Live stream findings").

@@ -195,6 +195,28 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   the app says so and nothing ticks, as intended). Known gap: steps that need agents (1–8, 11, 13–16) were
   checked against the rules and in unit tests, not driven end to end locally (no Nexconn locally).
 
+- **README pass before submission (2026-11-22):** compared with the Dibs, CrowdPlay, Hop, SameBall and
+  DoubtRoom READMEs. Added: track (Open Innovation), what to expect while waiting, "Judge mode is the
+  real app", a dated `/impact` snapshot with what is and isn't filtered, live Nexconn findings, rows for
+  read receipts, typing and online status, and the prior-work statement. The App Key is not in the
+  README: the rules ask for it in the write-up and the form. Still open (owner): repository is
+  **private** and must be public; `TEAM_USER_IDS` is empty on Render (`/impact` says team accounts are
+  left out, `teamAccounts` is 0); demo video and write-up links (two TODOs in the README).
+
+- **README sponsor section (2026-11-22):** Nexconn and Reskilll are the only companies the challenge
+  site names; AWS/Alibaba are winner perks and unused. The section maps each product step to Nexconn,
+  every Nexconn product to used / built / not used with the reason, and lists each API endpoint and SDK
+  call. Fixed stale README rows (streams are chunked; `user:connection_status` is only logged).
+
+- **Shield gap closed (2026-11-22):** found while checking the README's claims, reproduced with failing
+  tests first (`test/shield-relay.test.ts`, 10 tests). (1) `POST /api/chat/relay` handed messages to the
+  agents without the shield; (2) a stopped message kept its text in `messages_log`, so Pixel read it as
+  chat context on the next pitch; (3) voice transcripts were never checked. Now `shieldRelayed` and
+  `shieldTranscript` run the same rules and the text is cleared. A relay hit only keeps the message from
+  the agents: deleting, the notice and the log still need the signed webhook, and relayed messages have
+  their own flood tracker, so a browser can't change what the webhook decides. Not checked on the live
+  app yet. 532 tests (server 317).
+
 ## Phase 6: polish, harden, launch prep (branch `phase-6`)
 
 - **Arcade:** public `/arcade` (Newest / Top by plays then best score) from `GET /api/public/arcade`; published games only, fixture slugs never listed (tested).
