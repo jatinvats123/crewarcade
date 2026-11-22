@@ -51,3 +51,11 @@ test('invalid ?next= targets are ignored', async ({ page }) => {
   await page.goto('/start?next=//evil.example');
   await expect(page.getByLabel('Your name')).toBeVisible();
 });
+
+test('sign-up form sits centered under the heading (phone and desktop)', async ({ page }) => {
+  await page.goto('/start');
+  await expect(page.getByLabel('Your name')).toBeVisible();
+  const [heading, form] = await Promise.all([page.locator('#start-title').boundingBox(), page.locator('form').boundingBox()]);
+  const center = (b: { x: number; width: number }) => b.x + b.width / 2;
+  expect(Math.abs(center(heading!) - center(form!))).toBeLessThanOrEqual(2);
+});

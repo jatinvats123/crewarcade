@@ -61,7 +61,7 @@ export function QuickProfileForm({
   };
 
   return (
-    <form onSubmit={submit} noValidate className="flex w-full max-w-2xl flex-col items-center">
+    <form onSubmit={submit} noValidate className="mx-auto flex w-full max-w-2xl flex-col items-center">
       <label htmlFor={ids.name} className="sr-only">
         Your name
       </label>

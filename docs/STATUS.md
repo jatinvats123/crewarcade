@@ -113,6 +113,10 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   opens with a "Judging the Nexconn Build Challenge? ★ I'm a judge" card above "Or sign up as a
   player" (not on invite sign-ups), and `/try` links players back to the normal sign-up. 1 e2e.
   Checked at 320 px: nothing cut off, no sideways scroll.
+- **Sign-up form centered (2026-11-22):** on desktop `/start` the name, players, language and Start
+  playing sat on the left under a centered heading and judge card. `QuickProfileForm` had a max width
+  but no `mx-auto`; now it's centered (also on the invite screen). 1 e2e (phone + desktop). Checked
+  at 1440 and 375 px.
 - **"More below" in the desktop right panel (2026-11-22):** Crew HQ and the judge tour above it are cut
   off on shorter screens with nothing saying there's more. `components/ui/ScrollMore.tsx`: while a
   scroll area has more below, a fade and a "More below ↓" button sit at its bottom (tap scrolls on);
