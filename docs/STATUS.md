@@ -113,6 +113,16 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   opens with a "Judging the Nexconn Build Challenge? ★ I'm a judge" card above "Or sign up as a
   player" (not on invite sign-ups), and `/try` links players back to the normal sign-up. 1 e2e.
   Checked at 320 px: nothing cut off, no sideways scroll.
+- **No dead ends in the tour (2026-11-22):** the owner reached "Change the plan" with no plan left to
+  change (the remix plan was already approved), so Show me found nothing. The step is now "Change
+  the game": Show me types "make it night time with glowing stars" in the game room (Pixel writes the
+  change, Forge builds the next version); it ticks on a change build or plan v2. Every step that
+  waits on the agents or an earlier step now falls back to something always on screen (approve and
+  play → the agents' status, game page → Allow / test card / agents, remix → an Arcade game,
+  translate → the pitch chips, leaderboard → the room link). Fixed too: when Show me had to change
+  page and type (change, shield, Hindi), the text went into the old page's box; it now types after
+  arriving. 4 web tests; checked locally from Settings (opens the crew chat with the injection typed
+  and Send ringed). The change step in a real game room is checked live only (no chat locally).
 - **Tour's Allow step while Glitch is still testing (2026-11-22):** the owner reached step 6 while Glitch
   was testing v2 after a fix, so there was no publish card yet and Show me said "Not on screen yet".
   The step now says Allow comes after Glitch's PASS and that only the owner or an approver sees it

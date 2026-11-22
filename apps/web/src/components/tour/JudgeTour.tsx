@@ -99,10 +99,24 @@ export function JudgeTour() {
     setRing(null);
   }, [pathname]);
 
+  // Text Show me types in the message box once the right page is open (typing it before the page
+  // changes would put it in the old page's box, which then goes away).
+  const pendingFill = useRef<{ text: string; dest: string } | null>(null);
+  useEffect(() => {
+    const p = pendingFill.current;
+    if (p && samePath(pathname, p.dest)) {
+      pendingFill.current = null;
+      fillComposer(p.text);
+    }
+  }, [pathname]);
+
+  /** Goes to the step's page if it's elsewhere; returns that page, or null when already there. */
   const go = useCallback(
-    (step: TourStep, state: TourState) => {
+    (step: TourStep, state: TourState): string | null => {
       const dest = step.where(state.ctx, new Set(state.facts));
-      if (dest && !samePath(pathname, dest)) router.push(dest);
+      if (!dest || samePath(pathname, dest)) return null;
+      router.push(dest);
+      return dest;
     },
     [pathname, router],
   );
@@ -113,8 +127,11 @@ export function JudgeTour() {
       setMiss(null);
       setRing(null);
       const here = step.stayIfTarget && step.targets[0] ? findTarget([step.targets[0]]) : null;
-      if (!here) go(step, state);
-      if (step.fill) fillComposer(step.fill);
+      const moved = here ? null : go(step, state);
+      if (step.fill) {
+        if (moved) pendingFill.current = { text: step.fill, dest: moved };
+        else fillComposer(step.fill);
+      }
       if (step.targets.length === 0) return;
       const id = ++search.current;
       const started = Date.now();

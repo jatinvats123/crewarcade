@@ -15,7 +15,7 @@ browser and records the proof. Nothing goes public until someone in your crew ta
 [Real usage](#real-usage) ·
 [Safety](#safety)
 
-![tests](https://img.shields.io/badge/tests-518%20passing-2ea44f)
+![tests](https://img.shields.io/badge/tests-522%20passing-2ea44f)
 ![playtester eval](https://img.shields.io/badge/planted%20bugs%20caught-21%2F21-2ea44f)
 ![prompt injection](https://img.shields.io/badge/prompt%20injection%20resisted-10%2F10-2ea44f)
 ![hostile games](https://img.shields.io/badge/sandbox%20attacks%20blocked-21%2F21-2ea44f)
@@ -77,7 +77,7 @@ One phone or laptop is enough. No sign-up form, no second device, no waiting lis
 | 6                               | Allow it to go public (Block keeps it private)              | it is published                              |
 | **Explore · Fix & improve**     |                                                             |                                              |
 | 7                               | Remix a game                                                | a remix starts                               |
-| 8                               | Change the plan                                             | plan v2 arrives                              |
+| 8                               | Change the game ("make it …" → next version)                | a change build or plan v2 arrives            |
 | 9                               | Try again if it fails                                       | a version passes                             |
 | 10                              | Report a bug → Glitch reproduces it → Forge ships a hotfix  | the bug is reproduced or fixed               |
 | 11                              | Read the Story (Decision Ledger) and export the JSON        | you open it                                  |
@@ -319,7 +319,7 @@ structured outputs, a daily budget cap and a cost ledger; the live app runs **Cl
 
 ## Quality
 
-- **518 unit and integration tests** (shared 26, engine 48, server 307, web 137), plus **Playwright
+- **522 unit and integration tests** (shared 26, engine 48, server 307, web 141), plus **Playwright
   e2e** on phone and desktop viewports, including a check that no page or chat card runs off a
   phone screen.
 - **Playtester eval:** 7 kinds of planted bugs (collision disabled, score frozen, game over

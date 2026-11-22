@@ -78,6 +78,7 @@ describe('tour steps', () => {
   it.each<[StepId, string[]]>([
     ['pitch', ['plan']],
     ['change', ['plan-v2']],
+    ['change', ['build-change']],
     ['approve', ['approved']],
     ['build', ['build-ready']],
     ['playtest', ['test']],
@@ -140,6 +141,26 @@ describe('tour steps', () => {
     expect(stepById('arcade').where(ctx, facts())).toBe('/arcade');
     expect(stepById('settings').where(ctx, facts())).toBe('/settings');
     expect(stepById('dm').where(ctx, facts())).toBeNull();
+  });
+
+  it('no step is a dead end: every step has something to ring, a page to open, or Got it', () => {
+    const ctx = { crewPath: '/crews/c1', roomPath: '/crews/c1/rooms/r1' };
+    for (const s of STEPS) expect(s.targets.length > 0 || s.where(ctx, facts()) !== null || !!s.info, s.id).toBe(true);
+  });
+
+  it('steps that wait on the agents or an earlier step fall back to something always on screen', () => {
+    for (const id of ['approve', 'play', 'allow', 'page', 'remix', 'change', 'retry', 'translate', 'board'] as const)
+      expect(stepById(id).targets.length, id).toBeGreaterThanOrEqual(2);
+    expect(stepById('approve').targets.at(-1)?.id).toBe('agents');
+    expect(stepById('play').targets.at(-1)?.id).toBe('agents');
+    expect(stepById('page').targets.at(-1)?.id).toBe('agents');
+  });
+
+  it('the change step works on a real game: Show me types a “make it …” request in the game room', () => {
+    const change = stepById('change');
+    expect(change.fill).toMatch(/^make it /);
+    expect(change.where({ crewPath: '/crews/c1', roomPath: '/crews/c1/rooms/r1' }, facts())).toBe('/crews/c1/rooms/r1');
+    expect(change.targets[0]?.id).toBe('composer-send');
   });
 
   it('before the publish card exists, Allow’s Show me points at Glitch’s test card and the agents', () => {
@@ -325,6 +346,9 @@ describe('facts from chat', () => {
     const build: AnyCard = { kind: 'build', content: { v: 1, gameId: 'g1', slug: 'star-dodge', title: 'Star Dodge', version: 1, reason: 'build' } };
     expect(factsFromMessages([card(build, { status: 'building' })])).not.toContain('build-ready');
     expect(factsFromMessages([card(build, { status: 'ready' })])).toContain('build-ready');
+    expect(factsFromMessages([card(build, { status: 'ready' })])).not.toContain('build-change');
+    const changeBuild: AnyCard = { kind: 'build', content: { ...build.content, version: 3, reason: 'change', change: 'night time' } } as AnyCard;
+    expect(factsFromMessages([card(changeBuild, { status: 'building' })])).toContain('build-change');
 
     const test = (pass: boolean): AnyCard => ({
       kind: 'test',
