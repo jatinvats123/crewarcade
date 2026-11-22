@@ -243,11 +243,17 @@ const DEFS: ReadonlyArray<Omit<TourStep, 'group'>> = [
   {
     id: 'allow',
     title: 'Allow it to go public',
-    press: 'On the publish card, tap Allow. (Block keeps it private.)',
+    press:
+      'Once Glitch’s playtest says PASS, a publish card appears in the game room: tap Allow. (Block keeps it private.) Still testing or fixing? Wait for the PASS.',
     next: 'The game goes live in the public Arcade with its own page.',
-    why: 'Nothing goes public until a human approver taps Allow. The agents can’t publish by themselves.',
+    why: 'Nothing goes public until the crew’s owner or an approver taps Allow (you own your judge crew). The agents can’t publish by themselves.',
     done: 'Done: published.',
-    targets: [{ id: 'publish-allow', hint: 'Tap Allow' }],
+    // No publish card yet: point at Glitch's latest test card, then the live agent status.
+    targets: [
+      { id: 'publish-allow', hint: 'Tap Allow' },
+      { id: 'test-card', hint: 'Allow comes after Glitch says PASS' },
+      { id: 'agents', hint: 'Glitch is still testing: Allow comes after a PASS' },
+    ],
     where: room,
     isDone: f => has(f, 'published'),
   },

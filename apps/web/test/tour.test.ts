@@ -142,6 +142,11 @@ describe('tour steps', () => {
     expect(stepById('dm').where(ctx, facts())).toBeNull();
   });
 
+  it('before the publish card exists, Allow’s Show me points at Glitch’s test card and the agents', () => {
+    expect(stepById('allow').targets.map(t => t.id)).toEqual(['publish-allow', 'test-card', 'agents']);
+    expect(stepById('allow').press).toMatch(/PASS/);
+  });
+
   it('Show me types a real prompt injection for the shield step and Hindi for the Hindi step', () => {
     expect(stepById('shield').fill).toBe(TEST_INJECTION);
     expect(TEST_INJECTION).toMatch(/ignore all previous instructions/);

@@ -113,6 +113,11 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   opens with a "Judging the Nexconn Build Challenge? ★ I'm a judge" card above "Or sign up as a
   player" (not on invite sign-ups), and `/try` links players back to the normal sign-up. 1 e2e.
   Checked at 320 px: nothing cut off, no sideways scroll.
+- **Tour's Allow step while Glitch is still testing (2026-11-22):** the owner reached step 6 while Glitch
+  was testing v2 after a fix, so there was no publish card yet and Show me said "Not on screen yet".
+  The step now says Allow comes after Glitch's PASS and that only the owner or an approver sees it
+  (members see "Waiting for an approver", by design), and Show me rings the latest test card, then
+  the agents' status. 1 web test.
 - **Judge tour: core loop + Explore themes, and Hide (2026-11-22):** all 23 steps and tick rules are
   unchanged, but the tour now starts with a 6-step core loop (pitch, approve, build, playtest, play,
   Allow) that the bar counts ("Core · step 3 of 6"), then 17 steps in four themes (Fix & improve,
