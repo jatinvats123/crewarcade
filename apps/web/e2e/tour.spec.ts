@@ -59,13 +59,14 @@ test('a judge sees the tour; opening Settings ticks step 23; Skip moves on', asy
   await page.goto('/settings');
   if (isPhone(page)) {
     const bar = page.getByTestId('tour-bar');
-    await expect(bar).toContainText('Next step · 1 of 23');
+    await expect(bar).toContainText('Core · step 1 of 6');
     await expect(bar).toContainText('Pitch a game');
     await expect(bar.getByTestId('tour-bar-show-me')).toBeVisible();
   } else {
     const panel = page.getByTestId('tour-panel');
     await expect(panel).toContainText('Judge tour');
-    await expect(panel.getByRole('progressbar', { name: 'Judge tour progress' })).toHaveAttribute('aria-valuenow', '1');
+    await expect(panel.getByRole('progressbar', { name: 'Core loop progress' })).toHaveAttribute('aria-valuenow', '0');
+    await expect(panel.getByRole('list', { name: 'Explore' })).toContainText('Arcade & you');
     await expect(panel.getByTestId('tour-step')).toContainText('Press');
     await expect(panel.getByTestId('tour-step')).toContainText('What happens');
     await expect(panel.getByTestId('tour-step')).toContainText('Why it matters');
@@ -74,13 +75,13 @@ test('a judge sees the tour; opening Settings ticks step 23; Skip moves on', asy
   await expect(list.getByTestId('tour-checklist').getByRole('button')).toHaveCount(23);
   await expect(list.getByRole('button', { name: /23\. Settings.*done/ })).toBeVisible();
   await list.getByTestId('tour-skip').click();
-  await expect(list.getByTestId('tour-step')).toContainText('Change the plan');
+  await expect(list.getByTestId('tour-step')).toContainText('Approve it');
   await expect(list.getByRole('button', { name: /1\. Pitch a game.*skipped/ })).toBeVisible();
 
   // Progress lives in localStorage per user: a reload keeps it.
   await page.reload();
   const again = await openChecklist(page);
-  await expect(again.getByTestId('tour-step')).toContainText('Change the plan');
+  await expect(again.getByTestId('tour-step')).toContainText('Approve it');
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('crewarcade:tour:uJudge1') ?? '{}'));
   expect(saved.facts).toContain('visit:/settings');
   expect(saved.skipped).toEqual(['pitch']);
@@ -141,7 +142,7 @@ test('public pages: the tour follows the judge and opening /impact and /safety t
   const facts = await page.evaluate(() => JSON.parse(localStorage.getItem('crewarcade:tour:uJudge1') ?? '{}').facts);
   expect(facts).toEqual(expect.arrayContaining(['visit:/impact', 'visit:/safety']));
   const list = await openChecklist(page);
-  await expect(list.getByRole('button', { name: /20\. Live numbers and safety.*done/ })).toBeVisible();
+  await expect(list.getByRole('button', { name: /14\. Live numbers and safety.*done/ })).toBeVisible();
   // Not on the landing page.
   await page.goto('/');
   await expect(page.getByTestId('tour-bar')).toHaveCount(0);
@@ -186,7 +187,7 @@ test('tour complete lists the skipped steps with links back to them', async ({ p
   const card = isPhone(page) ? (await openChecklist(page)).getByTestId('tour-complete') : page.getByTestId('tour-panel').getByTestId('tour-complete');
   await expect(card).toContainText('Tour complete');
   await expect(card).toContainText('21 of 23 done');
-  await expect(card.getByRole('button')).toHaveText(['11. Report a bug →', '22. Play another crew’s game →']);
+  await expect(card.getByRole('button')).toHaveText(['10. Report a bug →', '22. Play another crew’s game →']);
   await card.getByRole('button', { name: /22\. Play another crew/ }).click();
   await expect(page).toHaveURL(/\/arcade$/);
 });
@@ -250,4 +251,37 @@ test('a saved score on another crew’s game ticks the Arcade step; opening the 
   await page.reload();
   const list = await openChecklist(page);
   await expect(list.getByRole('button', { name: /22\. Play another crew.*done/ })).toBeVisible();
+});
+
+test('Hide tucks the tour into a small pill that brings it back, and it stays hidden after a reload', async ({ page }) => {
+  await signIn(page, true);
+  await page.goto('/settings');
+  if (isPhone(page)) await page.getByTestId('tour-bar-hide').click();
+  else await page.getByTestId('tour-panel').getByTestId('tour-hide').click();
+  await expect(page.getByTestId('tour-bar')).toHaveCount(0);
+  await expect(page.getByTestId('tour-panel')).toHaveCount(0);
+  const pill = page.getByTestId('tour-pill');
+  await expect(pill).toHaveText(/Judge tour · Core 0\/6/);
+  await page.reload();
+  await expect(page.getByTestId('tour-pill')).toBeVisible();
+  await page.getByTestId('tour-pill').click();
+  await expect(isPhone(page) ? page.getByTestId('tour-bar') : page.getByTestId('tour-panel')).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test('finishing the core loop says so and Next walks straight into Explore', async ({ page }) => {
+  await signIn(page, true);
+  await page.goto('/settings');
+  await page.evaluate(() => {
+    const facts = ['plan', 'approved', 'build-ready', 'test', 'game:g1', 'play:g1', 'published'];
+    localStorage.setItem('crewarcade:tour:uJudge1', JSON.stringify({ facts, skipped: [], focus: 'allow', ctx: {} }));
+  });
+  await page.reload();
+  const list = await openChecklist(page);
+  await expect(list.getByTestId('tour-core-done')).toContainText('Core loop done!');
+  await expect(list.getByTestId('tour-core-done')).toContainText('17 more to explore');
+  await list.getByTestId('tour-next').click();
+  await expect(list.getByTestId('tour-step')).toContainText('Fix & improve · 1 of 5');
+  await expect(list.getByTestId('tour-step')).toContainText('Remix a game');
 });

@@ -20,6 +20,7 @@ import {
   tourHiddenOn,
   tourReducer,
   tourView,
+  stepLabel,
   type StepId,
   type TourState,
   type TourStep,
@@ -32,6 +33,8 @@ const TRANSLATE_OFF =
   'Translation is switched off on our Nexconn plan right now, so the tap can’t finish. When it’s on, the translation appears right under the message.';
 
 type Ring = { el: Element; hint: string };
+
+const HIDE_KEY = 'crewarcade:tour-hidden';
 
 /**
  * The visible element for the first target that has one. In the chat timeline that's the newest
@@ -59,7 +62,24 @@ export function JudgeTour() {
   const [ring, setRing] = useState<Ring | null>(null);
   const [miss, setMiss] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  // Hide: a per-viewer convenience, remembered in this browser.
+  const [hidden, setHiddenState] = useState(false);
+  useEffect(() => {
+    try {
+      setHiddenState(localStorage.getItem(HIDE_KEY) === '1');
+    } catch {
+      // storage blocked: the tour just starts shown
+    }
+  }, []);
+  const setHidden = useCallback((h: boolean) => {
+    setHiddenState(h);
+    try {
+      if (h) localStorage.setItem(HIDE_KEY, '1');
+      else localStorage.removeItem(HIDE_KEY);
+    } catch {
+      // storage blocked: hidden for this page view only
+    }
+  }, []);
   const search = useRef(0);
 
   // Pages opened count as ticks (/impact, /safety, /settings, game pages).
@@ -143,49 +163,61 @@ export function JudgeTour() {
     },
   };
 
-  const desktop = <TourPanel state={state} view={view} miss={miss} actions={actions} />;
-  const phoneBar = <PhoneBar view={view} actions={actions} onOpen={() => setSheetOpen(true)} />;
+  const desktop = <TourPanel state={state} view={view} miss={miss} actions={actions} onHide={() => setHidden(true)} />;
+  const phoneBar = <PhoneBar view={view} actions={actions} onOpen={() => setSheetOpen(true)} onHide={() => setHidden(true)} />;
 
   return (
     <>
-      {slots.phone ? (
-        createPortal(phoneBar, slots.phone)
+      {hidden ? (
+        // Hidden: one small pill brings it back (above the composer on phones).
+        <div className="fixed right-3 bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] z-40 lg:right-4 lg:bottom-4">
+          <button
+            type="button"
+            onClick={() => setHidden(false)}
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-brand/50 bg-surface px-4 text-sm font-semibold shadow-card"
+            data-testid="tour-pill"
+          >
+            <span aria-hidden className="text-brand">
+              ★
+            </span>
+            {view.core.done < view.core.total ? `Judge tour · Core ${view.core.done}/${view.core.total}` : `Judge tour · ${view.doneCount}/${view.total}`}
+          </button>
+        </div>
       ) : (
         <>
-          {/* Page spacer so the fixed bar never hides the end of the page. */}
-          <div aria-hidden className="h-20 lg:hidden" />
-          <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">{phoneBar}</div>
-        </>
-      )}
-      {slots.desktop
-        ? createPortal(desktop, slots.desktop)
-        : !collapsed && (
+          {slots.phone ? (
+            createPortal(phoneBar, slots.phone)
+          ) : (
+            <>
+              {/* Page spacer so the fixed bar never hides the end of the page. */}
+              <div aria-hidden className="h-20 lg:hidden" />
+              <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">{phoneBar}</div>
+            </>
+          )}
+          {slots.desktop ? (
+            createPortal(desktop, slots.desktop)
+          ) : (
             <div className="fixed right-4 bottom-4 z-40 hidden max-h-[calc(100dvh-2rem)] w-[360px] overflow-y-auto rounded-[24px] border border-border bg-surface shadow-card lg:block">
-              <button
-                type="button"
-                onClick={() => setCollapsed(true)}
-                className="absolute top-3 right-3 z-10 inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold text-dim hover:text-text"
-              >
-                Hide
-              </button>
               {desktop}
             </div>
           )}
-      {!slots.desktop && collapsed && (
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          className="fixed right-4 bottom-4 z-40 hidden min-h-11 items-center gap-2 rounded-full border border-brand/50 bg-surface px-4 text-sm font-semibold shadow-card lg:inline-flex"
-          data-testid="tour-pill"
-        >
-          <span className="text-brand">★</span> Judge tour · {view.doneCount} of {view.total}
-        </button>
+        </>
       )}
-      <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={`Judge tour · ${view.doneCount} of ${view.total} done`}>
+      <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={`Judge tour · Core ${view.core.done} of ${view.core.total}`}>
         <div className="flex flex-col gap-4 pb-2" data-testid="tour-sheet">
-          <Progress done={view.doneCount} total={view.total} />
+          <TourProgress view={view} />
           {view.kind === 'step' ? <StepBody view={view} state={state} miss={miss} actions={actions} /> : <Complete view={view} actions={actions} />}
-          <Checklist state={state} actions={actions} />
+          <Checklist state={state} view={view} actions={actions} />
+          <button
+            type="button"
+            onClick={() => {
+              setSheetOpen(false);
+              setHidden(true);
+            }}
+            className="inline-flex min-h-11 items-center self-start text-sm font-semibold text-dim hover:text-text"
+          >
+            Hide the tour
+          </button>
         </div>
       </Sheet>
       {ring && <ShowMeRing ring={ring} onDone={clearRing} />}
@@ -201,22 +233,41 @@ interface CardActions {
   focus: (id: StepId, navigate?: boolean) => void;
 }
 
-function Progress({ done, total }: { done: number; total: number }) {
+/** The core loop's bar (every judge's goal), then the four Explore themes with their own counts. */
+function TourProgress({ view }: { view: TourView }) {
   return (
-    <div>
-      <div
-        className="h-2 overflow-hidden rounded-full bg-text/10"
-        role="progressbar"
-        aria-label="Judge tour progress"
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={done}
-      >
-        <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${(done / total) * 100}%` }} />
+    <div className="flex flex-col gap-2.5">
+      <div>
+        <div className="flex items-baseline justify-between gap-2 text-xs">
+          <span className="font-semibold">Core loop</span>
+          <span className="text-dim">
+            {view.core.done} of {view.core.total}
+          </span>
+        </div>
+        <div
+          className="mt-1 h-2 overflow-hidden rounded-full bg-text/10"
+          role="progressbar"
+          aria-label="Core loop progress"
+          aria-valuemin={0}
+          aria-valuemax={view.core.total}
+          aria-valuenow={view.core.done}
+        >
+          <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${(view.core.done / view.core.total) * 100}%` }} />
+        </div>
       </div>
-      <p className="mt-1.5 text-xs text-dim">
-        {done} of {total} done
-      </p>
+      <ul className="grid grid-cols-2 gap-1.5" aria-label="Explore">
+        {view.groups.slice(1).map(g => (
+          <li
+            key={g.id}
+            className={cn('min-w-0 rounded-xl border px-2.5 py-1.5 text-xs', g.done === g.total ? 'border-success/50 bg-success/10' : 'border-text/15')}
+          >
+            <span className="block truncate font-semibold">{g.title}</span>
+            <span className="text-dim">
+              {g.done}/{g.total}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -224,9 +275,10 @@ function Progress({ done, total }: { done: number; total: number }) {
 const PILL = 'inline-flex min-h-11 items-center justify-center rounded-full px-4 text-sm font-bold whitespace-nowrap';
 
 function StepBody({ view, state, miss, actions }: { view: Extract<TourView, { kind: 'step' }>; state: TourState; miss: string | null; actions: CardActions }) {
-  const { step, index, done } = view;
+  const { step, done } = view;
   const facts = new Set(state.facts);
   const canShow = step.targets.length > 0 || !!step.where(state.ctx, facts) || !!step.fill;
+  const explore = view.total - view.core.total;
   if (done)
     return (
       <div className="flex flex-col gap-3 rounded-[18px] border border-success/40 bg-success/10 p-4" data-testid="tour-done" aria-live="polite">
@@ -236,11 +288,16 @@ function StepBody({ view, state, miss, actions }: { view: Extract<TourView, { ki
           </span>
           <span className="min-w-0">
             <span className="block text-xs font-semibold tracking-[0.14em] text-success uppercase">
-              Step {index + 1} · {step.title}
+              {stepLabel(view)} · {step.title}
             </span>
             {step.done}
           </span>
         </p>
+        {view.coreJustDone && (
+          <p className="text-sm" data-testid="tour-core-done">
+            <strong>Core loop done!</strong> {explore} more to explore: fixes and hotfixes, safety, languages and the Arcade. Next → keeps going.
+          </p>
+        )}
         <button type="button" onClick={actions.next} className={`${PILL} self-start bg-brand text-brand-ink hover:brightness-110`} data-testid="tour-next">
           Next →
         </button>
@@ -250,7 +307,7 @@ function StepBody({ view, state, miss, actions }: { view: Extract<TourView, { ki
     <div className="flex flex-col gap-3" data-testid="tour-step">
       <div>
         <p className="text-xs font-semibold tracking-[0.14em] text-brand uppercase">
-          Step {index + 1} of {view.total}
+          {stepLabel(view)}
           {step.info ? ' · Info' : ''}
         </p>
         <h3 className="mt-1 font-poster text-2xl leading-tight tracking-wide uppercase">{step.title}</h3>
@@ -332,56 +389,90 @@ function Complete({ view, actions }: { view: Extract<TourView, { kind: 'complete
   );
 }
 
-function Checklist({ state, actions }: { state: TourState; actions: CardActions }) {
+/** Every step, under its group (Core loop first, then the four Explore themes), each with its tick. */
+function Checklist({ state, view, actions }: { state: TourState; view: TourView; actions: CardActions }) {
   const done = doneSteps(new Set(state.facts));
-  const view = tourView(state);
   const current = view.kind === 'step' ? view.step.id : null;
   return (
-    <ol className="flex flex-col" aria-label="All tour steps" data-testid="tour-checklist">
-      {STEPS.map((s, i) => {
-        const isDone = done.has(s.id);
-        const skipped = !isDone && state.skipped.includes(s.id);
-        return (
-          <li key={s.id}>
-            <button
-              type="button"
-              onClick={() => actions.focus(s.id)}
-              aria-current={s.id === current ? 'step' : undefined}
-              className={cn(
-                'flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-xl px-2 text-left text-sm hover:bg-text/5',
-                s.id === current && 'bg-brand/10 font-semibold',
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  'inline-flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px]',
-                  isDone ? 'border-success bg-success text-[#06261a]' : skipped ? 'border-faint text-faint' : 'border-text/30',
-                )}
-              >
-                {isDone ? '✓' : skipped ? '–' : ''}
-              </span>
-              <span className={cn('min-w-0 flex-1 truncate', skipped && 'text-faint line-through')}>
-                {i + 1}. {s.title}
-              </span>
-              <span className="sr-only">{isDone ? 'done' : skipped ? 'skipped' : 'to do'}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ol>
+    <div className="flex flex-col gap-3" data-testid="tour-checklist">
+      {view.groups.map(g => (
+        <section key={g.id} aria-label={`${g.title}, ${g.done} of ${g.total} done`}>
+          <h4 className="flex items-baseline justify-between gap-2 px-2 text-[11px] font-semibold tracking-[0.14em] text-faint uppercase">
+            <span>{g.id === 'core' ? 'Core loop' : `Explore · ${g.title}`}</span>
+            <span>
+              {g.done}/{g.total}
+            </span>
+          </h4>
+          <ol className="flex flex-col">
+            {g.steps.map(s => {
+              const isDone = done.has(s.id);
+              const skipped = !isDone && state.skipped.includes(s.id);
+              return (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    onClick={() => actions.focus(s.id)}
+                    aria-current={s.id === current ? 'step' : undefined}
+                    className={cn(
+                      'flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-xl px-2 text-left text-sm hover:bg-text/5',
+                      s.id === current && 'bg-brand/10 font-semibold',
+                    )}
+                  >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'inline-flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px]',
+                        isDone ? 'border-success bg-success text-[#06261a]' : skipped ? 'border-faint text-faint' : 'border-text/30',
+                      )}
+                    >
+                      {isDone ? '✓' : skipped ? '–' : ''}
+                    </span>
+                    <span className={cn('min-w-0 flex-1 truncate', skipped && 'text-faint line-through')}>
+                      {STEPS.indexOf(s) + 1}. {s.title}
+                    </span>
+                    <span className="sr-only">{isDone ? 'done' : skipped ? 'skipped' : 'to do'}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ))}
+    </div>
   );
 }
 
-/** Desktop: the checklist with a progress bar (right panel, or floating). */
-function TourPanel({ state, view, miss, actions }: { state: TourState; view: TourView; miss: string | null; actions: CardActions }) {
+/** Desktop: progress, the step card and the grouped checklist (right panel, or floating). */
+function TourPanel({
+  state,
+  view,
+  miss,
+  actions,
+  onHide,
+}: {
+  state: TourState;
+  view: TourView;
+  miss: string | null;
+  actions: CardActions;
+  onHide: () => void;
+}) {
   return (
     <section aria-label="Judge tour" className="flex flex-col gap-4 p-5" data-testid="tour-panel">
-      <div>
-        <p className="text-[11px] font-semibold tracking-[0.2em] text-brand uppercase">Judges only</p>
-        <h2 className="font-poster text-3xl tracking-wide uppercase">Judge tour</h2>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[11px] font-semibold tracking-[0.2em] text-brand uppercase">Judges only</p>
+          <h2 className="font-poster text-3xl tracking-wide uppercase">Judge tour</h2>
+        </div>
+        <button
+          type="button"
+          onClick={onHide}
+          className="inline-flex min-h-11 items-center rounded-full px-3 text-xs font-semibold text-dim hover:text-text"
+          data-testid="tour-hide"
+        >
+          Hide
+        </button>
       </div>
-      <Progress done={view.doneCount} total={view.total} />
+      <TourProgress view={view} />
       {view.kind === 'step' ? <StepBody view={view} state={state} miss={miss} actions={actions} /> : <Complete view={view} actions={actions} />}
       <details className="group">
         <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-sm font-semibold text-dim hover:text-text">
@@ -390,22 +481,17 @@ function TourPanel({ state, view, miss, actions }: { state: TourState; view: Tou
             ⌄
           </span>
         </summary>
-        <div className="max-h-72 overflow-y-auto">
-          <Checklist state={state} actions={actions} />
+        <div className="max-h-80 overflow-y-auto">
+          <Checklist state={state} view={view} actions={actions} />
         </div>
       </details>
     </section>
   );
 }
 
-/** Phones and tablets: one bar; tap it for the full checklist. */
-function PhoneBar({ view, actions, onOpen }: { view: TourView; actions: CardActions; onOpen: () => void }) {
-  const label =
-    view.kind === 'complete'
-      ? `Tour complete · ${view.doneCount} of ${view.total}`
-      : view.done
-        ? `✓ Done · ${view.index + 1} of ${view.total}`
-        : `Next step · ${view.index + 1} of ${view.total}`;
+/** Phones and tablets: one bar; tap it for the full checklist; ✕ hides it. */
+function PhoneBar({ view, actions, onOpen, onHide }: { view: TourView; actions: CardActions; onOpen: () => void; onHide: () => void }) {
+  const label = view.kind === 'complete' ? `Tour complete · ${view.doneCount} of ${view.total}` : view.done ? `✓ Done · ${stepLabel(view)}` : stepLabel(view);
   const title =
     view.kind === 'complete'
       ? view.skipped.length
@@ -414,15 +500,21 @@ function PhoneBar({ view, actions, onOpen }: { view: TourView; actions: CardActi
       : view.done
         ? view.step.done
         : view.step.title;
+  // The thin line: the core loop until it's done, then everything.
+  const coreOpen = view.core.done < view.core.total;
+  const progress = coreOpen ? view.core.done / view.core.total : view.doneCount / view.total;
   return (
-    <div className="pb-safe relative border-t border-border bg-surface px-3 pt-2" data-testid="tour-bar">
+    <div className="pb-safe relative border-t border-border bg-surface pt-2 pr-1 pl-3" data-testid="tour-bar">
       <span aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-text/10">
-        <span className="block h-full bg-brand transition-[width] duration-500" style={{ width: `${(view.doneCount / view.total) * 100}%` }} />
+        <span className="block h-full bg-brand transition-[width] duration-500" style={{ width: `${progress * 100}%` }} />
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <button type="button" onClick={onOpen} className="min-h-11 min-w-0 flex-1 text-left" aria-label={`${label}: ${title}. Open the judge tour checklist`}>
           <span
-            className={cn('block text-[11px] font-semibold tracking-[0.14em] uppercase', view.kind === 'step' && view.done ? 'text-success' : 'text-brand')}
+            className={cn(
+              'block truncate text-[11px] font-semibold tracking-[0.14em] uppercase',
+              view.kind === 'step' && view.done ? 'text-success' : 'text-brand',
+            )}
           >
             {label}
           </span>
@@ -447,6 +539,15 @@ function PhoneBar({ view, actions, onOpen }: { view: TourView; actions: CardActi
               Show me
             </button>
           ))}
+        <button
+          type="button"
+          onClick={onHide}
+          aria-label="Hide the judge tour"
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-dim hover:bg-surface-2 hover:text-text"
+          data-testid="tour-bar-hide"
+        >
+          <span aria-hidden>✕</span>
+        </button>
       </div>
     </div>
   );

@@ -113,6 +113,15 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   opens with a "Judging the Nexconn Build Challenge? ★ I'm a judge" card above "Or sign up as a
   player" (not on invite sign-ups), and `/try` links players back to the normal sign-up. 1 e2e.
   Checked at 320 px: nothing cut off, no sideways scroll.
+- **Judge tour: core loop + Explore themes, and Hide (2026-11-22):** all 23 steps and tick rules are
+  unchanged, but the tour now starts with a 6-step core loop (pitch, approve, build, playtest, play,
+  Allow) that the bar counts ("Core · step 3 of 6"), then 17 steps in four themes (Fix & improve,
+  Safety & trust, Crews & languages, Arcade & you), each with its own progress; finishing the core
+  says "Core loop done! 17 more to explore" and Next walks on. "Change the plan" moved to Fix &
+  improve (any new plan: a remix or a new pitch). Hide (✕ on the phone bar, Hide on desktop) tucks it
+  into a "★ Judge tour · Core 2/6" pill, remembered in this browser. Saved progress keeps working.
+  3 more web tests, 2 more e2e. Checked at 320 px (bar, grouped sheet, Hide pill above the composer,
+  no sideways scroll) and on desktop.
 - **Judge mode for someone already signed in (2026-11-22):** the owner, signed in as a normal player,
   tapped Start as a judge: `/try` kept the account and opened a crew, but no tour (not a judge). Now
   `POST /api/auth/judge` with a session marks that same account as a judge (a guest account has no

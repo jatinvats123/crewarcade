@@ -1,5 +1,7 @@
 // Judge tour (judges only): 23 steps through everything CrewArcade does. Pure: the steps, the tick
 // rules, the reducer and the fact extractors live here and are unit-tested (test/tour.test.ts).
+// Shown in two layers: the 6-step core loop every judge can finish in one sitting, then 17 more in
+// four themed Explore sections. Next walks straight on through all of them.
 //
 // Ticks come from real app events, recorded as short "facts" (strings):
 //   chat cards and notices  plan, plan-v2, approved, plan-hi, remix, build-ready, test, test-pass,
@@ -12,32 +14,74 @@ import { parseCardMeta } from '@crewarcade/shared';
 import { z } from 'zod';
 import type { ChatMessage } from '../chat/types';
 
+/** Tour order: the core loop, then the four Explore themes. */
 export const STEP_IDS = [
+  // Core loop
   'pitch',
-  'change',
   'approve',
   'build',
   'playtest',
-  'retry',
   'play',
   'allow',
-  'page',
-  'board',
+  // Fix & improve
+  'remix',
+  'change',
+  'retry',
   'bug',
   'story',
-  'remix',
+  // Safety & trust
   'shield',
+  'sandbox',
+  'numbers',
+  // Crews & languages
   'hindi',
   'translate',
   'invite',
   'voice',
   'dm',
-  'numbers',
-  'sandbox',
+  // Arcade & you
+  'page',
+  'board',
   'arcade',
   'settings',
 ] as const;
 export type StepId = (typeof STEP_IDS)[number];
+
+export const GROUPS = [
+  { id: 'core', title: 'Core loop' },
+  { id: 'fix', title: 'Fix & improve' },
+  { id: 'safety', title: 'Safety & trust' },
+  { id: 'crews', title: 'Crews & languages' },
+  { id: 'arcade', title: 'Arcade & you' },
+] as const;
+export type GroupId = (typeof GROUPS)[number]['id'];
+
+const GROUP_OF: Record<StepId, GroupId> = {
+  pitch: 'core',
+  approve: 'core',
+  build: 'core',
+  playtest: 'core',
+  play: 'core',
+  allow: 'core',
+  remix: 'fix',
+  change: 'fix',
+  retry: 'fix',
+  bug: 'fix',
+  story: 'fix',
+  shield: 'safety',
+  sandbox: 'safety',
+  numbers: 'safety',
+  hindi: 'crews',
+  translate: 'crews',
+  invite: 'crews',
+  voice: 'crews',
+  dm: 'crews',
+  page: 'arcade',
+  board: 'arcade',
+  arcade: 'arcade',
+  settings: 'arcade',
+};
+export const groupTitle = (g: GroupId): string => GROUPS.find(x => x.id === g)!.title;
 
 /** Where the judge's own crew and latest game room are (learned as they use the app). */
 export interface TourCtx {
@@ -56,6 +100,7 @@ export interface TourTarget {
 
 export interface TourStep {
   id: StepId;
+  group: GroupId;
   title: string;
   /** What to press. */
   press: string;
@@ -102,7 +147,7 @@ export function publishedSlug(f: Facts): string | null {
 const crew = (c: TourCtx) => c.crewPath ?? null;
 const room = (c: TourCtx) => c.roomPath ?? c.crewPath ?? null;
 
-export const STEPS: readonly TourStep[] = [
+const DEFS: ReadonlyArray<Omit<TourStep, 'group'>> = [
   {
     id: 'pitch',
     title: 'Pitch a game',
@@ -120,7 +165,7 @@ export const STEPS: readonly TourStep[] = [
   {
     id: 'change',
     title: 'Change the plan',
-    press: 'On the plan card, tap Change and ask for something, like “make it night time”.',
+    press: 'On a plan that isn’t approved yet (your remix, or a new pitch), tap Change and ask for something, like “make it night time”.',
     next: 'Pixel posts plan v2 and marks v1 as replaced.',
     why: 'Plans are a conversation: anyone in the crew can steer before a line of code exists.',
     done: 'Done: plan v2 is in.',
@@ -400,6 +445,9 @@ export const STEPS: readonly TourStep[] = [
   },
 ];
 
+/** The 23 steps in tour order, each with its group. */
+export const STEPS: readonly TourStep[] = STEP_IDS.map(id => ({ ...DEFS.find(d => d.id === id)!, group: GROUP_OF[id] }));
+
 const BY_ID = new Map(STEPS.map((s, i) => [s.id, { step: s, index: i }]));
 export const stepById = (id: StepId): TourStep => BY_ID.get(id)!.step;
 export const stepIndex = (id: StepId): number => BY_ID.get(id)!.index;
@@ -491,18 +539,71 @@ export function tourReducer(state: TourState, action: TourAction): TourState {
   }
 }
 
+export interface GroupProgress {
+  id: GroupId;
+  title: string;
+  steps: TourStep[];
+  done: number;
+  total: number;
+}
+
+/** Each group's steps (in tour order) and how many are done. */
+export function groupProgress(done: ReadonlySet<StepId>): GroupProgress[] {
+  return GROUPS.map(g => {
+    const steps = STEPS.filter(s => s.group === g.id);
+    return { id: g.id, title: g.title, steps, done: steps.filter(s => done.has(s.id)).length, total: steps.length };
+  });
+}
+
+interface ViewBase {
+  doneCount: number;
+  total: number;
+  groups: GroupProgress[];
+  /** The core loop: every judge's goal; Explore comes after. */
+  core: { done: number; total: number };
+}
 export type TourView =
-  | { kind: 'step'; step: TourStep; index: number; done: boolean; doneCount: number; total: number }
-  | { kind: 'complete'; skipped: TourStep[]; doneCount: number; total: number };
+  | (ViewBase & {
+      kind: 'step';
+      step: TourStep;
+      index: number;
+      done: boolean;
+      /** Position inside the step's group (0-based) and the group's size. */
+      groupIndex: number;
+      groupTotal: number;
+      /** The step just finished completes the core loop: "Core done, 17 more to explore". */
+      coreJustDone: boolean;
+    })
+  | (ViewBase & { kind: 'complete'; skipped: TourStep[] });
 
 /** What the card shows. A focused step that just got done stays on screen ("Done: …", Next →). */
 export function tourView(state: TourState): TourView {
   const facts = new Set(state.facts);
   const done = doneSteps(facts);
-  const total = STEPS.length;
+  const groups = groupProgress(done);
+  const coreGroup = groups[0]!;
+  const base: ViewBase = { doneCount: done.size, total: STEPS.length, groups, core: { done: coreGroup.done, total: coreGroup.total } };
   const focus = state.focus ?? nextOpen(state, null);
-  if (!focus) return { kind: 'complete', skipped: STEPS.filter(s => state.skipped.includes(s.id) && !done.has(s.id)), doneCount: done.size, total };
-  return { kind: 'step', step: stepById(focus), index: stepIndex(focus), done: done.has(focus), doneCount: done.size, total };
+  if (!focus) return { ...base, kind: 'complete', skipped: STEPS.filter(s => state.skipped.includes(s.id) && !done.has(s.id)) };
+  const step = stepById(focus);
+  const group = groups.find(g => g.id === step.group)!;
+  return {
+    ...base,
+    kind: 'step',
+    step,
+    index: stepIndex(focus),
+    done: done.has(focus),
+    groupIndex: group.steps.indexOf(step),
+    groupTotal: group.total,
+    coreJustDone: step.group === 'core' && done.has(focus) && coreGroup.done === coreGroup.total,
+  };
+}
+
+/** The short label for the bar and the card: "Core · step 3 of 6", "Safety & trust · 1 of 3". */
+export function stepLabel(view: Extract<TourView, { kind: 'step' }>): string {
+  return view.step.group === 'core'
+    ? `Core · step ${view.groupIndex + 1} of ${view.groupTotal}`
+    : `${groupTitle(view.step.group)} · ${view.groupIndex + 1} of ${view.groupTotal}`;
 }
 
 // ---- facts from the app ------------------------------------------------------------------------

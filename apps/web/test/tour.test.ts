@@ -6,6 +6,9 @@ import type { ChatMessage } from '../src/lib/chat/types';
 import {
   doneSteps,
   factsForPath,
+  GROUPS,
+  groupProgress,
+  stepLabel,
   factsFromMessages,
   initialTourState,
   JUDGE_PITCHES,
@@ -156,22 +159,59 @@ describe('tour steps', () => {
     expect(stepById('arcade').targets[0]?.id).toBe('game-play');
   });
 
-  it('info steps are the voice, DM and sandbox steps', () => {
-    expect(STEPS.filter(s => s.info).map(s => s.id)).toEqual(['voice', 'dm', 'sandbox']);
+  it('the core loop comes first (6 steps), then four Explore themes; all 23 are kept', () => {
+    expect(STEPS.slice(0, 6).map(s => s.id)).toEqual(['pitch', 'approve', 'build', 'playtest', 'play', 'allow']);
+    expect(STEPS.slice(0, 6).every(s => s.group === 'core')).toBe(true);
+    const sizes = groupProgress(new Set()).map(g => [g.id, g.total]);
+    expect(sizes).toEqual([
+      ['core', 6],
+      ['fix', 5],
+      ['safety', 3],
+      ['crews', 5],
+      ['arcade', 4],
+    ]);
+    // Groups are contiguous in tour order, so Next walks one theme at a time.
+    const order = STEPS.map(s => s.group);
+    expect(order).toEqual([...order].sort((a, b) => GROUPS.findIndex(g => g.id === a) - GROUPS.findIndex(g => g.id === b)));
+  });
+
+  it('info steps are the sandbox, voice and DM steps', () => {
+    expect(STEPS.filter(s => s.info).map(s => s.id)).toEqual(['sandbox', 'voice', 'dm']);
   });
 });
 
 describe('tour reducer', () => {
-  it('starts on step 1, 0 of 23 done', () => {
+  it('starts on step 1, 0 of 23 done, labelled as the core loop', () => {
     const v = tourView(initialTourState());
-    expect(v).toMatchObject({ kind: 'step', index: 0, done: false, doneCount: 0, total: 23 });
+    expect(v).toMatchObject({ kind: 'step', index: 0, done: false, doneCount: 0, total: 23, core: { done: 0, total: 6 }, groupIndex: 0, groupTotal: 6 });
+    if (v.kind === 'step') expect(stepLabel(v)).toBe('Core · step 1 of 6');
+  });
+
+  it('Explore steps are labelled by theme and position', () => {
+    const v = tourView(state({ focus: 'sandbox' }));
+    if (v.kind !== 'step') throw new Error('expected a step');
+    expect(stepLabel(v)).toBe('Safety & trust · 2 of 3');
+  });
+
+  it('per-group progress counts ticks; finishing the core says so once, on its last done step', () => {
+    const core = ['plan', 'approved', 'build-ready', 'test', 'game:g1', 'play:g1', 'published'];
+    const v = tourView(state({ facts: [...core, 'shield'], focus: 'allow' }));
+    if (v.kind !== 'step') throw new Error('expected a step');
+    expect(v.core).toEqual({ done: 6, total: 6 });
+    expect(v.coreJustDone).toBe(true);
+    expect(v.groups.find(g => g.id === 'safety')).toMatchObject({ done: 1, total: 3 });
+    // Not yet: one core step still open.
+    const w = tourView(state({ facts: core.filter(f => f !== 'published'), focus: 'play' }));
+    expect(w.kind === 'step' && w.coreJustDone).toBe(false);
+    // Next from the last core step goes straight into Explore.
+    expect(tourReducer(state({ facts: core, focus: 'allow' }), { type: 'next' }).focus).toBe('remix');
   });
 
   it('a finished step stays on the card as done until Next, which goes to the next open step', () => {
     let s = tourReducer(state(), { type: 'facts', facts: ['plan'] });
     expect(tourView(s)).toMatchObject({ kind: 'step', index: 0, done: true, doneCount: 1 });
     s = tourReducer(s, { type: 'next' });
-    expect(s.focus).toBe('change');
+    expect(s.focus).toBe('approve');
   });
 
   it('Next skips over steps already done out of order', () => {
@@ -188,7 +228,7 @@ describe('tour reducer', () => {
 
   it('Skip moves on and remembers the step; focusing it again un-skips it', () => {
     let s = tourReducer(state(), { type: 'skip', id: 'pitch' });
-    expect(s.focus).toBe('change');
+    expect(s.focus).toBe('approve');
     expect(s.skipped).toEqual(['pitch']);
     s = tourReducer(s, { type: 'focus', id: 'pitch' });
     expect(s.focus).toBe('pitch');
