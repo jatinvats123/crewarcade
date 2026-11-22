@@ -10,7 +10,7 @@ import { GameScene } from '@/components/arcade/GameScene';
 import { MemberAvatar } from '@/components/identity/MemberAvatar';
 import { Leaderboard } from '@/components/play/Leaderboard';
 import { StoryTimeline } from '@/components/story/StoryTimeline';
-import { Avatar, StateChip, useToast } from '@/components/ui';
+import { Avatar, ScrollMore, StateChip, useToast } from '@/components/ui';
 import { ACCENT_TEXT, BUSY_STATES } from '@/lib/agents';
 import { roomAgentStates } from '@/lib/chat/reducer';
 import { useChannelState, usePresence } from '@/lib/chat/store';
@@ -154,14 +154,14 @@ export function ContextPanel() {
 
   if (!room?.game)
     return (
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
+      <ScrollMore wrapperClassName="flex-1" className="flex flex-1 flex-col gap-4 p-5">
         {heading}
         {agents}
         {room && <YourCrew crewId={room.crewId} />}
         <p className="mt-2 text-sm text-dim">
           Approved plans get their own game room. Open one to see its Story: every decision, who made it, and what it cost.
         </p>
-      </div>
+      </ScrollMore>
     );
 
   return (
@@ -207,7 +207,7 @@ export function ContextPanel() {
           ))}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-5" role="tabpanel">
+      <ScrollMore wrapperClassName="flex-1" className="flex-1 p-5" role="tabpanel">
         {tab === 'story' ? (
           <StoryTimeline gameId={room.game.id} refreshKey={cards} />
         ) : tab === 'board' ? (
@@ -215,7 +215,7 @@ export function ContextPanel() {
         ) : (
           agents
         )}
-      </div>
+      </ScrollMore>
     </div>
   );
 }

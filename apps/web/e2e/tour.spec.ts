@@ -354,3 +354,20 @@ test('on the bug step, opening the game rings its Report a bug button (the playe
   await report.click();
   await expect(page.getByTestId('tour-ring')).toHaveCount(0);
 });
+
+test('desktop right panel: "More below" shows while there is more, scrolls on tap, and goes at the end', async ({ page }) => {
+  test.skip(isPhone(page), 'the right panel is desktop only');
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await signIn(page, true);
+  await page.goto('/settings');
+  const panel = page.getByRole('complementary', { name: 'Crew HQ' });
+  const more = panel.getByTestId('scroll-more').first();
+  await expect(more).toBeVisible();
+  await expect(more).toContainText('More below');
+  // Tap until the end: each tap scrolls on; at the end the hint is gone.
+  for (let i = 0; i < 12 && (await panel.getByTestId('scroll-more').count()) > 0; i++) {
+    await panel.getByTestId('scroll-more').first().click();
+    await page.waitForTimeout(400);
+  }
+  await expect(panel.getByTestId('scroll-more')).toHaveCount(0);
+});

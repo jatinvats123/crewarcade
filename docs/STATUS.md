@@ -113,6 +113,11 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   opens with a "Judging the Nexconn Build Challenge? ★ I'm a judge" card above "Or sign up as a
   player" (not on invite sign-ups), and `/try` links players back to the normal sign-up. 1 e2e.
   Checked at 320 px: nothing cut off, no sideways scroll.
+- **"More below" in the desktop right panel (2026-11-22):** Crew HQ and the judge tour above it are cut
+  off on shorter screens with nothing saying there's more. `components/ui/ScrollMore.tsx`: while a
+  scroll area has more below, a fade and a "More below ↓" button sit at its bottom (tap scrolls on);
+  they go at the end and come back when content grows. Used for Crew HQ (both branches) and the
+  desktop tour slot. 1 e2e (desktop 1280×640: shows, taps to the end, goes). Checked at 1280×680.
 - **Bug step inside the player (2026-11-22):** the full-screen player covers the tour card, so a judge
   on "Report a bug" got no guidance there. On that step, the moment the player shows its 🐞 Report a
   bug button the tour rings it ("Found a bug? Tap here to report it"), above the player; the ring

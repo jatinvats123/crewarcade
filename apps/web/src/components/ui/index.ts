@@ -8,3 +8,4 @@ export { Sheet } from './Sheet';
 export { ToastProvider, useToast } from './Toast';
 export { Skeleton, MessageSkeleton, EmptyState, ErrorState } from './States';
 export { Composer } from './Composer';
+export { ScrollMore } from './ScrollMore';

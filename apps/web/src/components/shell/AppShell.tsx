@@ -48,7 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </aside>
               <main className={cn('min-w-0 flex-1 flex-col', inCrewIndex ? 'hidden md:flex' : 'flex')}>{children}</main>
               <aside aria-label="Crew HQ" className="hidden w-[360px] shrink-0 flex-col border-l border-border lg:flex">
-                <TourSlot kind="desktop" className="max-h-[62%] shrink-0 overflow-y-auto border-b border-border empty:hidden" />
+                <TourSlot kind="desktop" scroll wrapperClassName="max-h-[62%] shrink-0" className="border-b border-border empty:hidden" />
                 <ContextPanel />
               </aside>
             </div>
