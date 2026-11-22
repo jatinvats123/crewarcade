@@ -11,7 +11,7 @@ browser and records the proof. Nothing goes public until someone in your crew ta
 [**Arcade**](https://crewarcade.vercel.app/arcade) ·
 [**Live numbers**](https://crewarcade.vercel.app/impact) ·
 [Try it in 3 minutes](#for-judges-try-it-in-3-minutes) ·
-[Sponsors](#sponsors-and-how-we-use-them) ·
+[How we use Nexconn](#how-we-use-nexconn) ·
 [Built on Nexconn](#built-on-nexconn) ·
 [Real usage](#real-usage) ·
 [Safety](#safety)
@@ -191,19 +191,21 @@ sequenceDiagram
   end
 ```
 
-## Sponsors and how we use them
+## How we use Nexconn
 
-The [challenge site](https://reskilll.com/hack/nexconn) names two companies: **Nexconn**, whose
-platform every entry must use, and **Reskilll**, which runs the challenge for them.
+[Nexconn](https://www.nexconn.ai) gives apps real-time chat through SDKs, server APIs and webhooks.
+CrewArcade is built on **Nexconn Chat**, and these are the pieces that carry it:
 
-| Company      | What they do                                                                                            | Their role in CrewArcade                                                                                                                 |
-| ------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **Nexconn**  | Chat and call SDKs and APIs: direct, group, open and community channels, translation, moderation, calls | **The core.** Crews, game rooms, agents, cards, live states, DMs and receipts all run on Nexconn Chat, as the rest of this section shows |
-| **Reskilll** | India's hackathon platform; runs this challenge                                                         | Where we registered and submit. Nothing in the code depends on it                                                                        |
-
-AWS and Alibaba Cloud appear on the prize list (discounted accounts for winners). CrewArcade doesn't
-use either. The other services we run on (Claude, Render, Vercel, Supabase, Sarvam) are not sponsors
-of the challenge.
+| Nexconn product                  | Its main job in CrewArcade                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------- |
+| **Chat SDK for Web**             | Every live screen: messages, cards, votes, agent states, receipts, typing and online dots |
+| **Platform Chat API**            | Our server creates crews and game rooms, and Pixel, Forge and Glitch speak as themselves  |
+| **Webhooks**                     | A message in the chat becomes a job for an agent                                          |
+| **Group channels**               | One per crew, and one per game being made                                                 |
+| **Custom messages and metadata** | Plans, builds, tests and publish requests as cards whose votes and status change in place |
+| **Stream and status messages**   | Agent replies as they are written, and what each agent is doing right now                 |
+| **Direct channels**              | Glitch's message when a friend beats your score                                           |
+| **`nexconn-chat` AI skill**      | Nexconn's own coding skill, used to write the integration from the live docs              |
 
 ### What breaks without Nexconn
 

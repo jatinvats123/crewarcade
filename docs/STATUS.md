@@ -203,8 +203,7 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   **private** and must be public; `TEAM_USER_IDS` is empty on Render (`/impact` says team accounts are
   left out, `teamAccounts` is 0); demo video and write-up links (two TODOs in the README).
 
-- **README sponsor section (2026-11-22):** Nexconn and Reskilll are the only companies the challenge
-  site names; AWS/Alibaba are winner perks and unused. The section maps each product step to Nexconn,
+- **README "How we use Nexconn" (2026-11-22):** the section maps each product step to Nexconn,
   every Nexconn product to used / built / not used with the reason, and lists each API endpoint and SDK
   call. Fixed stale README rows (streams are chunked; `user:connection_status` is only logged).
 
