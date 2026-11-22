@@ -398,6 +398,17 @@ Details: [`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## Real usage
 
+**32 monthly active users on our Nexconn App Key** in November 2026, with a peak of **6 people connected
+at once**, as counted by Nexconn itself:
+
+<p align="center">
+  <img src="docs/images/nexconn-console-usage.png" alt="Nexconn Console usage for November 2026: 32 monthly active users, peak of 6 concurrent connections, last updated 21 Nov 2026 15:59 UTC" width="760">
+</p>
+<p align="center"><sub>Nexconn Console, November 2026, last updated 21 Nov 2026 21:29 IST (22 Nov is not in it yet).</sub></p>
+
+Nexconn counts every user ID that connected, so its 32 includes our own, test and judge accounts. Our own
+page below leaves judges out, which is why its number is lower.
+
 **Live: https://crewarcade.vercel.app/impact.** People, crews, games, the pitch-to-Arcade funnel,
 each day's sign-ups and how the agents did, straight from the database every minute (raw JSON:
 [`/api/public/impact`](https://crewarcade-server.onrender.com/api/public/impact)). The live page is the
@@ -406,7 +417,7 @@ source of truth; the table is a snapshot.
 People found CrewArcade through invite links shared in WhatsApp groups; each link carries a
 `?ref=` code, so sign-ups are counted by where they came from. No accounts were created by scripts.
 
-Snapshot of `/impact`, **22 Nov 2026, 13:08 IST**:
+Snapshot of `/impact`, **22 Nov 2026, 13:43 IST**:
 
 | Measure                                         | Number                                                           |
 | ----------------------------------------------- | ---------------------------------------------------------------- |
@@ -414,10 +425,10 @@ Snapshot of `/impact`, **22 Nov 2026, 13:08 IST**:
 | Active in the last 24 h                         | 21                                                               |
 | Crews                                           | 25 (2 of them with more than one person)                         |
 | Games: pitched → approved → built               | 17 → 13 → 13                                                     |
-| Games with a version that passed Glitch         | 6 of 13 built                                                    |
+| Games with a version that passed Glitch         | 7 of 13 built                                                    |
 | Games published                                 | 2 (a human tapped Allow on each)                                 |
 | Scores saved                                    | 14, by 3 people                                                  |
-| Agents, last 30 days, all accounts: playtests   | 15 of 44 passed                                                  |
+| Agents, last 30 days, all accounts: playtests   | 16 of 46 passed                                                  |
 | Agents, last 30 days, all accounts: AI per game | $0.018                                                           |
 
 **What is in these numbers.** Judge accounts (3) and the agents are left out of the people, crew and
