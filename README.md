@@ -8,6 +8,7 @@ Pitch a game idea in your group chat. Pixel plans it, Forge builds it, Glitch pl
 browser and records the proof. Nothing goes public until someone in your crew taps **Allow**.
 
 [**Live app**](https://crewarcade.vercel.app) ·
+[**Demo video**](https://drive.google.com/file/d/1ZUl1BDzusAeTOwiSiNLNpKq2gi-MDOBH/view?usp=sharing) ·
 [**Arcade**](https://crewarcade.vercel.app/arcade) ·
 [**Live numbers**](https://crewarcade.vercel.app/impact) ·
 [Try it in 3 minutes](#for-judges-try-it-in-3-minutes) ·
@@ -35,19 +36,19 @@ built by Forge, fixed once, playtested headlessly and published on 20 Nov 2026.<
 
 ## Links
 
-| What            | Where                                                                                                  |
-| --------------- | ------------------------------------------------------------------------------------------------------ |
-| Judge mode      | https://crewarcade.vercel.app/try (one tap, no sign-up, then a 23-step guided tour with Show me)       |
-| Live app        | https://crewarcade.vercel.app (no password, no email)                                                  |
-| Public Arcade   | https://crewarcade.vercel.app/arcade (games that crews made and published)                             |
-| Live numbers    | https://crewarcade.vercel.app/impact (judges and agents left out, recomputed every minute, raw JSON)   |
-| Safety rules    | https://crewarcade.vercel.app/safety (what the shield blocks, publicly)                                |
-| API health      | https://crewarcade-server.onrender.com/health                                                          |
-| Demo video      | _TODO: YouTube link_                                                                                   |
-| Write-up PDF    | _TODO: link_                                                                                           |
-| Nexconn App Key | In the write-up PDF (the rules ask for it there). Singapore data center                                |
-| Source          | https://github.com/jatinvats123/crewarcade (default branch `main`, MIT)                                |
-| Build log       | [`docs/STATUS.md`](docs/STATUS.md): every phase, what was verified live, and every bug found and fixed |
+| What            | Where                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Judge mode      | https://crewarcade.vercel.app/try (one tap, no sign-up, then a 23-step guided tour with Show me)                               |
+| Live app        | https://crewarcade.vercel.app (no password, no email)                                                                          |
+| Public Arcade   | https://crewarcade.vercel.app/arcade (games that crews made and published)                                                     |
+| Live numbers    | https://crewarcade.vercel.app/impact (judges and agents left out, recomputed every minute, raw JSON)                           |
+| Safety rules    | https://crewarcade.vercel.app/safety (what the shield blocks, publicly)                                                        |
+| API health      | https://crewarcade-server.onrender.com/health                                                                                  |
+| Demo video      | [Watch on Google Drive](https://drive.google.com/file/d/1ZUl1BDzusAeTOwiSiNLNpKq2gi-MDOBH/view?usp=sharing) (3:21, no sign-in) |
+| Write-up PDF    | Uploaded with the submission form                                                                                              |
+| Nexconn App Key | In the write-up PDF (the rules ask for it there). Singapore data center                                                        |
+| Source          | https://github.com/jatinvats123/crewarcade (default branch `main`, MIT)                                                        |
+| Build log       | [`docs/STATUS.md`](docs/STATUS.md): every phase, what was verified live, and every bug found and fixed                         |
 
 ## A real game, minute by minute
 
