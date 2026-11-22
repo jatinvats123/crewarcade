@@ -113,6 +113,11 @@ Updated at the end of every phase. Branch per phase (`phase-<n>`); the owner mer
   opens with a "Judging the Nexconn Build Challenge? ★ I'm a judge" card above "Or sign up as a
   player" (not on invite sign-ups), and `/try` links players back to the normal sign-up. 1 e2e.
   Checked at 320 px: nothing cut off, no sideways scroll.
+- **Bug step inside the player (2026-11-22):** the full-screen player covers the tour card, so a judge
+  on "Report a bug" got no guidance there. On that step, the moment the player shows its 🐞 Report a
+  bug button the tour rings it ("Found a bug? Tap here to report it"), above the player; the ring
+  stays until the judge taps, and comes back each time the player reopens. 1 e2e (phone + desktop:
+  game room with ?play, ring on the button, still there after a pause, gone after the tap).
 - **No dead ends in the tour (2026-11-22):** the owner reached "Change the plan" with no plan left to
   change (the remix plan was already approved), so Show me found nothing. The step is now "Change
   the game": Show me types "make it night time with glowing stars" in the game room (Pixel writes the

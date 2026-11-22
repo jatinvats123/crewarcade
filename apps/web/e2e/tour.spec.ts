@@ -285,3 +285,72 @@ test('finishing the core loop says so and Next walks straight into Explore', asy
   await expect(list.getByTestId('tour-step')).toContainText('Fix & improve · 1 of 5');
   await expect(list.getByTestId('tour-step')).toContainText('Remix a game');
 });
+
+test('on the bug step, opening the game rings its Report a bug button (the player covers the tour card)', async ({ page }) => {
+  const GAME_HTML = readFileSync(path.resolve(process.cwd(), '../../packages/engine/starter/index.html'), 'utf8');
+  const CSP =
+    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; frame-ancestors *";
+  await signIn(page, true);
+  const now = new Date().toISOString();
+  const summary = { id: 'c1', name: "Judge's crew", kind: 'crew', groupChannelId: 'g1', inviteCode: 'ABCD1234', role: 'owner', memberCount: 4, createdAt: now };
+  const member = {
+    id: 'uJudge1',
+    nexconnId: 'uJudge1',
+    displayName: 'Judge',
+    avatarEmoji: '🦊',
+    avatarColor: 'gold',
+    avatarUrl: null,
+    isAgent: false,
+    role: 'owner',
+    joinedAt: now,
+  };
+  const game = {
+    id: 'gDemo',
+    crewId: 'c1',
+    slug: 'sample-scooter-run',
+    title: 'Sample Scooter Run',
+    status: 'built',
+    language: 'en',
+    roomChannelId: 'r1',
+    remixOfGameId: null,
+    createdAt: now,
+  };
+  await page.route('**/api/crews', route => route.fulfill({ json: { crews: [summary] } }));
+  await page.route('**/api/crews/c1', route => route.fulfill({ json: { crew: { ...summary, ownerId: 'uJudge1', members: [member], games: [game] } } }));
+  await page.route('**/api/games/gDemo/versions/*/play', route =>
+    route.fulfill({
+      json: {
+        url: 'https://play.test/play/sample-scooter-run/v/1?t=1999999999999.abcdefghijklmnopqrstuv',
+        expiresAt: Date.now() + 60_000,
+        gameId: 'gDemo',
+        slug: 'sample-scooter-run',
+        title: 'Sample Scooter Run',
+        version: 1,
+        orientation: 'any',
+      },
+    }),
+  );
+  await page.route('https://play.test/**', route =>
+    route.fulfill({ status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': CSP }, body: GAME_HTML }),
+  );
+  await page.goto('/settings');
+  await page.evaluate(() =>
+    localStorage.setItem('crewarcade:tour:uJudge1', JSON.stringify({ facts: ['plan', 'approved'], skipped: [], focus: 'bug', ctx: {} })),
+  );
+  await page.goto('/crews/c1/rooms/r1?play=latest');
+  const report = page.getByTestId('report-bug');
+  await expect(report).toBeVisible();
+  await expect(page.getByTestId('tour-hint')).toHaveText('Found a bug? Tap here to report it');
+  // The ring sits on the button, above the player.
+  await expect
+    .poll(async () => {
+      const [ring, btn] = await Promise.all([page.getByTestId('tour-ring').locator('span').first().boundingBox(), report.boundingBox()]);
+      return !!ring && !!btn && Math.abs(ring.x + 6 - btn.x) < 4 && Math.abs(ring.y + 6 - btn.y) < 4;
+    })
+    .toBe(true);
+  // It stays (no timeout) until the judge taps; tapping opens the bug report.
+  await page.waitForTimeout(500);
+  await expect(page.getByTestId('tour-ring')).toBeVisible();
+  await report.click();
+  await expect(page.getByTestId('tour-ring')).toHaveCount(0);
+});

@@ -32,7 +32,8 @@ import { dispatchTour, fillComposer, recordTourFacts, useTour, useTourSlots } fr
 const TRANSLATE_OFF =
   'Translation is switched off on our Nexconn plan right now, so the tap can’t finish. When it’s on, the translation appears right under the message.';
 
-type Ring = { el: Element; hint: string };
+/** sticky: stays until the judge taps (no 12 s timeout). */
+type Ring = { el: Element; hint: string; sticky?: boolean };
 
 const HIDE_KEY = 'crewarcade:tour-hidden';
 
@@ -151,6 +152,24 @@ export function JudgeTour() {
   );
 
   const clearRing = useCallback(() => setRing(null), []);
+
+  // The bug step happens inside the full-screen player, which covers the tour card: as soon as the
+  // player shows its Report a bug button, ring it (and again each time the player reopens).
+  const bugPending = !!tour && tour.state.focus === 'bug' && !doneSteps(new Set(tour.state.facts)).has('bug');
+  useEffect(() => {
+    if (!bugPending) return;
+    let ringed: Element | null = null;
+    const check = () => {
+      const el = document.querySelector('[data-tour="report-bug"]');
+      if (!el || el === ringed || el.getBoundingClientRect().width === 0) return;
+      ringed = el;
+      setRing({ el, hint: 'Found a bug? Tap here to report it', sticky: true });
+    };
+    check();
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => mo.disconnect();
+  }, [bugPending]);
 
   if (!tour || tourHiddenOn(pathname)) return null;
   const state = tour.state;
@@ -593,7 +612,7 @@ function ShowMeRing({ ring, onDone }: { ring: Ring; onDone: () => void }) {
     raf = requestAnimationFrame(tick);
     const end = () => onDone();
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onDone();
-    const timer = setTimeout(end, 12_000);
+    const timer = ring.sticky ? undefined : setTimeout(end, 12_000);
     // Capture, without preventing: the tap still reaches the button.
     window.addEventListener('pointerdown', end, true);
     window.addEventListener('keydown', onKey);
