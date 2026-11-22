@@ -34,6 +34,7 @@ import { getCrew, getRole } from '../repo/crews';
 import { getCard, getGame, listLedgerForActor, listLedgerForGame, toGameSummary, toLedgerEntry } from '../repo/games';
 import { requestBuildChange } from '../services/builds';
 import { approvePlan, requestChange, votePlan } from '../services/plans';
+import { shieldRelayed } from '../safety/runtime';
 import { bugScreenshot, reportBug, reserveTranslation } from '../services/bugs';
 import { askForFix, decidePublish } from '../services/publish';
 import { resolveRoom } from '../services/rooms';
@@ -114,7 +115,8 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx): void {
 
   // Backup trigger for the agents: the app reports a text message it just sent, and the server
   // routes it exactly as the message:send webhook would (only as the signed-in user, only in rooms
-  // they belong to). Job ids come from the messageId, so webhook + relay never run a job twice.
+  // they belong to), after the same shield. Job ids come from the messageId, so webhook + relay never
+  // run a job twice.
   const relayLimit = fixedWindowLimiter({ limit: 30, windowMs: 60_000, now: ctx.now });
   app.post('/api/chat/relay', async req => {
     const user = await requireUser(ctx, req);
@@ -129,6 +131,9 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx): void {
     const content = JSON.stringify(
       body.voice ? { remoteUrl: body.voice.url, duration: body.voice.durationS, ...mentions } : { content: body.text, ...mentions },
     );
+    // Not logged either: the agents read the log (the webhook keeps its own record).
+    const incoming = { messageId: body.messageId, channelId: body.channelId, userId: nexconnUserId(user.id), messageType, content };
+    if (await shieldRelayed(ctx, { ...incoming, channelType: 3 })) return { routed: false };
     await logMessage(ctx.db, {
       nexconnMessageId: body.messageId,
       channelId: body.channelId,
@@ -140,11 +145,7 @@ export function registerGameRoutes(app: FastifyInstance, ctx: Ctx): void {
     });
     const key = ctx.agents
       ? await routeIncoming(ctx as Ctx & { agents: AgentServices }, {
-          messageId: body.messageId,
-          channelId: body.channelId,
-          userId: nexconnUserId(user.id),
-          messageType,
-          content,
+          ...incoming,
           relayed: true,
         })
       : null;

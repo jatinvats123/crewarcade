@@ -13,6 +13,11 @@ export async function logMessage(db: Db, row: typeof messagesLog.$inferInsert): 
   await db.insert(messagesLog).values(row).onConflictDoNothing();
 }
 
+/** Drops the text of a message the shield stopped, so it never becomes agent context (recentChat). */
+export async function clearMessageText(db: Db, nexconnMessageId: string): Promise<void> {
+  await db.update(messagesLog).set({ text: null }).where(eq(messagesLog.nexconnMessageId, nexconnMessageId));
+}
+
 export async function logConnection(db: Db, row: typeof connections.$inferInsert): Promise<void> {
   await db.insert(connections).values(row).onConflictDoNothing();
   await db.update(users).set({ lastSeenAt: row.at }).where(eq(users.id, row.userId));

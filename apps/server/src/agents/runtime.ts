@@ -7,6 +7,7 @@ import type { Ctx } from '../context';
 import { countMembers } from '../repo/crews';
 import { latestPlanForGame } from '../repo/games';
 import { getUser } from '../repo/users';
+import { shieldTranscript } from '../safety/runtime';
 import { reportBug } from '../services/bugs';
 import { CrewRuleError } from '../services/crews';
 import { postText } from '../services/chat';
@@ -148,6 +149,17 @@ async function transcribeJob(ctx: AgentCtx, job: AgentJobData, room: Room): Prom
       summary: `Could not transcribe a voice note (${r.reason})`,
       reason: r.detail,
     });
+    await ctx.agents.states.set(job.channelId, job.agent, 'idle');
+    return null;
+  }
+  const stopped = await shieldTranscript(ctx, {
+    messageId: job.messageId ?? job.key,
+    channelId: job.channelId,
+    userId: job.fromUserId,
+    text: r.text,
+    relayed: voice.relayed || !job.messageId,
+  });
+  if (stopped) {
     await ctx.agents.states.set(job.channelId, job.agent, 'idle');
     return null;
   }

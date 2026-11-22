@@ -3,7 +3,9 @@
 //     the sender sees why through `extra`). Used as soon as pre-messaging is enabled for our App Key.
 //   - after-delivery: `shieldIncoming` runs on every message:send before the agents see it. A hit is
 //     deleted for everyone (POST /v4/message/delete) within about a second, a 🛡 notice tells the room
-//     why, and the agents never act on it.
+//     why, the text leaves the log the agents read, and the agents never act on it.
+// Two more ways in are checked before the agents see them: messages the browser reports itself
+// (`shieldRelayed`, POST /api/chat/relay) and voice transcripts (`shieldTranscript`).
 // Both write moderation_log and the ledger. The /safety page reports which mode is live.
 import {
   AGENTS,
@@ -18,6 +20,7 @@ import {
 import type { Ctx } from '../context';
 import { getRole } from '../repo/crews';
 import { insertModeration } from '../repo/moderation';
+import { clearMessageText } from '../repo/webhooks';
 import { deleteMessage } from '../nexconn/api';
 import { postNotice } from '../services/crews';
 import { record } from '../services/ledger';
@@ -41,6 +44,11 @@ export interface ShieldMessage {
 
 interface ShieldState {
   flood: ReturnType<typeof createFloodTracker>;
+  /**
+   * Relayed messages and transcripts are counted apart: the browser picks a relayed message's id and
+   * text, so it must not be able to change what the webhook's tracker remembers.
+   */
+  relayFlood: ReturnType<typeof createFloodTracker>;
   /** `${channelId}|${userId}` -> can publish in that crew (60 s). */
   roles: TtlCache<{ crewId: string; canApprove: boolean } | null>;
   /** When the last pre-messaging event arrived (pre-delivery mode is live). */
@@ -52,7 +60,12 @@ const states = new WeakMap<object, ShieldState>();
 function stateOf(ctx: ShieldCtx): ShieldState {
   let s = states.get(ctx.db);
   if (!s) {
-    s = { flood: createFloodTracker(ctx.now), roles: createTtlCache({ ttlMs: 60_000, now: ctx.now }), lastPreAt: null };
+    s = {
+      flood: createFloodTracker(ctx.now),
+      relayFlood: createFloodTracker(ctx.now),
+      roles: createTtlCache({ ttlMs: 60_000, now: ctx.now }),
+      lastPreAt: null,
+    };
     states.set(ctx.db, s);
   }
   return s;
@@ -74,13 +87,18 @@ async function senderRole(ctx: ShieldCtx, channelId: string, userId: string) {
 }
 
 /** Runs the rules on one human text message; null = fine. Only ship commands need the sender's role. */
-async function evaluate(ctx: ShieldCtx, m: ShieldMessage, o: { roleTimeoutMs?: number } = {}): Promise<{ hit: ShieldHit; userId: string } | null> {
+async function evaluate(
+  ctx: ShieldCtx,
+  m: ShieldMessage,
+  o: { roleTimeoutMs?: number; relayed?: boolean } = {},
+): Promise<{ hit: ShieldHit; userId: string } | null> {
   const userId = dbUserIdFromNexconn(m.userId);
   if (isAgentId(userId) || m.os === 'Server') return null;
   if (m.messageType !== BUILTIN_MESSAGE_TYPES.text) return null;
   const text = parseTextContent(m.content)?.text ?? '';
   if (!text.trim()) return null;
-  const flooding = stateOf(ctx).flood.hit(userId, m.channelId, text, m.messageId || undefined);
+  const state = stateOf(ctx);
+  const flooding = (o.relayed ? state.relayFlood : state.flood).hit(userId, m.channelId, text, m.messageId || undefined);
   let hit = checkMessage(text, { canApprove: true, flooding });
   if (!hit && isShipCommand(text)) {
     const lookup = senderRole(ctx, m.channelId, userId);
@@ -118,6 +136,24 @@ async function notify(ctx: ShieldCtx, channelId: string, hit: ShieldHit) {
   await postNotice(ctx as Ctx, channelId, { kind: 'shield', text: hit.notice }).catch(err => ctx.log.warn({ err }, 'shield: notice failed'));
 }
 
+async function removeForEveryone(ctx: ShieldCtx, m: ShieldMessage): Promise<boolean> {
+  if (!ctx.nexconn || (m.channelType !== 1 && m.channelType !== 3)) return false;
+  try {
+    await deleteMessage(ctx.nexconn, {
+      fromUserId: m.userId,
+      channelType: m.channelType,
+      channelId: m.channelId,
+      messageId: m.messageId,
+      ...(m.time && { sentAt: m.time }),
+      disablePush: true,
+    });
+    return true;
+  } catch (err) {
+    ctx.log.warn({ err, messageId: m.messageId }, 'shield: delete failed');
+    return false;
+  }
+}
+
 /**
  * After-delivery mode (message:send). Returns the hit when the message was stopped: the caller must
  * not route it to the agents. Removal comes first so it lands within about a second.
@@ -125,23 +161,44 @@ async function notify(ctx: ShieldCtx, channelId: string, hit: ShieldHit) {
 export async function shieldIncoming(ctx: ShieldCtx, m: ShieldMessage): Promise<ShieldHit | null> {
   const r = await evaluate(ctx, m);
   if (!r) return null;
-  let removed = false;
-  if (ctx.nexconn && (m.channelType === 1 || m.channelType === 3)) {
-    try {
-      await deleteMessage(ctx.nexconn, {
-        fromUserId: m.userId,
-        channelType: m.channelType,
-        channelId: m.channelId,
-        messageId: m.messageId,
-        ...(m.time && { sentAt: m.time }),
-        disablePush: true,
-      });
-      removed = true;
-    } catch (err) {
-      ctx.log.warn({ err, messageId: m.messageId }, 'shield: delete failed');
-    }
-  }
+  await clearMessageText(ctx.db, m.messageId).catch(err => ctx.log.error({ err, messageId: m.messageId }, 'shield: log text not cleared'));
+  const removed = await removeForEveryone(ctx, m);
   ctx.log.info({ rule: r.hit.rule, messageId: m.messageId, removed }, 'shield: message stopped after delivery');
+  await notify(ctx, m.channelId, r.hit);
+  await logHit(ctx, m, r.userId, r.hit, 'after-delivery', removed);
+  return r.hit;
+}
+
+/**
+ * A message the browser reported (POST /api/chat/relay). A hit only keeps it from the agents: the id
+ * and text are the browser's word, so removal, the notice and the log wait for the signed webhook.
+ */
+export async function shieldRelayed(ctx: ShieldCtx, m: ShieldMessage): Promise<ShieldHit | null> {
+  const r = await evaluate(ctx, m, { relayed: true });
+  if (r) ctx.log.info({ rule: r.hit.rule, messageId: m.messageId }, 'shield: relayed message kept from the agents');
+  return r?.hit ?? null;
+}
+
+/**
+ * What a voice note says, before any agent reads it. `relayed`: the note came from the browser, not
+ * the signed webhook, so nothing is deleted on its word (the agents still skip it).
+ */
+export async function shieldTranscript(
+  ctx: ShieldCtx,
+  v: { messageId: string; channelId: string; userId: string; text: string; relayed: boolean },
+): Promise<ShieldHit | null> {
+  const m: ShieldMessage = {
+    messageId: v.messageId,
+    channelId: v.channelId,
+    channelType: 3,
+    userId: nexconnUserId(v.userId),
+    messageType: BUILTIN_MESSAGE_TYPES.text,
+    content: JSON.stringify({ content: v.text }),
+  };
+  const r = await evaluate(ctx, m, { relayed: true });
+  if (!r) return null;
+  const removed = v.relayed ? false : await removeForEveryone(ctx, m);
+  ctx.log.info({ rule: r.hit.rule, messageId: m.messageId, removed }, 'shield: voice transcript stopped');
   await notify(ctx, m.channelId, r.hit);
   await logHit(ctx, m, r.userId, r.hit, 'after-delivery', removed);
   return r.hit;
